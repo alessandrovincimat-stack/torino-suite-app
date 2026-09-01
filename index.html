@@ -15,10 +15,141 @@
 <style>
   html, body { margin: 0; padding: 0; background: #0a0a0a; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
   #root { min-height: 100vh; }
+
+  .ts-switcher { position: sticky; top: 0; z-index: 40; display: none; gap: 8px; padding: 10px 14px; background: rgba(10,9,8,0.92); backdrop-filter: blur(6px); border-bottom: 1px solid var(--border); }
+  .ts-switcher.ts-visible { display: flex; }
+  .ts-switch-btn { flex: 1; max-width: 220px; background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; letter-spacing: .3px; cursor: pointer; text-align: center; }
+  .ts-switch-btn.ts-active { border-color: var(--brass); color: var(--brass); background: var(--surface-2); }
+  #questura-section { display: none; min-height: 100vh; background: var(--bg); }
+
+  #app * { box-sizing: border-box; }
+  #app { background:var(--bg); }
+  .as-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:18px; margin-bottom:16px; }
+  .as-title { font-size:20px; font-weight:600; color:var(--brass); letter-spacing:.3px; margin:0 0 4px; }
+  .as-sub { font-size:13px; color:var(--text-muted); margin:0 0 16px; }
+  .as-tabs { display:flex; gap:6px; margin-bottom:18px; flex-wrap:wrap; }
+  .as-tab { background:var(--surface); border:1px solid var(--border); color:var(--text-muted); padding:9px 14px; border-radius:8px; font-size:13px; cursor:pointer; }
+  .as-tab.active { background:var(--surface-2); border-color:var(--brass); color:var(--brass); }
+  .as-field { margin-bottom:10px; }
+  .as-field label { display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px; }
+  .as-field input, .as-field select, .as-field textarea {
+    width:100%; background:var(--surface-2); border:1px solid var(--border); color:var(--text);
+    border-radius:6px; padding:8px 10px; font-size:14px;
+  }
+  .as-field input:focus, .as-field select:focus, .as-field textarea:focus { outline:1px solid var(--brass); }
+  .as-row { display:flex; gap:10px; flex-wrap:wrap; }
+  .as-row > div { flex:1; min-width:140px; }
+  .as-btn { background:var(--brass); color:var(--surface); border:none; border-radius:6px; padding:9px 16px; font-size:13px; font-weight:600; cursor:pointer; }
+  .as-btn.secondary { background:transparent; border:1px solid var(--brass); color:var(--brass); }
+  .as-btn.ghost { background:transparent; border:1px solid var(--border); color:var(--text-muted); }
+  .as-btn:disabled { opacity:.4; cursor:default; }
+  .as-guest { border:1px solid var(--border); border-radius:8px; padding:14px; margin-bottom:12px; background:var(--surface); }
+  .as-guest-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .as-guest-head .as-name { font-size:15px; font-weight:600; color:var(--text); }
+  .as-guest-head .as-role { font-size:11px; color:var(--brass); border:1px solid var(--brass); border-radius:20px; padding:2px 9px; margin-left:8px; }
+  .as-warn { font-size:12px; color:#e0a04a; margin-top:4px; }
+  .as-err { font-size:12px; color:var(--danger); margin-top:4px; }
+  .as-ok { font-size:12px; color:var(--ok); }
+  .as-links { display:flex; gap:10px; flex-wrap:wrap; }
+  .as-link-card { flex:1; min-width:200px; border:1px solid var(--border); border-radius:8px; padding:14px; text-decoration:none; color:var(--text); display:block; }
+  .as-link-card:hover { border-color:var(--brass); }
+  .as-link-card .n { font-weight:600; color:var(--brass); margin-bottom:4px; }
+  .as-link-card .d { font-size:12px; color:var(--text-muted); }
+  #as-file-preview { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:10px; font-family:monospace; font-size:11px; color:#8fcf8f; white-space:pre; overflow-x:auto; max-height:260px; overflow-y:auto; }
+  .as-hidden { display:none; }
+  .as-remove { background:transparent; border:none; color:var(--danger); cursor:pointer; font-size:12px; }
+  .as-photobox { border:1.5px dashed var(--border); border-radius:8px; padding:20px; text-align:center; cursor:pointer; color:var(--text-muted); font-size:13px; }
+  .as-photobox:hover { border-color:var(--brass); }
+  .as-doc-grid { display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; }
+  .as-doc { width:96px; border:1px solid var(--border); border-radius:6px; padding:6px; text-align:center; background:var(--surface); }
+  .as-doc img { width:100%; height:64px; object-fit:cover; border-radius:4px; display:block; margin-bottom:4px; cursor:pointer; }
+  .as-doc .n { font-size:10px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .as-group-head { font-size:14px; font-weight:600; color:var(--brass); margin:18px 0 4px; }
+  .as-group-period { font-size:12px; color:var(--text-muted); margin-bottom:6px; }
+  .as-spin { display:inline-block; width:12px; height:12px; border:2px solid var(--border); border-top-color:var(--brass); border-radius:50%; animation:asspin .7s linear infinite; margin-right:6px; vertical-align:-2px; }
+  @keyframes asspin { to { transform:rotate(360deg); } }
+
 </style>
 </head>
 <body>
+<div class="ts-switcher" id="ts-switcher"><button class="ts-switch-btn ts-active" id="ts-btn-porte">Gestione porte</button><button class="ts-switch-btn" id="ts-btn-questura">Gestione questura</button></div><div id="porte-section">
 <div id="root"></div>
+</div>
+<div id="questura-section">
+<div id="app" style="max-width:960px;margin:0 auto;font-family:'Helvetica Neue',Arial,sans-serif;color:var(--text);background:var(--bg);padding:0;">
+
+<style>
+  #app * { box-sizing: border-box; }
+  #app { background:var(--bg); }
+  .as-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:18px; margin-bottom:16px; }
+  .as-title { font-size:20px; font-weight:600; color:var(--brass); letter-spacing:.3px; margin:0 0 4px; }
+  .as-sub { font-size:13px; color:var(--text-muted); margin:0 0 16px; }
+  .as-tabs { display:flex; gap:6px; margin-bottom:18px; flex-wrap:wrap; }
+  .as-tab { background:var(--surface); border:1px solid var(--border); color:var(--text-muted); padding:9px 14px; border-radius:8px; font-size:13px; cursor:pointer; }
+  .as-tab.active { background:var(--surface-2); border-color:var(--brass); color:var(--brass); }
+  .as-field { margin-bottom:10px; }
+  .as-field label { display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px; }
+  .as-field input, .as-field select, .as-field textarea {
+    width:100%; background:var(--surface-2); border:1px solid var(--border); color:var(--text);
+    border-radius:6px; padding:8px 10px; font-size:14px;
+  }
+  .as-field input:focus, .as-field select:focus, .as-field textarea:focus { outline:1px solid var(--brass); }
+  .as-row { display:flex; gap:10px; flex-wrap:wrap; }
+  .as-row > div { flex:1; min-width:140px; }
+  .as-btn { background:var(--brass); color:var(--surface); border:none; border-radius:6px; padding:9px 16px; font-size:13px; font-weight:600; cursor:pointer; }
+  .as-btn.secondary { background:transparent; border:1px solid var(--brass); color:var(--brass); }
+  .as-btn.ghost { background:transparent; border:1px solid var(--border); color:var(--text-muted); }
+  .as-btn:disabled { opacity:.4; cursor:default; }
+  .as-guest { border:1px solid var(--border); border-radius:8px; padding:14px; margin-bottom:12px; background:var(--surface); }
+  .as-guest-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .as-guest-head .as-name { font-size:15px; font-weight:600; color:var(--text); }
+  .as-guest-head .as-role { font-size:11px; color:var(--brass); border:1px solid var(--brass); border-radius:20px; padding:2px 9px; margin-left:8px; }
+  .as-warn { font-size:12px; color:#e0a04a; margin-top:4px; }
+  .as-err { font-size:12px; color:var(--danger); margin-top:4px; }
+  .as-ok { font-size:12px; color:var(--ok); }
+  .as-links { display:flex; gap:10px; flex-wrap:wrap; }
+  .as-link-card { flex:1; min-width:200px; border:1px solid var(--border); border-radius:8px; padding:14px; text-decoration:none; color:var(--text); display:block; }
+  .as-link-card:hover { border-color:var(--brass); }
+  .as-link-card .n { font-weight:600; color:var(--brass); margin-bottom:4px; }
+  .as-link-card .d { font-size:12px; color:var(--text-muted); }
+  #as-file-preview { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:10px; font-family:monospace; font-size:11px; color:#8fcf8f; white-space:pre; overflow-x:auto; max-height:260px; overflow-y:auto; }
+  .as-hidden { display:none; }
+  .as-remove { background:transparent; border:none; color:var(--danger); cursor:pointer; font-size:12px; }
+  .as-photobox { border:1.5px dashed var(--border); border-radius:8px; padding:20px; text-align:center; cursor:pointer; color:var(--text-muted); font-size:13px; }
+  .as-photobox:hover { border-color:var(--brass); }
+  .as-doc-grid { display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; }
+  .as-doc { width:96px; border:1px solid var(--border); border-radius:6px; padding:6px; text-align:center; background:var(--surface); }
+  .as-doc img { width:100%; height:64px; object-fit:cover; border-radius:4px; display:block; margin-bottom:4px; cursor:pointer; }
+  .as-doc .n { font-size:10px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .as-group-head { font-size:14px; font-weight:600; color:var(--brass); margin:18px 0 4px; }
+  .as-group-period { font-size:12px; color:var(--text-muted); margin-bottom:6px; }
+  .as-spin { display:inline-block; width:12px; height:12px; border:2px solid var(--border); border-top-color:var(--brass); border-radius:50%; animation:asspin .7s linear infinite; margin-right:6px; vertical-align:-2px; }
+  @keyframes asspin { to { transform:rotate(360deg); } }
+</style>
+
+<div style="padding:22px 20px 40px;">
+  <p class="as-title">Torino Suite · Schedine Alloggiati</p>
+  <p class="as-sub">Foto del documento → dati estratti → file per Alloggiati Web (Questura)</p>
+
+  <div class="as-tabs">
+    <div class="as-tab active" data-tab="ospiti">Ospiti</div>
+    <div class="as-tab" data-tab="tabelle">Tabelle codici</div>
+    <div class="as-tab" data-tab="genera">Genera file</div>
+    <div class="as-tab" data-tab="archivio">Archivio documenti</div>
+    <div class="as-tab" data-tab="backend">Backend</div>
+    <div class="as-tab" data-tab="link">Portali</div>
+  </div>
+
+  <div id="tab-ospiti"></div>
+  <div id="tab-tabelle" class="as-hidden"></div>
+  <div id="tab-genera" class="as-hidden"></div>
+  <div id="tab-archivio" class="as-hidden"></div>
+  <div id="tab-backend" class="as-hidden"></div>
+  <div id="tab-link" class="as-hidden"></div>
+</div>
+</div>
+</div>
+
 <script>
 (()=>{var vf=Object.create;var Pn=Object.defineProperty;var Sf=Object.getOwnPropertyDescriptor;var yf=Object.getOwnPropertyNames;var kf=Object.getPrototypeOf,wf=Object.prototype.hasOwnProperty;var wa=(e,a)=>()=>{try{return a||e((a={exports:{}}).exports,a),a.exports}catch(t){throw a=0,t}};var Pf=(e,a,t,r)=>{if(a&&typeof a=="object"||typeof a=="function")for(let o of yf(a))!wf.call(e,o)&&o!==t&&Pn(e,o,{get:()=>a[o],enumerable:!(r=Sf(a,o))||r.enumerable});return e};var yt=(e,a,t)=>(t=e!=null?vf(kf(e)):{},Pf(a||!e||!e.__esModule?Pn(t,"default",{value:e,enumerable:!0}):t,e));var Rn=wa(D=>{"use strict";var kt=Symbol.for("react.element"),Mf=Symbol.for("react.portal"),Df=Symbol.for("react.fragment"),Af=Symbol.for("react.strict_mode"),Ff=Symbol.for("react.profiler"),Tf=Symbol.for("react.provider"),Bf=Symbol.for("react.context"),Ef=Symbol.for("react.forward_ref"),Nf=Symbol.for("react.suspense"),Of=Symbol.for("react.memo"),Uf=Symbol.for("react.lazy"),Mn=Symbol.iterator;function zf(e){return e===null||typeof e!="object"?null:(e=Mn&&e[Mn]||e["@@iterator"],typeof e=="function"?e:null)}var Fn={isMounted:function(){return!1},enqueueForceUpdate:function(){},enqueueReplaceState:function(){},enqueueSetState:function(){}},Tn=Object.assign,Bn={};function Va(e,a,t){this.props=e,this.context=a,this.refs=Bn,this.updater=t||Fn}Va.prototype.isReactComponent={};Va.prototype.setState=function(e,a){if(typeof e!="object"&&typeof e!="function"&&e!=null)throw Error("setState(...): takes an object of state variables to update or a function which returns an object of state variables.");this.updater.enqueueSetState(this,e,a,"setState")};Va.prototype.forceUpdate=function(e){this.updater.enqueueForceUpdate(this,e,"forceUpdate")};function En(){}En.prototype=Va.prototype;function ll(e,a,t){this.props=e,this.context=a,this.refs=Bn,this.updater=t||Fn}var ul=ll.prototype=new En;ul.constructor=ll;Tn(ul,Va.prototype);ul.isPureReactComponent=!0;var Dn=Array.isArray,Nn=Object.prototype.hasOwnProperty,nl={current:null},On={key:!0,ref:!0,__self:!0,__source:!0};function Un(e,a,t){var r,o={},l=null,u=null;if(a!=null)for(r in a.ref!==void 0&&(u=a.ref),a.key!==void 0&&(l=""+a.key),a)Nn.call(a,r)&&!On.hasOwnProperty(r)&&(o[r]=a[r]);var n=arguments.length-2;if(n===1)o.children=t;else if(1<n){for(var i=Array(n),d=0;d<n;d++)i[d]=arguments[d+2];o.children=i}if(e&&e.defaultProps)for(r in n=e.defaultProps,n)o[r]===void 0&&(o[r]=n[r]);return{$$typeof:kt,type:e,key:l,ref:u,props:o,_owner:nl.current}}function Rf(e,a){return{$$typeof:kt,type:e.type,key:a,ref:e.ref,props:e.props,_owner:e._owner}}function sl(e){return typeof e=="object"&&e!==null&&e.$$typeof===kt}function qf(e){var a={"=":"=0",":":"=2"};return"$"+e.replace(/[=:]/g,function(t){return a[t]})}var An=/\/+/g;function ol(e,a){return typeof e=="object"&&e!==null&&e.key!=null?qf(""+e.key):a.toString(36)}function Tr(e,a,t,r,o){var l=typeof e;(l==="undefined"||l==="boolean")&&(e=null);var u=!1;if(e===null)u=!0;else switch(l){case"string":case"number":u=!0;break;case"object":switch(e.$$typeof){case kt:case Mf:u=!0}}if(u)return u=e,o=o(u),e=r===""?"."+ol(u,0):r,Dn(o)?(t="",e!=null&&(t=e.replace(An,"$&/")+"/"),Tr(o,a,t,"",function(d){return d})):o!=null&&(sl(o)&&(o=Rf(o,t+(!o.key||u&&u.key===o.key?"":(""+o.key).replace(An,"$&/")+"/")+e)),a.push(o)),1;if(u=0,r=r===""?".":r+":",Dn(e))for(var n=0;n<e.length;n++){l=e[n];var i=r+ol(l,n);u+=Tr(l,a,t,i,o)}else if(i=zf(e),typeof i=="function")for(e=i.call(e),n=0;!(l=e.next()).done;)l=l.value,i=r+ol(l,n++),u+=Tr(l,a,t,i,o);else if(l==="object")throw a=String(e),Error("Objects are not valid as a React child (found: "+(a==="[object Object]"?"object with keys {"+Object.keys(e).join(", ")+"}":a)+"). If you meant to render a collection of children, use an array instead.");return u}function Fr(e,a,t){if(e==null)return e;var r=[],o=0;return Tr(e,r,"","",function(l){return a.call(t,l,o++)}),r}function Hf(e){if(e._status===-1){var a=e._result;a=a(),a.then(function(t){(e._status===0||e._status===-1)&&(e._status=1,e._result=t)},function(t){(e._status===0||e._status===-1)&&(e._status=2,e._result=t)}),e._status===-1&&(e._status=0,e._result=a)}if(e._status===1)return e._result.default;throw e._result}var re={current:null},Br={transition:null},_f={ReactCurrentDispatcher:re,ReactCurrentBatchConfig:Br,ReactCurrentOwner:nl};function zn(){throw Error("act(...) is not supported in production builds of React.")}D.Children={map:Fr,forEach:function(e,a,t){Fr(e,function(){a.apply(this,arguments)},t)},count:function(e){var a=0;return Fr(e,function(){a++}),a},toArray:function(e){return Fr(e,function(a){return a})||[]},only:function(e){if(!sl(e))throw Error("React.Children.only expected to receive a single React element child.");return e}};D.Component=Va;D.Fragment=Df;D.Profiler=Ff;D.PureComponent=ll;D.StrictMode=Af;D.Suspense=Nf;D.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED=_f;D.act=zn;D.cloneElement=function(e,a,t){if(e==null)throw Error("React.cloneElement(...): The argument must be a React element, but you passed "+e+".");var r=Tn({},e.props),o=e.key,l=e.ref,u=e._owner;if(a!=null){if(a.ref!==void 0&&(l=a.ref,u=nl.current),a.key!==void 0&&(o=""+a.key),e.type&&e.type.defaultProps)var n=e.type.defaultProps;for(i in a)Nn.call(a,i)&&!On.hasOwnProperty(i)&&(r[i]=a[i]===void 0&&n!==void 0?n[i]:a[i])}var i=arguments.length-2;if(i===1)r.children=t;else if(1<i){n=Array(i);for(var d=0;d<i;d++)n[d]=arguments[d+2];r.children=n}return{$$typeof:kt,type:e.type,key:o,ref:l,props:r,_owner:u}};D.createContext=function(e){return e={$$typeof:Bf,_currentValue:e,_currentValue2:e,_threadCount:0,Provider:null,Consumer:null,_defaultValue:null,_globalName:null},e.Provider={$$typeof:Tf,_context:e},e.Consumer=e};D.createElement=Un;D.createFactory=function(e){var a=Un.bind(null,e);return a.type=e,a};D.createRef=function(){return{current:null}};D.forwardRef=function(e){return{$$typeof:Ef,render:e}};D.isValidElement=sl;D.lazy=function(e){return{$$typeof:Uf,_payload:{_status:-1,_result:e},_init:Hf}};D.memo=function(e,a){return{$$typeof:Of,type:e,compare:a===void 0?null:a}};D.startTransition=function(e){var a=Br.transition;Br.transition={};try{e()}finally{Br.transition=a}};D.unstable_act=zn;D.useCallback=function(e,a){return re.current.useCallback(e,a)};D.useContext=function(e){return re.current.useContext(e)};D.useDebugValue=function(){};D.useDeferredValue=function(e){return re.current.useDeferredValue(e)};D.useEffect=function(e,a){return re.current.useEffect(e,a)};D.useId=function(){return re.current.useId()};D.useImperativeHandle=function(e,a,t){return re.current.useImperativeHandle(e,a,t)};D.useInsertionEffect=function(e,a){return re.current.useInsertionEffect(e,a)};D.useLayoutEffect=function(e,a){return re.current.useLayoutEffect(e,a)};D.useMemo=function(e,a){return re.current.useMemo(e,a)};D.useReducer=function(e,a,t){return re.current.useReducer(e,a,t)};D.useRef=function(e){return re.current.useRef(e)};D.useState=function(e){return re.current.useState(e)};D.useSyncExternalStore=function(e,a,t){return re.current.useSyncExternalStore(e,a,t)};D.useTransition=function(){return re.current.useTransition()};D.version="18.3.1"});var ba=wa((xm,qn)=>{"use strict";qn.exports=Rn()});var $n=wa(N=>{"use strict";function cl(e,a){var t=e.length;e.push(a);e:for(;0<t;){var r=t-1>>>1,o=e[r];if(0<Er(o,a))e[r]=a,e[t]=o,t=r;else break e}}function Pe(e){return e.length===0?null:e[0]}function Or(e){if(e.length===0)return null;var a=e[0],t=e.pop();if(t!==a){e[0]=t;e:for(var r=0,o=e.length,l=o>>>1;r<l;){var u=2*(r+1)-1,n=e[u],i=u+1,d=e[i];if(0>Er(n,t))i<o&&0>Er(d,n)?(e[r]=d,e[i]=t,r=i):(e[r]=n,e[u]=t,r=u);else if(i<o&&0>Er(d,t))e[r]=d,e[i]=t,r=i;else break e}}return a}function Er(e,a){var t=e.sortIndex-a.sortIndex;return t!==0?t:e.id-a.id}typeof performance=="object"&&typeof performance.now=="function"?(Hn=performance,N.unstable_now=function(){return Hn.now()}):(il=Date,_n=il.now(),N.unstable_now=function(){return il.now()-_n});var Hn,il,_n,Oe=[],aa=[],Vf=1,Ie=null,Y=3,Ur=!1,Pa=!1,Pt=!1,Wn=typeof setTimeout=="function"?setTimeout:null,Gn=typeof clearTimeout=="function"?clearTimeout:null,Vn=typeof setImmediate<"u"?setImmediate:null;typeof navigator<"u"&&navigator.scheduling!==void 0&&navigator.scheduling.isInputPending!==void 0&&navigator.scheduling.isInputPending.bind(navigator.scheduling);function pl(e){for(var a=Pe(aa);a!==null;){if(a.callback===null)Or(aa);else if(a.startTime<=e)Or(aa),a.sortIndex=a.expirationTime,cl(Oe,a);else break;a=Pe(aa)}}function ml(e){if(Pt=!1,pl(e),!Pa)if(Pe(Oe)!==null)Pa=!0,hl(Ll);else{var a=Pe(aa);a!==null&&gl(ml,a.startTime-e)}}function Ll(e,a){Pa=!1,Pt&&(Pt=!1,Gn(Mt),Mt=-1),Ur=!0;var t=Y;try{for(pl(a),Ie=Pe(Oe);Ie!==null&&(!(Ie.expirationTime>a)||e&&!Kn());){var r=Ie.callback;if(typeof r=="function"){Ie.callback=null,Y=Ie.priorityLevel;var o=r(Ie.expirationTime<=a);a=N.unstable_now(),typeof o=="function"?Ie.callback=o:Ie===Pe(Oe)&&Or(Oe),pl(a)}else Or(Oe);Ie=Pe(Oe)}if(Ie!==null)var l=!0;else{var u=Pe(aa);u!==null&&gl(ml,u.startTime-a),l=!1}return l}finally{Ie=null,Y=t,Ur=!1}}var zr=!1,Nr=null,Mt=-1,jn=5,Xn=-1;function Kn(){return!(N.unstable_now()-Xn<jn)}function dl(){if(Nr!==null){var e=N.unstable_now();Xn=e;var a=!0;try{a=Nr(!0,e)}finally{a?wt():(zr=!1,Nr=null)}}else zr=!1}var wt;typeof Vn=="function"?wt=function(){Vn(dl)}:typeof MessageChannel<"u"?(fl=new MessageChannel,bn=fl.port2,fl.port1.onmessage=dl,wt=function(){bn.postMessage(null)}):wt=function(){Wn(dl,0)};var fl,bn;function hl(e){Nr=e,zr||(zr=!0,wt())}function gl(e,a){Mt=Wn(function(){e(N.unstable_now())},a)}N.unstable_IdlePriority=5;N.unstable_ImmediatePriority=1;N.unstable_LowPriority=4;N.unstable_NormalPriority=3;N.unstable_Profiling=null;N.unstable_UserBlockingPriority=2;N.unstable_cancelCallback=function(e){e.callback=null};N.unstable_continueExecution=function(){Pa||Ur||(Pa=!0,hl(Ll))};N.unstable_forceFrameRate=function(e){0>e||125<e?console.error("forceFrameRate takes a positive int between 0 and 125, forcing frame rates higher than 125 fps is not supported"):jn=0<e?Math.floor(1e3/e):5};N.unstable_getCurrentPriorityLevel=function(){return Y};N.unstable_getFirstCallbackNode=function(){return Pe(Oe)};N.unstable_next=function(e){switch(Y){case 1:case 2:case 3:var a=3;break;default:a=Y}var t=Y;Y=a;try{return e()}finally{Y=t}};N.unstable_pauseExecution=function(){};N.unstable_requestPaint=function(){};N.unstable_runWithPriority=function(e,a){switch(e){case 1:case 2:case 3:case 4:case 5:break;default:e=3}var t=Y;Y=e;try{return a()}finally{Y=t}};N.unstable_scheduleCallback=function(e,a,t){var r=N.unstable_now();switch(typeof t=="object"&&t!==null?(t=t.delay,t=typeof t=="number"&&0<t?r+t:r):t=r,e){case 1:var o=-1;break;case 2:o=250;break;case 5:o=1073741823;break;case 4:o=1e4;break;default:o=5e3}return o=t+o,e={id:Vf++,callback:a,priorityLevel:e,startTime:t,expirationTime:o,sortIndex:-1},t>r?(e.sortIndex=t,cl(aa,e),Pe(Oe)===null&&e===Pe(aa)&&(Pt?(Gn(Mt),Mt=-1):Pt=!0,gl(ml,t-r))):(e.sortIndex=o,cl(Oe,e),Pa||Ur||(Pa=!0,hl(Ll))),e};N.unstable_shouldYield=Kn;N.unstable_wrapCallback=function(e){var a=Y;return function(){var t=Y;Y=a;try{return e.apply(this,arguments)}finally{Y=t}}}});var Zn=wa((Cm,Qn)=>{"use strict";Qn.exports=$n()});var af=wa(xe=>{"use strict";var bf=ba(),he=Zn();function g(e){for(var a="https://reactjs.org/docs/error-decoder.html?invariant="+e,t=1;t<arguments.length;t++)a+="&args[]="+encodeURIComponent(arguments[t]);return"Minified React error #"+e+"; visit "+a+" for the full message or use the non-minified dev environment for full errors and additional helpful warnings."}var oi=new Set,$t={};function qa(e,a){dt(e,a),dt(e+"Capture",a)}function dt(e,a){for($t[e]=a,e=0;e<a.length;e++)oi.add(a[e])}var Xe=!(typeof window>"u"||typeof window.document>"u"||typeof window.document.createElement>"u"),Hl=Object.prototype.hasOwnProperty,Wf=/^[:A-Z_a-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u02FF\u0370-\u037D\u037F-\u1FFF\u200C-\u200D\u2070-\u218F\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD][:A-Z_a-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u02FF\u0370-\u037D\u037F-\u1FFF\u200C-\u200D\u2070-\u218F\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD\-.0-9\u00B7\u0300-\u036F\u203F-\u2040]*$/,Yn={},Jn={};function Gf(e){return Hl.call(Jn,e)?!0:Hl.call(Yn,e)?!1:Wf.test(e)?Jn[e]=!0:(Yn[e]=!0,!1)}function jf(e,a,t,r){if(t!==null&&t.type===0)return!1;switch(typeof a){case"function":case"symbol":return!0;case"boolean":return r?!1:t!==null?!t.acceptsBooleans:(e=e.toLowerCase().slice(0,5),e!=="data-"&&e!=="aria-");default:return!1}}function Xf(e,a,t,r){if(a===null||typeof a>"u"||jf(e,a,t,r))return!0;if(r)return!1;if(t!==null)switch(t.type){case 3:return!a;case 4:return a===!1;case 5:return isNaN(a);case 6:return isNaN(a)||1>a}return!1}function ue(e,a,t,r,o,l,u){this.acceptsBooleans=a===2||a===3||a===4,this.attributeName=r,this.attributeNamespace=o,this.mustUseProperty=t,this.propertyName=e,this.type=a,this.sanitizeURL=l,this.removeEmptyString=u}var Z={};"children dangerouslySetInnerHTML defaultValue defaultChecked innerHTML suppressContentEditableWarning suppressHydrationWarning style".split(" ").forEach(function(e){Z[e]=new ue(e,0,!1,e,null,!1,!1)});[["acceptCharset","accept-charset"],["className","class"],["htmlFor","for"],["httpEquiv","http-equiv"]].forEach(function(e){var a=e[0];Z[a]=new ue(a,1,!1,e[1],null,!1,!1)});["contentEditable","draggable","spellCheck","value"].forEach(function(e){Z[e]=new ue(e,2,!1,e.toLowerCase(),null,!1,!1)});["autoReverse","externalResourcesRequired","focusable","preserveAlpha"].forEach(function(e){Z[e]=new ue(e,2,!1,e,null,!1,!1)});"allowFullScreen async autoFocus autoPlay controls default defer disabled disablePictureInPicture disableRemotePlayback formNoValidate hidden loop noModule noValidate open playsInline readOnly required reversed scoped seamless itemScope".split(" ").forEach(function(e){Z[e]=new ue(e,3,!1,e.toLowerCase(),null,!1,!1)});["checked","multiple","muted","selected"].forEach(function(e){Z[e]=new ue(e,3,!0,e,null,!1,!1)});["capture","download"].forEach(function(e){Z[e]=new ue(e,4,!1,e,null,!1,!1)});["cols","rows","size","span"].forEach(function(e){Z[e]=new ue(e,6,!1,e,null,!1,!1)});["rowSpan","start"].forEach(function(e){Z[e]=new ue(e,5,!1,e.toLowerCase(),null,!1,!1)});var Bu=/[\-:]([a-z])/g;function Eu(e){return e[1].toUpperCase()}"accent-height alignment-baseline arabic-form baseline-shift cap-height clip-path clip-rule color-interpolation color-interpolation-filters color-profile color-rendering dominant-baseline enable-background fill-opacity fill-rule flood-color flood-opacity font-family font-size font-size-adjust font-stretch font-style font-variant font-weight glyph-name glyph-orientation-horizontal glyph-orientation-vertical horiz-adv-x horiz-origin-x image-rendering letter-spacing lighting-color marker-end marker-mid marker-start overline-position overline-thickness paint-order panose-1 pointer-events rendering-intent shape-rendering stop-color stop-opacity strikethrough-position strikethrough-thickness stroke-dasharray stroke-dashoffset stroke-linecap stroke-linejoin stroke-miterlimit stroke-opacity stroke-width text-anchor text-decoration text-rendering underline-position underline-thickness unicode-bidi unicode-range units-per-em v-alphabetic v-hanging v-ideographic v-mathematical vector-effect vert-adv-y vert-origin-x vert-origin-y word-spacing writing-mode xmlns:xlink x-height".split(" ").forEach(function(e){var a=e.replace(Bu,Eu);Z[a]=new ue(a,1,!1,e,null,!1,!1)});"xlink:actuate xlink:arcrole xlink:role xlink:show xlink:title xlink:type".split(" ").forEach(function(e){var a=e.replace(Bu,Eu);Z[a]=new ue(a,1,!1,e,"http://www.w3.org/1999/xlink",!1,!1)});["xml:base","xml:lang","xml:space"].forEach(function(e){var a=e.replace(Bu,Eu);Z[a]=new ue(a,1,!1,e,"http://www.w3.org/XML/1998/namespace",!1,!1)});["tabIndex","crossOrigin"].forEach(function(e){Z[e]=new ue(e,1,!1,e.toLowerCase(),null,!1,!1)});Z.xlinkHref=new ue("xlinkHref",1,!1,"xlink:href","http://www.w3.org/1999/xlink",!0,!1);["src","href","action","formAction"].forEach(function(e){Z[e]=new ue(e,1,!1,e.toLowerCase(),null,!0,!0)});function Nu(e,a,t,r){var o=Z.hasOwnProperty(a)?Z[a]:null;(o!==null?o.type!==0:r||!(2<a.length)||a[0]!=="o"&&a[0]!=="O"||a[1]!=="n"&&a[1]!=="N")&&(Xf(a,t,o,r)&&(t=null),r||o===null?Gf(a)&&(t===null?e.removeAttribute(a):e.setAttribute(a,""+t)):o.mustUseProperty?e[o.propertyName]=t===null?o.type===3?!1:"":t:(a=o.attributeName,r=o.attributeNamespace,t===null?e.removeAttribute(a):(o=o.type,t=o===3||o===4&&t===!0?"":""+t,r?e.setAttributeNS(r,a,t):e.setAttribute(a,t))))}var Ze=bf.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED,Rr=Symbol.for("react.element"),ja=Symbol.for("react.portal"),Xa=Symbol.for("react.fragment"),Ou=Symbol.for("react.strict_mode"),_l=Symbol.for("react.profiler"),li=Symbol.for("react.provider"),ui=Symbol.for("react.context"),Uu=Symbol.for("react.forward_ref"),Vl=Symbol.for("react.suspense"),bl=Symbol.for("react.suspense_list"),zu=Symbol.for("react.memo"),ra=Symbol.for("react.lazy"),ni=Symbol.for("react.offscreen"),es=Symbol.iterator;function Dt(e){return e===null||typeof e!="object"?null:(e=es&&e[es]||e["@@iterator"],typeof e=="function"?e:null)}var _=Object.assign,xl;function Ut(e){if(xl===void 0)try{throw Error()}catch(t){var a=t.stack.trim().match(/\n( *(at )?)/);xl=a&&a[1]||""}return`
 `+xl+e}var Il=!1;function Cl(e,a){if(!e||Il)return"";Il=!0;var t=Error.prepareStackTrace;Error.prepareStackTrace=void 0;try{if(a)if(a=function(){throw Error()},Object.defineProperty(a.prototype,"props",{set:function(){throw Error()}}),typeof Reflect=="object"&&Reflect.construct){try{Reflect.construct(a,[])}catch(d){var r=d}Reflect.construct(e,[],a)}else{try{a.call()}catch(d){r=d}e.call(a.prototype)}else{try{throw Error()}catch(d){r=d}e()}}catch(d){if(d&&r&&typeof d.stack=="string"){for(var o=d.stack.split(`
@@ -700,5 +831,760 @@ lucide-react/dist/esm/lucide-react.js:
 */
 
 </script>
+
+<script id="questura-script">
+
+(function(){
+
+var state = { guests: [], tables: { comuni: [], stati: [], documenti: [] }, backend: { url: '', secret: '' }, archivio: [] };
+
+function uid(){ return 'g' + Math.random().toString(36).slice(2,9); }
+
+function todayISO(){ var d=new Date(); return d.toISOString().slice(0,10); }
+
+async function loadState(){
+  try {
+    var g = await window.storage.get('as-guests', false);
+    if (g && g.value) state.guests = JSON.parse(g.value);
+  } catch(e){}
+  try {
+    var t = await window.storage.get('as-tables', false);
+    if (t && t.value) state.tables = JSON.parse(t.value);
+  } catch(e){}
+  if (!state.tables.stati.find(function(s){return s.nome==='ITALIA';})){
+    state.tables.stati.push({ codice:'100000100', nome:'ITALIA' });
+    saveTables();
+  }
+  if (!state.tables.documenti.find(function(s){return s.codice==='IDENT';})){
+    state.tables.documenti.push({ codice:'IDENT', nome:"CARTA D'IDENTITA" });
+    saveTables();
+  }
+  try {
+    var b = await window.storage.get('as-backend', false);
+    if (b && b.value) state.backend = JSON.parse(b.value);
+  } catch(e){}
+  try {
+    var a = await window.storage.get('as-archivio', false);
+    if (a && a.value) state.archivio = JSON.parse(a.value);
+  } catch(e){}
+}
+async function saveGuests(){
+  try { await window.storage.set('as-guests', JSON.stringify(state.guests), false); } catch(e){}
+}
+async function saveTables(){
+  try { await window.storage.set('as-tables', JSON.stringify(state.tables), false); } catch(e){}
+}
+async function saveBackend(){
+  try { await window.storage.set('as-backend', JSON.stringify(state.backend), false); } catch(e){}
+}
+async function saveArchivio(){
+  try { await window.storage.set('as-archivio', JSON.stringify(state.archivio), false); } catch(e){}
+}
+
+function compressImage(file, maxWidth, quality){
+  return new Promise(function(resolve, reject){
+    var img = new Image();
+    var reader = new FileReader();
+    reader.onload = function(){
+      img.onload = function(){
+        var scale = Math.min(1, maxWidth / img.width);
+        var w = Math.round(img.width * scale);
+        var h = Math.round(img.height * scale);
+        var canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality).split(',')[1]);
+      };
+      img.onerror = function(){ reject(new Error('immagine non leggibile')); };
+      img.src = reader.result;
+    };
+    reader.onerror = function(){ reject(new Error('lettura file fallita')); };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function archiveDocument(file, guest){
+  try {
+    var b64 = await compressImage(file, 1100, 0.72);
+    if (b64.length > 4.5 * 1024 * 1024) { b64 = await compressImage(file, 700, 0.6); }
+    var isDependent = guest.ruolo === 'familiare' || guest.ruolo === 'membro';
+    var head = isDependent ? state.guests.find(function(x){ return x.id === guest.groupOf; }) : guest;
+    var entry = {
+      id: uid(),
+      fotoKey: 'as-doc-' + Math.random().toString(36).slice(2,10),
+      dataCaricamento: new Date().toISOString(),
+      cognomeCapogruppo: (head && head.cognome) || guest.cognome || '',
+      nomeCapogruppo: (head && head.nome) || guest.nome || '',
+      dataArrivo: (head && head.dataArrivo) || guest.dataArrivo || '',
+      permanenza: (head && head.permanenza) || guest.permanenza || '',
+      cognomeOspite: guest.cognome || '',
+      nomeOspite: guest.nome || '',
+      guestId: guest.id
+    };
+    await window.storage.set(entry.fotoKey, b64, false);
+    state.archivio.push(entry);
+    await saveArchivio();
+  } catch(e){
+    console.error('archiviazione fallita', e);
+  }
+}
+
+function backendUrl(path){
+  var base = (state.backend.url || '').replace(/\/$/, '');
+  return base + path;
+}
+function backendHeaders(extra){
+  var h = Object.assign({}, extra || {});
+  if (state.backend.secret) h['x-app-secret'] = state.backend.secret;
+  return h;
+}
+
+function parseCsv(text, kind){
+  var lines = text.split(/\r?\n/).map(function(l){return l.trim();}).filter(Boolean);
+  var out = [];
+  lines.forEach(function(line){
+    var sep = line.indexOf(';') !== -1 ? ';' : ',';
+    var parts = line.split(sep).map(function(p){return p.trim();});
+    if (kind === 'comuni'){
+      if (parts.length < 3) return;
+      out.push({ codice: parts[0], nome: parts[1], provincia: parts[2] });
+    } else {
+      if (parts.length < 2) return;
+      out.push({ codice: parts[0], nome: parts[1] });
+    }
+  });
+  return out;
+}
+
+function findByName(list, name){
+  if (!name) return null;
+  var n = name.trim().toLowerCase();
+  var exact = list.find(function(x){ return x.nome.toLowerCase() === n; });
+  if (exact) return exact;
+  return list.find(function(x){ return x.nome.toLowerCase().indexOf(n) === 0; }) || null;
+}
+
+function italiaEntry(){
+  return findByName(state.tables.stati, 'ITALIA');
+}
+
+function newGuest(){
+  return {
+    id: uid(), ruolo: 'singolo', groupOf: '',
+    dataArrivo: todayISO(), permanenza: '1',
+    cognome: '', nome: '', sesso: 'M', dataNascita: '',
+    nascitaEstero: false, comuneNascitaNome: '', statoNascitaNome: 'ITALIA',
+    cittadinanzaNome: 'ITALIA',
+    tipoDocumentoNome: '', numeroDocumento: '',
+    rilascioEstero: false, luogoRilascioNome: '',
+    ocrPending: false
+  };
+}
+
+/* ---------- OCR ---------- */
+function fileToBase64(file){
+  return new Promise(function(res, rej){
+    var r = new FileReader();
+    r.onload = function(){ res(r.result.split(',')[1]); };
+    r.onerror = function(){ rej(new Error('read failed')); };
+    r.readAsDataURL(file);
+  });
+}
+
+async function ocrDocument(file, guest){
+  guest.ocrPending = true; render();
+  try {
+    var b64 = await fileToBase64(file);
+    var mediaType = file.type || 'image/jpeg';
+    var sys = "Estrai i dati anagrafici da un documento d'identita' italiano o straniero (carta d'identita', passaporto, patente). Rispondi SOLO con un oggetto JSON valido, nessun altro testo, con queste chiavi esatte: cognome, nome, sesso (M o F), data_nascita (formato AAAA-MM-GG), luogo_nascita (nome del comune se italiano, altrimenti nome dello stato), nascita_estero (true/false), cittadinanza (nome dello stato), tipo_documento (CARTA D'IDENTITA, PASSAPORTO, PATENTE o altro), numero_documento, luogo_rilascio (nome comune o stato), rilascio_estero (true/false). Se un campo non e' leggibile lascialo stringa vuota.";
+    var resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        system: sys,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: mediaType, data: b64 } },
+            { type: "text", text: "Estrai i dati in JSON come da istruzioni." }
+          ]
+        }]
+      })
+    });
+    var data = await resp.json();
+    var textBlock = (data.content || []).filter(function(c){return c.type==='text';}).map(function(c){return c.text;}).join('');
+    var clean = textBlock.replace(/```json|```/g, '').trim();
+    var parsed = JSON.parse(clean);
+    guest.cognome = (parsed.cognome || '').toUpperCase();
+    guest.nome = (parsed.nome || '').toUpperCase();
+    guest.sesso = parsed.sesso === 'F' ? 'F' : 'M';
+    guest.dataNascita = parsed.data_nascita || '';
+    guest.nascitaEstero = !!parsed.nascita_estero;
+    if (guest.nascitaEstero) guest.statoNascitaNome = (parsed.luogo_nascita || '').toUpperCase();
+    else guest.comuneNascitaNome = (parsed.luogo_nascita || '').toUpperCase();
+    guest.cittadinanzaNome = (parsed.cittadinanza || 'ITALIA').toUpperCase();
+    guest.tipoDocumentoNome = (parsed.tipo_documento || '').toUpperCase();
+    guest.numeroDocumento = (parsed.numero_documento || '').toUpperCase();
+    guest.rilascioEstero = !!parsed.rilascio_estero;
+    guest.luogoRilascioNome = (parsed.luogo_rilascio || '').toUpperCase();
+  } catch(e){
+    alert('Estrazione non riuscita, inserisci i dati manualmente. (' + e.message + ')');
+  }
+  guest.ocrPending = false;
+  saveGuests(); render();
+}
+
+/* ---------- Rendering: Ospiti tab ---------- */
+function roleLabel(r){
+  return { singolo:'Ospite singolo', capofamiglia:'Capofamiglia', capogruppo:'Capogruppo', familiare:'Familiare', membro:'Membro gruppo' }[r] || r;
+}
+
+function renderOspiti(){
+  var el = document.getElementById('tab-ospiti');
+  var html = '';
+  html += '<div class="as-card"><div class="as-photobox" id="as-add-photo">+ Aggiungi ospite da foto documento</div>' +
+          '<input type="file" id="as-file-input" accept="image/*" multiple style="display:none">' +
+          '<div style="margin-top:10px;"><button class="as-btn ghost" id="as-add-manual">+ Aggiungi ospite manualmente</button></div></div>';
+
+  var capiOptions = state.guests.filter(function(g){ return g.ruolo==='capofamiglia'||g.ruolo==='capogruppo'; });
+
+  state.guests.forEach(function(g, idx){
+    var comuniOpts = state.tables.comuni.map(function(c){return c.nome;});
+    var statiOpts = state.tables.stati.map(function(c){return c.nome;});
+    var docOpts = state.tables.documenti.map(function(c){return c.nome;});
+    var isDependent = g.ruolo === 'familiare' || g.ruolo === 'membro';
+
+    html += '<div class="as-guest" data-id="'+g.id+'">';
+    html += '<div class="as-guest-head"><div><span class="as-name">'+(g.cognome||g.nome? (g.cognome+' '+g.nome).trim() : 'Nuovo ospite')+'</span><span class="as-role">'+roleLabel(g.ruolo)+'</span></div>' +
+            (g.ocrPending? '<span class="as-warn"><span class="as-spin"></span>estrazione in corso…</span>' : '<button class="as-remove" data-remove="'+g.id+'">rimuovi</button>') +
+            '</div>';
+
+    html += '<div class="as-row">';
+    html += '<div class="as-field"><label>Ruolo</label><select data-f="ruolo" data-id="'+g.id+'">';
+    ['singolo','capofamiglia','capogruppo','familiare','membro'].forEach(function(r){
+      html += '<option value="'+r+'" '+(g.ruolo===r?'selected':'')+'>'+roleLabel(r)+'</option>';
+    });
+    html += '</select></div>';
+    if (isDependent){
+      html += '<div class="as-field"><label>Collegato a</label><select data-f="groupOf" data-id="'+g.id+'"><option value="">—</option>';
+      capiOptions.forEach(function(c){
+        html += '<option value="'+c.id+'" '+(g.groupOf===c.id?'selected':'')+'>'+(c.cognome+' '+c.nome).trim()+'</option>';
+      });
+      html += '</select></div>';
+    } else {
+      html += '<div class="as-field"><label>Data arrivo</label><input type="date" data-f="dataArrivo" data-id="'+g.id+'" value="'+g.dataArrivo+'"></div>';
+      html += '<div class="as-field"><label>Giorni permanenza</label><input type="number" min="1" max="30" data-f="permanenza" data-id="'+g.id+'" value="'+g.permanenza+'"></div>';
+    }
+    html += '</div>';
+
+    html += '<div class="as-row">';
+    html += '<div class="as-field"><label>Cognome</label><input data-f="cognome" data-id="'+g.id+'" value="'+g.cognome+'"></div>';
+    html += '<div class="as-field"><label>Nome</label><input data-f="nome" data-id="'+g.id+'" value="'+g.nome+'"></div>';
+    html += '<div class="as-field"><label>Sesso</label><select data-f="sesso" data-id="'+g.id+'"><option value="M" '+(g.sesso==='M'?'selected':'')+'>M</option><option value="F" '+(g.sesso==='F'?'selected':'')+'>F</option></select></div>';
+    html += '<div class="as-field"><label>Data nascita</label><input type="date" data-f="dataNascita" data-id="'+g.id+'" value="'+g.dataNascita+'"></div>';
+    html += '</div>';
+
+    html += '<div class="as-row">';
+    html += '<div class="as-field"><label>Nato/a all\'estero?</label><select data-f="nascitaEstero" data-id="'+g.id+'"><option value="false" '+(!g.nascitaEstero?'selected':'')+'>No, in Italia</option><option value="true" '+(g.nascitaEstero?'selected':'')+'>Sì</option></select></div>';
+    if (g.nascitaEstero){
+      html += '<div class="as-field"><label>Stato di nascita</label><input list="dl-stati" data-f="statoNascitaNome" data-id="'+g.id+'" value="'+g.statoNascitaNome+'"></div>';
+    } else {
+      html += '<div class="as-field"><label>Comune di nascita</label><input list="dl-comuni" data-f="comuneNascitaNome" data-id="'+g.id+'" value="'+g.comuneNascitaNome+'"></div>';
+    }
+    html += '<div class="as-field"><label>Cittadinanza</label><input list="dl-stati" data-f="cittadinanzaNome" data-id="'+g.id+'" value="'+g.cittadinanzaNome+'"></div>';
+    html += '</div>';
+
+    if (!isDependent){
+      html += '<div class="as-row">';
+      html += '<div class="as-field"><label>Tipo documento</label><input list="dl-doc" data-f="tipoDocumentoNome" data-id="'+g.id+'" value="'+g.tipoDocumentoNome+'"></div>';
+      html += '<div class="as-field"><label>Numero documento</label><input data-f="numeroDocumento" data-id="'+g.id+'" value="'+g.numeroDocumento+'"></div>';
+      html += '<div class="as-field"><label>Rilascio all\'estero?</label><select data-f="rilascioEstero" data-id="'+g.id+'"><option value="false" '+(!g.rilascioEstero?'selected':'')+'>No, in Italia</option><option value="true" '+(g.rilascioEstero?'selected':'')+'>Sì</option></select></div>';
+      html += '<div class="as-field"><label>Luogo rilascio</label><input list="'+(g.rilascioEstero?'dl-stati':'dl-comuni')+'" data-f="luogoRilascioNome" data-id="'+g.id+'" value="'+g.luogoRilascioNome+'"></div>';
+      html += '</div>';
+    }
+
+    var problems = validateGuest(g);
+    if (problems.length) html += '<div class="as-err">' + problems.join(' · ') + '</div>';
+    else html += '<div class="as-ok">Dati completi</div>';
+
+    html += '</div>';
+  });
+
+  html += '<datalist id="dl-comuni">' + state.tables.comuni.map(function(c){return '<option value="'+c.nome+'">';}).join('') + '</datalist>';
+  html += '<datalist id="dl-stati">' + state.tables.stati.map(function(c){return '<option value="'+c.nome+'">';}).join('') + '</datalist>';
+  html += '<datalist id="dl-doc">' + state.tables.documenti.map(function(c){return '<option value="'+c.nome+'">';}).join('') + '</datalist>';
+
+  el.innerHTML = html;
+
+  document.getElementById('as-add-photo').onclick = function(){ document.getElementById('as-file-input').click(); };
+  document.getElementById('as-file-input').onchange = function(e){
+    var files = Array.prototype.slice.call(e.target.files || []);
+    files.forEach(function(file){
+      var g = newGuest();
+      state.guests.push(g);
+      ocrDocument(file, g).then(function(){ archiveDocument(file, g); });
+    });
+    saveGuests();
+    e.target.value = '';
+  };
+  document.getElementById('as-add-manual').onclick = function(){
+    state.guests.push(newGuest()); saveGuests(); render();
+  };
+  el.querySelectorAll('[data-remove]').forEach(function(btn){
+    btn.onclick = function(){
+      var id = btn.getAttribute('data-remove');
+      state.guests = state.guests.filter(function(g){ return g.id !== id; });
+      saveGuests(); render();
+    };
+  });
+  el.querySelectorAll('[data-f]').forEach(function(inp){
+    inp.onchange = function(){
+      var id = inp.getAttribute('data-id');
+      var f = inp.getAttribute('data-f');
+      var g = state.guests.find(function(x){ return x.id === id; });
+      if (!g) return;
+      var v = inp.value;
+      if (f === 'nascitaEstero' || f === 'rilascioEstero') v = (v === 'true');
+      g[f] = v;
+      saveGuests(); render();
+    };
+  });
+}
+
+function validateGuest(g){
+  var probs = [];
+  if (!g.cognome) probs.push('cognome mancante');
+  if (!g.nome) probs.push('nome mancante');
+  if (!g.dataNascita) probs.push('data di nascita mancante');
+  if (g.nascitaEstero){
+    if (!findByName(state.tables.stati, g.statoNascitaNome)) probs.push('stato di nascita non in tabella');
+  } else {
+    if (!findByName(state.tables.comuni, g.comuneNascitaNome)) probs.push('comune di nascita non in tabella');
+  }
+  if (!findByName(state.tables.stati, g.cittadinanzaNome)) probs.push('cittadinanza non in tabella');
+  var isDependent = g.ruolo === 'familiare' || g.ruolo === 'membro';
+  if (isDependent && !g.groupOf) probs.push('non collegato a un capofamiglia/capogruppo');
+  if (!isDependent){
+    if (!findByName(state.tables.documenti, g.tipoDocumentoNome)) probs.push('tipo documento non in tabella');
+    if (!g.numeroDocumento) probs.push('numero documento mancante');
+    if (g.rilascioEstero){
+      if (!findByName(state.tables.stati, g.luogoRilascioNome)) probs.push('luogo rilascio (stato) non in tabella');
+    } else {
+      if (!findByName(state.tables.comuni, g.luogoRilascioNome)) probs.push('luogo rilascio (comune) non in tabella');
+    }
+    if (!g.dataArrivo) probs.push('data arrivo mancante');
+    if (!g.permanenza) probs.push('permanenza mancante');
+  }
+  return probs;
+}
+
+/* ---------- Tabelle codici tab ---------- */
+function renderTabelle(){
+  var el = document.getElementById('tab-tabelle');
+  var html = '';
+  html += '<div class="as-card">';
+  html += '<p class="as-sub" style="margin-bottom:14px;">Incolla qui le tabelle ufficiali scaricate una volta dal portale Alloggiati Web (menu Area Download → Tabelle, formato Excel: converti i fogli Comuni / Stati / Tipi Documento in testo con formato <code>codice;nome</code>, per i comuni <code>codice;nome;provincia</code>). Restano salvate in questo dispositivo.</p>';
+
+  ['comuni','stati','documenti'].forEach(function(kind){
+    var label = kind==='comuni' ? 'Comuni (codice;nome;provincia)' : kind==='stati' ? 'Stati (codice;nome) — includi ITALIA' : 'Tipi documento (codice;nome)';
+    html += '<div class="as-field"><label>'+label+' — '+state.tables[kind].length+' voci caricate</label>' +
+            '<textarea rows="4" id="ta-'+kind+'" placeholder="'+(kind==='comuni'?'058091;TORINO;TO':'100000100;ITALIA')+'"></textarea>' +
+            '<button class="as-btn secondary" style="margin-top:6px;" data-load="'+kind+'">Carica/aggiorna tabella</button></div>';
+  });
+  html += '</div>';
+  el.innerHTML = html;
+
+  el.querySelectorAll('[data-load]').forEach(function(btn){
+    btn.onclick = function(){
+      var kind = btn.getAttribute('data-load');
+      var text = document.getElementById('ta-'+kind).value;
+      if (!text.trim()) return;
+      var parsed = parseCsv(text, kind);
+      state.tables[kind] = parsed;
+      saveTables();
+      render();
+    };
+  });
+
+  if (state.backend.url){
+    var importBox = document.createElement('div');
+    importBox.className = 'as-card';
+    importBox.innerHTML =
+      '<p class="as-sub">In alternativa, scarica le tabelle direttamente dalla Questura tramite il backend configurato. Il formato esatto della tabella "Luoghi" (comuni + stati insieme) va verificato una volta: dopo lo scaricamento controlla l\'anteprima e conferma come interpretarla.</p>' +
+      '<div class="as-row">' +
+        '<button class="as-btn secondary" id="as-fetch-luoghi">Scarica Luoghi (comuni/stati)</button>' +
+        '<button class="as-btn secondary" id="as-fetch-doc">Scarica tipi documento</button>' +
+      '</div>' +
+      '<div id="as-fetch-preview" style="margin-top:12px;"></div>';
+    el.appendChild(importBox);
+
+    document.getElementById('as-fetch-doc').onclick = function(){ fetchTabella('documenti'); };
+    document.getElementById('as-fetch-luoghi').onclick = function(){ fetchTabella('luoghi'); };
+  }
+}
+
+async function fetchTabella(kind){
+  var endpoint = kind === 'luoghi' ? 'luoghi' : 'documenti';
+  var out = document.getElementById('as-fetch-preview');
+  out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>scaricamento in corso…</span>';
+  try {
+    var resp = await fetch(backendUrl('/api/tabella/'+endpoint), { headers: backendHeaders() });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'errore backend');
+    var lines = data.csv.split(/\r?\n/).filter(Boolean);
+    var preview = lines.slice(0, 12).join('\n');
+    out.innerHTML =
+      '<p class="as-sub">'+lines.length+' righe ricevute. Anteprima:</p>' +
+      '<div id="as-file-preview" style="max-height:160px;">'+preview.replace(/</g,'&lt;')+'</div>' +
+      '<div class="as-row" style="margin-top:10px;">' +
+        '<div class="as-field"><label>Colonna codice (0=prima)</label><input type="number" id="col-codice" value="0"></div>' +
+        '<div class="as-field"><label>Colonna nome</label><input type="number" id="col-nome" value="1"></div>' +
+        (kind==='luoghi' ? '<div class="as-field"><label>Colonna provincia (-1 se assente/stato)</label><input type="number" id="col-prov" value="2"></div>' : '') +
+      '</div>' +
+      '<div class="as-row">' +
+        (kind==='luoghi' ?
+          '<button class="as-btn" id="import-comuni">Importa come Comuni</button><button class="as-btn secondary" id="import-stati">Importa come Stati</button>'
+          : '<button class="as-btn" id="import-doc">Importa come tipi documento</button>') +
+      '</div>';
+
+    function doImport(target){
+      var ic = parseInt(document.getElementById('col-codice').value, 10);
+      var inm = parseInt(document.getElementById('col-nome').value, 10);
+      var ip = kind==='luoghi' ? parseInt(document.getElementById('col-prov').value, 10) : -1;
+      var rows = lines.map(function(l){
+        var sep = l.indexOf(';') !== -1 ? ';' : ',';
+        return l.split(sep).map(function(p){return p.trim();});
+      }).filter(function(r){ return r[ic] && r[inm]; });
+      if (target === 'comuni'){
+        state.tables.comuni = rows.map(function(r){ return { codice:r[ic], nome:r[inm], provincia: ip>=0? (r[ip]||'') : '' }; });
+      } else {
+        state.tables[target] = rows.map(function(r){ return { codice:r[ic], nome:r[inm] }; });
+      }
+      saveTables(); render();
+    }
+    if (kind==='luoghi'){
+      document.getElementById('import-comuni').onclick = function(){ doImport('comuni'); };
+      document.getElementById('import-stati').onclick = function(){ doImport('stati'); };
+    } else {
+      document.getElementById('import-doc').onclick = function(){ doImport('documenti'); };
+    }
+  } catch(e){
+    out.innerHTML = '<div class="as-err">'+e.message+'</div>';
+  }
+}
+
+/* ---------- Genera file tab ---------- */
+function pad(str, len){ str = (str||'').toString(); return str.length >= len ? str.slice(0,len) : str + ' '.repeat(len-str.length); }
+function padNum(str, len){ str = (str||'').toString(); return str.length >= len ? str.slice(0,len) : '0'.repeat(len-str.length) + str; }
+function toItDate(iso){
+  if (!iso) return '';
+  var p = iso.split('-');
+  if (p.length !== 3) return '';
+  return p[2] + '/' + p[1] + '/' + p[0];
+}
+var ruoloCode = { singolo:'16', capofamiglia:'17', capogruppo:'18', familiare:'19', membro:'20' };
+
+function buildLine(g){
+  var isDependent = g.ruolo === 'familiare' || g.ruolo === 'membro';
+  var head = isDependent ? state.guests.find(function(x){return x.id===g.groupOf;}) : g;
+  var comune = g.nascitaEstero ? null : findByName(state.tables.comuni, g.comuneNascitaNome);
+  var statoNascita = g.nascitaEstero ? findByName(state.tables.stati, g.statoNascitaNome) : italiaEntry();
+  var cittadinanza = findByName(state.tables.stati, g.cittadinanzaNome);
+
+  var line = '';
+  line += pad(ruoloCode[g.ruolo] || '', 2);
+  line += pad(toItDate(head ? head.dataArrivo : g.dataArrivo), 10);
+  line += padNum(head ? head.permanenza : g.permanenza, 2);
+  line += pad(g.cognome, 50);
+  line += pad(g.nome, 30);
+  line += g.sesso === 'F' ? '2' : '1';
+  line += pad(toItDate(g.dataNascita), 10);
+  line += pad(comune ? comune.codice : '', 9);
+  line += pad(comune ? comune.provincia : '', 2);
+  line += pad(statoNascita ? statoNascita.codice : '', 9);
+  line += pad(cittadinanza ? cittadinanza.codice : '', 9);
+
+  if (!isDependent){
+    var doc = findByName(state.tables.documenti, g.tipoDocumentoNome);
+    var rilascio = g.rilascioEstero ? findByName(state.tables.stati, g.luogoRilascioNome) : findByName(state.tables.comuni, g.luogoRilascioNome);
+    line += pad(doc ? doc.codice : '', 5);
+    line += pad(g.numeroDocumento, 20);
+    line += pad(rilascio ? rilascio.codice : '', 9);
+  } else {
+    line += ' '.repeat(5 + 20 + 9);
+  }
+  return line;
+}
+
+function orderedGuests(){
+  var out = [];
+  state.guests.forEach(function(g){
+    if (g.ruolo === 'singolo' || g.ruolo === 'capofamiglia' || g.ruolo === 'capogruppo'){
+      out.push(g);
+      state.guests.forEach(function(d){
+        if ((d.ruolo === 'familiare' || d.ruolo === 'membro') && d.groupOf === g.id) out.push(d);
+      });
+    }
+  });
+  return out;
+}
+
+function renderGenera(){
+  var el = document.getElementById('tab-genera');
+  var ordered = orderedGuests();
+  var allProblems = [];
+  ordered.forEach(function(g){
+    var p = validateGuest(g);
+    if (p.length) allProblems.push((g.cognome||'(senza nome)') + ': ' + p.join(', '));
+  });
+
+  var html = '<div class="as-card">';
+  html += '<p class="as-sub">'+ordered.length+' ospiti pronti per l\'esportazione. Ordine: capofamiglia/capogruppo seguiti dai relativi familiari/membri, come richiesto dal tracciato.</p>';
+
+  if (allProblems.length){
+    html += '<div class="as-err" style="margin-bottom:12px;">Correggi prima di generare:<br>' + allProblems.join('<br>') + '</div>';
+    html += '<button class="as-btn" disabled>Genera file .txt</button>';
+  } else if (ordered.length === 0) {
+    html += '<p class="as-sub">Aggiungi almeno un ospite nella scheda "Ospiti".</p>';
+  } else {
+    html += '<button class="as-btn" id="as-gen-btn">Genera file .txt</button>';
+  }
+  html += '<div id="as-preview-wrap" style="margin-top:14px;"></div>';
+  html += '</div>';
+  el.innerHTML = html;
+
+  var genBtn = document.getElementById('as-gen-btn');
+  if (genBtn){
+    genBtn.onclick = function(){
+      var lines = ordered.map(buildLine);
+      var content = lines.join('\r\n');
+      document.getElementById('as-preview-wrap').innerHTML =
+        '<p class="as-sub">Anteprima (' + lines.length + ' righe, ' + (lines[0]||'').length + ' caratteri/riga):</p>' +
+        '<div id="as-file-preview"></div>' +
+        '<button class="as-btn secondary" style="margin-top:10px;" id="as-download-btn">Scarica file .txt</button>';
+      document.getElementById('as-file-preview').textContent = content;
+      document.getElementById('as-download-btn').onclick = function(){
+        var blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        var stamp = new Date().toISOString().slice(0,10).replace(/-/g,'');
+        a.href = url;
+        a.download = 'alloggiati_torinosuite_' + stamp + '.txt';
+        a.click();
+        URL.revokeObjectURL(url);
+      };
+
+      if (state.backend.url){
+        var sendBox = document.createElement('div');
+        sendBox.style.marginTop = '14px';
+        sendBox.innerHTML =
+          '<div class="as-row">' +
+            '<button class="as-btn secondary" id="as-test-btn">Valida con la Questura (senza inviare)</button>' +
+            '<button class="as-btn" id="as-send-btn">Invia alla Questura</button>' +
+          '</div>' +
+          '<div id="as-send-result" style="margin-top:10px;"></div>';
+        document.getElementById('as-preview-wrap').appendChild(sendBox);
+
+        document.getElementById('as-test-btn').onclick = function(){ sendToBackend(lines, false); };
+        document.getElementById('as-send-btn').onclick = function(){
+          if (confirm('Confermi l\'invio ufficiale di ' + lines.length + ' schedine alla Questura? Non è reversibile.')) {
+            sendToBackend(lines, true);
+          }
+        };
+      }
+    };
+  }
+}
+
+async function sendToBackend(lines, real){
+  var out = document.getElementById('as-send-result');
+  out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>'+(real?'invio':'validazione')+' in corso…</span>';
+  try {
+    var resp = await fetch(backendUrl(real ? '/api/schedine/send' : '/api/schedine/test'), {
+      method: 'POST',
+      headers: backendHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ righe: lines })
+    });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'errore backend');
+    var html = '<p class="as-ok">Schedine valide: ' + data.schedineValide + ' / ' + lines.length + '</p>';
+    var errori = (data.righeErrori || []).filter(Boolean);
+    if (errori.length){
+      html += '<div class="as-err">Errori per riga:<br>' + errori.map(function(e,i){return (i+1)+': '+e;}).join('<br>') + '</div>';
+    } else if (real) {
+      html += '<p class="as-ok">Inviato correttamente alla Questura.</p>';
+    }
+    out.innerHTML = html;
+  } catch(e){
+    out.innerHTML = '<div class="as-err">'+e.message+'</div>';
+  }
+}
+
+/* ---------- Portali tab ---------- */
+function renderLink(){
+  var el = document.getElementById('tab-link');
+  el.innerHTML =
+    '<div class="as-card"><p class="as-sub">Collegamenti rapidi ai portali. Il caricamento del file resta manuale: la Questura non offre un upload automatico via browser, solo accesso diretto con le tue credenziali.</p>' +
+    '<div class="as-links">' +
+      '<a class="as-link-card" href="https://alloggiatiweb.poliziadistato.it" target="_blank"><div class="n">Alloggiati Web</div><div class="d">Portale Questura → menu "File" per caricare il .txt generato</div></a>' +
+      '<a class="as-link-card" href="https://login.smoobu.com" target="_blank"><div class="n">Smoobu</div><div class="d">Controlla le prenotazioni/ospiti da incrociare con i documenti</div></a>' +
+    '</div></div>';
+}
+
+/* ---------- Archivio documenti tab ---------- */
+function groupKey(e){ return (e.cognomeCapogruppo+'|'+e.nomeCapogruppo+'|'+e.dataArrivo).toLowerCase(); }
+
+function renderArchivio(){
+  var el = document.getElementById('tab-archivio');
+  if (!state.archivio.length){
+    el.innerHTML = '<div class="as-card"><p class="as-sub">Nessun documento archiviato. Le foto caricate nella scheda "Ospiti" vengono salvate qui automaticamente, con cognome/nome del capogruppo e periodo di soggiorno.</p></div>';
+    return;
+  }
+  var groups = {};
+  var order = [];
+  state.archivio.slice().sort(function(a,b){ return (b.dataArrivo||'').localeCompare(a.dataArrivo||''); }).forEach(function(e){
+    var k = groupKey(e);
+    if (!groups[k]) { groups[k] = []; order.push(k); }
+    groups[k].push(e);
+  });
+
+  var html = '<div class="as-card">';
+  order.forEach(function(k){
+    var items = groups[k];
+    var head = items[0];
+    var periodo = toItDate(head.dataArrivo) + (head.permanenza ? ' · ' + head.permanenza + ' notti' : '');
+    html += '<div class="as-group-head">' + (head.cognomeCapogruppo+' '+head.nomeCapogruppo).trim() + '</div>';
+    html += '<div class="as-group-period">' + periodo + '</div>';
+    html += '<div class="as-doc-grid">';
+    items.forEach(function(e){
+      html += '<div class="as-doc" data-entry="'+e.id+'">' +
+              '<img data-photo="'+e.fotoKey+'" alt="documento">' +
+              '<div class="n">'+(e.cognomeOspite+' '+e.nomeOspite).trim()+'</div>' +
+              '<button class="as-remove" data-remove-doc="'+e.id+'" style="margin-top:4px;">rimuovi</button>' +
+              '</div>';
+    });
+    html += '</div>';
+  });
+  html += '</div>';
+  el.innerHTML = html;
+
+  el.querySelectorAll('img[data-photo]').forEach(function(img){
+    var key = img.getAttribute('data-photo');
+    window.storage.get(key, false).then(function(res){
+      if (res && res.value) img.src = 'data:image/jpeg;base64,' + res.value;
+    }).catch(function(){});
+    img.onclick = function(){
+      window.storage.get(key, false).then(function(res){
+        if (res && res.value){
+          var w = window.open();
+          w.document.write('<img src="data:image/jpeg;base64,'+res.value+'" style="max-width:100%">');
+        }
+      }).catch(function(){});
+    };
+  });
+  el.querySelectorAll('[data-remove-doc]').forEach(function(btn){
+    btn.onclick = async function(){
+      var id = btn.getAttribute('data-remove-doc');
+      var entry = state.archivio.find(function(x){ return x.id === id; });
+      if (!entry) return;
+      try {
+        var v = await window.storage.get(entry.fotoKey, false);
+        if (v) await window.storage.delete(entry.fotoKey, false);
+      } catch(e){}
+      state.archivio = state.archivio.filter(function(x){ return x.id !== id; });
+      saveArchivio(); render();
+    };
+  });
+}
+
+/* ---------- Backend tab ---------- */
+function renderBackend(){
+  var el = document.getElementById('tab-backend');
+  el.innerHTML =
+    '<div class="as-card">' +
+    '<p class="as-sub">Indirizzo del backend installato sul tuo QNAP (es. http://192.168.1.50:4600) e la chiave segreta scelta nel file .env del server. Utente, password e WSKEY della Questura restano SOLO sul server, mai in questa app.</p>' +
+    '<div class="as-field"><label>Indirizzo backend</label><input id="be-url" value="'+(state.backend.url||'')+'" placeholder="http://192.168.1.50:4600"></div>' +
+    '<div class="as-field"><label>Chiave segreta (APP_SECRET)</label><input id="be-secret" type="password" value="'+(state.backend.secret||'')+'"></div>' +
+    '<button class="as-btn secondary" id="be-save">Salva</button>' +
+    '<button class="as-btn ghost" id="be-test" style="margin-left:8px;">Verifica connessione</button>' +
+    '<div id="be-result" style="margin-top:10px;"></div>' +
+    '</div>';
+
+  document.getElementById('be-save').onclick = function(){
+    state.backend.url = document.getElementById('be-url').value.trim();
+    state.backend.secret = document.getElementById('be-secret').value.trim();
+    saveBackend(); render();
+  };
+  document.getElementById('be-test').onclick = async function(){
+    var out = document.getElementById('be-result');
+    out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>verifica in corso…</span>';
+    try {
+      var resp = await fetch(backendUrl('/api/status'), { headers: backendHeaders() });
+      var data = await resp.json();
+      if (!resp.ok || !data.ok) throw new Error(data.error || 'connessione fallita');
+      out.innerHTML = '<p class="as-ok">Connesso. Token valido fino alle ' + new Date(data.scade).toLocaleTimeString('it-IT') + '.</p>';
+    } catch(e){
+      out.innerHTML = '<div class="as-err">'+e.message+'</div>';
+    }
+  };
+}
+
+/* ---------- Tabs & main render ---------- */
+function render(){
+  renderOspiti(); renderTabelle(); renderGenera(); renderArchivio(); renderBackend(); renderLink();
+}
+
+document.querySelectorAll('.as-tab').forEach(function(tab){
+  tab.onclick = function(){
+    document.querySelectorAll('.as-tab').forEach(function(t){ t.classList.remove('active'); });
+    tab.classList.add('active');
+    var name = tab.getAttribute('data-tab');
+    ['ospiti','tabelle','genera','archivio','backend','link'].forEach(function(n){
+      document.getElementById('tab-'+n).classList.toggle('as-hidden', n !== name);
+    });
+  };
+});
+
+loadState().then(render);
+
+})();
+
+</script>
+<script>
+(function(){
+  var switcher = document.getElementById('ts-switcher');
+  var porteSection = document.getElementById('porte-section');
+  var questuraSection = document.getElementById('questura-section');
+  var btnPorte = document.getElementById('ts-btn-porte');
+  var btnQuestura = document.getElementById('ts-btn-questura');
+
+  function showPorte(){
+    porteSection.style.display = 'block';
+    questuraSection.style.display = 'none';
+    btnPorte.classList.add('ts-active');
+    btnQuestura.classList.remove('ts-active');
+  }
+  function showQuestura(){
+    porteSection.style.display = 'none';
+    questuraSection.style.display = 'block';
+    btnQuestura.classList.add('ts-active');
+    btnPorte.classList.remove('ts-active');
+  }
+  btnPorte.onclick = showPorte;
+  btnQuestura.onclick = showQuestura;
+
+  var root = document.getElementById('root');
+  function checkUnlocked(){
+    if (root.querySelector('.app-root')) {
+      switcher.classList.add('ts-visible');
+    }
+  }
+  checkUnlocked();
+  new MutationObserver(checkUnlocked).observe(root, { childList: true, subtree: true });
+})();
+</script>
 </body>
+
 </html>
