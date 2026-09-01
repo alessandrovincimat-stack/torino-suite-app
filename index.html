@@ -133,11 +133,10 @@
 
   <div class="as-tabs">
     <div class="as-tab active" data-tab="ospiti">Ospiti</div>
-    <div class="as-tab" data-tab="tabelle">Tabelle codici</div>
     <div class="as-tab" data-tab="genera">Genera file</div>
     <div class="as-tab" data-tab="archivio">Archivio documenti</div>
-    <div class="as-tab" data-tab="backend">Backend</div>
     <div class="as-tab" data-tab="link">Portali</div>
+    <div class="as-tab" id="as-admin-tab" style="opacity:.55;">🔒 Admin</div>
   </div>
 
   <div id="tab-ospiti"></div>
@@ -1603,16 +1602,48 @@ function render(){
   renderOspiti(); renderTabelle(); renderGenera(); renderArchivio(); renderBackend(); renderLink();
 }
 
-document.querySelectorAll('.as-tab').forEach(function(tab){
-  tab.onclick = function(){
-    document.querySelectorAll('.as-tab').forEach(function(t){ t.classList.remove('active'); });
-    tab.classList.add('active');
-    var name = tab.getAttribute('data-tab');
-    ['ospiti','tabelle','genera','archivio','backend','link'].forEach(function(n){
-      document.getElementById('tab-'+n).classList.toggle('as-hidden', n !== name);
-    });
-  };
+var adminUnlocked = false;
+
+function switchTab(name){
+  document.querySelectorAll('.as-tab[data-tab]').forEach(function(t){ t.classList.remove('active'); });
+  var btn = document.querySelector('.as-tab[data-tab="'+name+'"]');
+  if (btn) btn.classList.add('active');
+  ['ospiti','tabelle','genera','archivio','backend','link'].forEach(function(n){
+    var el = document.getElementById('tab-'+n);
+    if (el) el.classList.toggle('as-hidden', n !== name);
+  });
+}
+
+document.querySelectorAll('.as-tab[data-tab]').forEach(function(tab){
+  tab.onclick = function(){ switchTab(tab.getAttribute('data-tab')); };
 });
+
+document.getElementById('as-admin-tab').onclick = function(){
+  if (adminUnlocked){ switchTab('backend'); return; }
+  var code = prompt('Codice amministratore');
+  if (code === null) return;
+  if (code.trim() === '050808'){
+    adminUnlocked = true;
+    var adminBtn = document.getElementById('as-admin-tab');
+    adminBtn.textContent = 'Admin';
+    adminBtn.style.opacity = '1';
+    var tabelleBtn = document.createElement('div');
+    tabelleBtn.className = 'as-tab';
+    tabelleBtn.setAttribute('data-tab','tabelle');
+    tabelleBtn.textContent = 'Tabelle codici';
+    tabelleBtn.onclick = function(){ switchTab('tabelle'); };
+    var backendBtn = document.createElement('div');
+    backendBtn.className = 'as-tab';
+    backendBtn.setAttribute('data-tab','backend');
+    backendBtn.textContent = 'Backend';
+    backendBtn.onclick = function(){ switchTab('backend'); };
+    adminBtn.parentNode.insertBefore(tabelleBtn, adminBtn);
+    adminBtn.parentNode.insertBefore(backendBtn, adminBtn);
+    switchTab('backend');
+  } else {
+    alert('Codice errato');
+  }
+};
 
 loadState().then(render);
 
