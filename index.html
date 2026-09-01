@@ -1005,6 +1005,8 @@ function newGuest(){
     cognome: '', nome: '', sesso: 'M', dataNascita: '',
     nascitaEstero: false, comuneNascitaNome: '', statoNascitaNome: 'ITALIA',
     cittadinanzaNome: 'ITALIA',
+    residenzaEstero: false, comuneResidenzaNome: '', statoResidenzaNome: 'ITALIA',
+    tipoTurismo: 'Non specificato', mezzoTrasporto: 'Non specificato',
     tipoDocumentoNome: '', numeroDocumento: '',
     rilascioEstero: false, luogoRilascioNome: '',
     ocrPending: false
@@ -1125,6 +1127,24 @@ function renderOspiti(){
       html += '</div>';
     }
 
+    html += '<details style="margin-top:10px;"><summary style="cursor:pointer;color:var(--text-muted);font-size:12px;">Dati ISTAT (Piemonte Dati Turismo) — facoltativi</summary>';
+    html += '<div class="as-row" style="margin-top:8px;">';
+    html += '<div class="as-field"><label>Residente all\'estero?</label><select data-f="residenzaEstero" data-id="'+g.id+'"><option value="false" '+(!g.residenzaEstero?'selected':'')+'>No, in Italia</option><option value="true" '+(g.residenzaEstero?'selected':'')+'>Sì</option></select></div>';
+    if (g.residenzaEstero){
+      html += '<div class="as-field"><label>Stato di residenza</label><input list="dl-stati" data-f="statoResidenzaNome" data-id="'+g.id+'" value="'+g.statoResidenzaNome+'"></div>';
+    } else {
+      html += '<div class="as-field"><label>Comune di residenza</label><input list="dl-comuni" data-f="comuneResidenzaNome" data-id="'+g.id+'" value="'+g.comuneResidenzaNome+'"></div>';
+    }
+    html += '</div>';
+    html += '<div class="as-row">';
+    html += '<div class="as-field"><label>Tipo turismo</label><select data-f="tipoTurismo" data-id="'+g.id+'">' +
+      ['Non specificato','Culturale','Balneare','Congressuale/Affari','Fieristico','Sportivo/Fitness','Scolastico','Religioso','Sociale','Parchi Tematici','Termale/Trattamenti salute','Enogastronomico','Cicloturismo','Escursionistico/Naturalistico','Altro motivo'].map(function(t){ return '<option '+(g.tipoTurismo===t?'selected':'')+'>'+t+'</option>'; }).join('') +
+      '</select></div>';
+    html += '<div class="as-field"><label>Mezzo di trasporto</label><select data-f="mezzoTrasporto" data-id="'+g.id+'">' +
+      ['Non specificato','Auto','Aereo','Aereo+Pullman','Aereo+Navetta/Taxi/Auto','Aereo+Treno','Treno','Pullman','Caravan/Autocaravan','Barca/Nave/Traghetto','Moto','Bicicletta','A piedi','Altro mezzo'].map(function(t){ return '<option '+(g.mezzoTrasporto===t?'selected':'')+'>'+t+'</option>'; }).join('') +
+      '</select></div>';
+    html += '</div></details>';
+
     var problems = validateGuest(g);
     if (problems.length) html += '<div class="as-err">' + problems.join(' · ') + '</div>';
     else html += '<div class="as-ok">Dati completi</div>';
@@ -1166,7 +1186,7 @@ function renderOspiti(){
       var g = state.guests.find(function(x){ return x.id === id; });
       if (!g) return;
       var v = inp.value;
-      if (f === 'nascitaEstero' || f === 'rilascioEstero') v = (v === 'true');
+      if (f === 'nascitaEstero' || f === 'rilascioEstero' || f === 'residenzaEstero') v = (v === 'true');
       g[f] = v;
       saveGuests(); render();
     };
@@ -1462,8 +1482,68 @@ function renderGenera(){
             sendToBackend(lines, true, idAppartamento, ordered);
           }
         };
+
+        var istatBox = document.createElement('div');
+        istatBox.style.marginTop = '18px';
+        istatBox.style.borderTop = '1px solid var(--border)';
+        istatBox.style.paddingTop = '14px';
+        istatBox.innerHTML =
+          '<p class="as-sub"><strong>Piemonte Dati Turismo (ISTAT)</strong> — invia gli arrivi di oggi (' + toItDate(todayISO()) + '). Le partenze vanno inviate separatamente il giorno della partenza.</p>' +
+          '<button class="as-btn secondary" id="as-istat-btn">Invia dati ISTAT (arrivi di oggi)</button>' +
+          '<div id="as-istat-result" style="margin-top:10px;"></div>';
+        document.getElementById('as-preview-wrap').appendChild(istatBox);
+        document.getElementById('as-istat-btn').onclick = function(){ inviaIstat(ordered); };
       }
     };
+  }
+}
+
+async function inviaIstat(ordered){
+  var out = document.getElementById('as-istat-result');
+  var oggiISO = todayISO();
+  var arriviOggi = ordered.filter(function(g){ return g.dataArrivo === oggiISO; });
+  if (!arriviOggi.length){
+    out.innerHTML = '<div class="as-err">Nessun ospite con data di arrivo odierna tra quelli generati.</div>';
+    return;
+  }
+  var arrivi = arriviOggi.map(function(g){
+    var comune = g.nascitaEstero ? null : findByName(state.tables.comuni, g.comuneNascitaNome);
+    var statoNascita = g.nascitaEstero ? findByName(state.tables.stati, g.statoNascitaNome) : italiaEntry();
+    var cittadinanza = findByName(state.tables.stati, g.cittadinanzaNome);
+    var comuneRes = g.residenzaEstero ? null : findByName(state.tables.comuni, g.comuneResidenzaNome);
+    var statoRes = g.residenzaEstero ? findByName(state.tables.stati, g.statoResidenzaNome) : italiaEntry();
+    var head = (g.ruolo==='familiare'||g.ruolo==='membro') ? ordered.find(function(x){ return x.id===g.groupOf; }) : null;
+    return {
+      idswh: g.id,
+      tipoalloggiato: ruoloCode[g.ruolo] || '16',
+      idcapo: head ? head.id : '',
+      cognome: g.cognome, nome: g.nome, sesso: g.sesso === 'F' ? 'F' : 'M',
+      cittadinanza: cittadinanza ? cittadinanza.codice : '',
+      statoresidenza: statoRes ? statoRes.codice : '',
+      luogoresidenza: g.residenzaEstero ? (g.comuneResidenzaNome||'') : (comuneRes ? comuneRes.codice : ''),
+      datanascita: (g.dataNascita||'').replace(/-/g,''),
+      statonascita: statoNascita ? statoNascita.codice : '',
+      comunenascita: comune ? comune.codice : '',
+      tipoturismo: g.tipoTurismo || 'Non specificato',
+      mezzotrasporto: g.mezzoTrasporto || 'Non specificato'
+    };
+  });
+  out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>invio in corso…</span>';
+  try {
+    var resp = await fetch(backendUrl('/api/istat/movimento'), {
+      method: 'POST',
+      headers: backendHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        data: oggiISO.replace(/-/g,''),
+        camereOccupate: new Set(arriviOggi.map(function(g){ return g.idAppartamento; })).size,
+        arrivi: arrivi
+      })
+    });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'errore invio ISTAT');
+    out.innerHTML = '<p class="as-ok">Inviato correttamente a Piemonte Dati Turismo (' + arrivi.length + ' ospiti).</p>';
+  } catch(e){
+    out.innerHTML = '<div class="as-err">'+e.message+'</div>';
   }
 }
 
