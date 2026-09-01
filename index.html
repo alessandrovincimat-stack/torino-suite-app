@@ -956,6 +956,9 @@ function parseCsv(text, kind){
   return out;
 }
 
+function tokenSet(s){
+  return (s||'').toUpperCase().split(/[^A-Z0-9]+/).filter(function(w){ return w.length >= 3; }).sort().join('|');
+}
 function normName(s){
   return (s||'').toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
@@ -972,6 +975,9 @@ function findByName(list, name){
     return xn.indexOf(nn) !== -1 || nn.indexOf(xn) !== -1;
   });
   if (contains) return contains;
+  var tok = tokenSet(name);
+  var tokMatch = list.find(function(x){ return tokenSet(x.nome) === tok; });
+  if (tokMatch) return tokMatch;
   return list.find(function(x){ return x.nome.toLowerCase().indexOf(n) === 0; }) || null;
 }
 
