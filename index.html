@@ -1419,6 +1419,7 @@ function renderGenera(){
         var sendBox = document.createElement('div');
         sendBox.style.marginTop = '14px';
         sendBox.innerHTML =
+          '<div class="as-field"><label>ID Appartamento (Questura) — lascia vuoto se il tuo account non è "Gestione Appartamenti"</label><input id="as-id-appartamento" value="'+(state.backend.idAppartamento||'')+'" placeholder="es. 1"></div>' +
           '<div class="as-row">' +
             '<button class="as-btn secondary" id="as-test-btn">Valida con la Questura (senza inviare)</button>' +
             '<button class="as-btn" id="as-send-btn">Invia alla Questura</button>' +
@@ -1439,12 +1440,15 @@ function renderGenera(){
 
 async function sendToBackend(lines, real){
   var out = document.getElementById('as-send-result');
+  var idAppartamento = (document.getElementById('as-id-appartamento').value || '').trim();
+  state.backend.idAppartamento = idAppartamento;
+  saveBackend();
   out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>'+(real?'invio':'validazione')+' in corso…</span>';
   try {
     var resp = await fetch(backendUrl(real ? '/api/schedine/send' : '/api/schedine/test'), {
       method: 'POST',
       headers: backendHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ righe: lines })
+      body: JSON.stringify({ righe: lines, idAppartamento: idAppartamento || undefined })
     });
     var data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'errore backend');
