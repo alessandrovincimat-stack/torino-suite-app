@@ -999,7 +999,7 @@ function italiaEntry(){
 function newGuest(){
   return {
     id: uid(), ruolo: 'singolo', groupOf: '',
-    dataArrivo: todayISO(), permanenza: '1',
+    dataArrivo: todayISO(), permanenza: '1', idAppartamento: (state.tables.appartamenti[0]? state.tables.appartamenti[0].id : ''),
     cognome: '', nome: '', sesso: 'M', dataNascita: '',
     nascitaEstero: false, comuneNascitaNome: '', statoNascitaNome: 'ITALIA',
     cittadinanzaNome: 'ITALIA',
@@ -1091,6 +1091,9 @@ function renderOspiti(){
     } else {
       html += '<div class="as-field"><label>Data arrivo</label><input type="date" data-f="dataArrivo" data-id="'+g.id+'" value="'+g.dataArrivo+'"></div>';
       html += '<div class="as-field"><label>Giorni permanenza</label><input type="number" min="1" max="30" data-f="permanenza" data-id="'+g.id+'" value="'+g.permanenza+'"></div>';
+      html += '<div class="as-field"><label>Appartamento</label><select data-f="idAppartamento" data-id="'+g.id+'"><option value="">—</option>' +
+        state.tables.appartamenti.map(function(a){ return '<option value="'+a.id+'" '+(g.idAppartamento===a.id?'selected':'')+'>'+a.nome+'</option>'; }).join('') +
+        '</select></div>';
     }
     html += '</div>';
 
@@ -1432,13 +1435,18 @@ function renderGenera(){
       };
 
       if (state.backend.url){
+        var headsWithApp = ordered.filter(function(g){ return g.ruolo!=='familiare' && g.ruolo!=='membro'; });
+        var appIds = Array.from(new Set(headsWithApp.map(function(g){ return g.idAppartamento || ''; })));
+        var idAppartamento = appIds[0] || '';
+        var appNome = (state.tables.appartamenti.find(function(a){ return a.id===idAppartamento; })||{}).nome;
         var sendBox = document.createElement('div');
         sendBox.style.marginTop = '14px';
+        var appLine = idAppartamento
+          ? '<p class="as-sub">Appartamento: <strong>'+(appNome||idAppartamento)+'</strong> (scelto nella scheda ospite)</p>'
+          : '<p class="as-sub">Nessun appartamento selezionato negli ospiti — invio senza riferimento appartamento.</p>';
+        if (appIds.length > 1) appLine += '<p class="as-warn">Attenzione: gli ospiti hanno appartamenti diversi tra loro; verrà usato solo "'+(appNome||idAppartamento)+'". Invia gli altri separatamente.</p>';
         sendBox.innerHTML =
-          '<div class="as-field"><label>Appartamento (Questura) — lascia "Nessuno" se il tuo account non è "Gestione Appartamenti"</label><select id="as-id-appartamento">' +
-            '<option value="">Nessuno</option>' +
-            state.tables.appartamenti.map(function(a){ return '<option value="'+a.id+'" '+(state.backend.idAppartamento===a.id?'selected':'')+'>'+a.nome+'</option>'; }).join('') +
-          '</select></div>' +
+          appLine +
           '<div class="as-row">' +
             '<button class="as-btn secondary" id="as-test-btn">Valida con la Questura (senza inviare)</button>' +
             '<button class="as-btn" id="as-send-btn">Invia alla Questura</button>' +
@@ -1446,10 +1454,10 @@ function renderGenera(){
           '<div id="as-send-result" style="margin-top:10px;"></div>';
         document.getElementById('as-preview-wrap').appendChild(sendBox);
 
-        document.getElementById('as-test-btn').onclick = function(){ sendToBackend(lines, false); };
+        document.getElementById('as-test-btn').onclick = function(){ sendToBackend(lines, false, idAppartamento); };
         document.getElementById('as-send-btn').onclick = function(){
           if (confirm('Confermi l\'invio ufficiale di ' + lines.length + ' schedine alla Questura? Non è reversibile.')) {
-            sendToBackend(lines, true);
+            sendToBackend(lines, true, idAppartamento);
           }
         };
       }
@@ -1457,11 +1465,8 @@ function renderGenera(){
   }
 }
 
-async function sendToBackend(lines, real){
+async function sendToBackend(lines, real, idAppartamento){
   var out = document.getElementById('as-send-result');
-  var idAppartamento = (document.getElementById('as-id-appartamento').value || '').trim();
-  state.backend.idAppartamento = idAppartamento;
-  saveBackend();
   out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>'+(real?'invio':'validazione')+' in corso…</span>';
   try {
     var resp = await fetch(backendUrl(real ? '/api/schedine/send' : '/api/schedine/test'), {
