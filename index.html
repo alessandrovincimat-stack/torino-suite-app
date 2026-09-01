@@ -16,7 +16,7 @@
   html, body { margin: 0; padding: 0; background: #0a0a0a; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
   #root { min-height: 100vh; }
 
-  .ts-switcher { position: sticky; top: 0; z-index: 40; display: none; gap: 8px; padding: 10px 14px; background: rgba(10,9,8,0.92); backdrop-filter: blur(6px); border-bottom: 1px solid var(--border); }
+  .ts-switcher { position: sticky; top: 0; z-index: 40; display: none; gap: 8px; padding: calc(10px + env(safe-area-inset-top)) 14px 10px; background: rgba(10,9,8,0.98); backdrop-filter: blur(6px); border-bottom: 1px solid var(--border); }
   .ts-switcher.ts-visible { display: flex; }
   .ts-switch-btn { flex: 1; max-width: 220px; background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; letter-spacing: .3px; cursor: pointer; text-align: center; }
   .ts-switch-btn.ts-active { border-color: var(--brass); color: var(--brass); background: var(--surface-2); }
@@ -2067,9 +2067,7 @@ loadState().then(render);
 
   var root = document.getElementById('root');
   function checkUnlocked(){
-    if (root.querySelector('.app-root')) {
-      switcher.classList.add('ts-visible');
-    }
+    switcher.classList.toggle('ts-visible', !!root.querySelector('.app-root'));
   }
   checkUnlocked();
   new MutationObserver(checkUnlocked).observe(root, { childList: true, subtree: true });
