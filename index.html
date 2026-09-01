@@ -836,7 +836,7 @@ lucide-react/dist/esm/lucide-react.js:
 
 (function(){
 
-var state = { guests: [], tables: { comuni: [], stati: [], documenti: [] }, backend: { url: '', secret: '' }, archivio: [] };
+var state = { guests: [], tables: { comuni: [], stati: [], documenti: [], appartamenti: [] }, backend: { url: '', secret: '' }, archivio: [] };
 
 function uid(){ return 'g' + Math.random().toString(36).slice(2,9); }
 
@@ -857,6 +857,17 @@ async function loadState(){
   }
   if (!state.tables.documenti.find(function(s){return s.codice==='IDENT';})){
     state.tables.documenti.push({ codice:'IDENT', nome:"CARTA D'IDENTITA" });
+    saveTables();
+  }
+  if (!state.tables.appartamenti || !state.tables.appartamenti.length){
+    state.tables.appartamenti = [
+      { id:'0', nome:'CARLO ALBERTO' },
+      { id:'1', nome:'CARLO FELICE' },
+      { id:'2', nome:'SAN CARLO' },
+      { id:'3', nome:'CARIGNANO' },
+      { id:'4', nome:'CASA BORGONE' },
+      { id:'5', nome:'VITTORIO' }
+    ];
     saveTables();
   }
   try {
@@ -1191,10 +1202,10 @@ function renderTabelle(){
   html += '<div class="as-card">';
   html += '<p class="as-sub" style="margin-bottom:14px;">Incolla qui le tabelle ufficiali scaricate una volta dal portale Alloggiati Web (menu Area Download → Tabelle, formato Excel: converti i fogli Comuni / Stati / Tipi Documento in testo con formato <code>codice;nome</code>, per i comuni <code>codice;nome;provincia</code>). Restano salvate in questo dispositivo.</p>';
 
-  ['comuni','stati','documenti'].forEach(function(kind){
-    var label = kind==='comuni' ? 'Comuni (codice;nome;provincia)' : kind==='stati' ? 'Stati (codice;nome) — includi ITALIA' : 'Tipi documento (codice;nome)';
+  ['comuni','stati','documenti','appartamenti'].forEach(function(kind){
+    var label = kind==='comuni' ? 'Comuni (codice;nome;provincia)' : kind==='stati' ? 'Stati (codice;nome) — includi ITALIA' : kind==='documenti' ? 'Tipi documento (codice;nome)' : 'Appartamenti (id;nome)';
     html += '<div class="as-field"><label>'+label+' — '+state.tables[kind].length+' voci caricate</label>' +
-            '<textarea rows="4" id="ta-'+kind+'" placeholder="'+(kind==='comuni'?'058091;TORINO;TO':'100000100;ITALIA')+'"></textarea>' +
+            '<textarea rows="4" id="ta-'+kind+'" placeholder="'+(kind==='comuni'?'058091;TORINO;TO':kind==='appartamenti'?'0;CARLO ALBERTO':'100000100;ITALIA')+'"></textarea>' +
             '<button class="as-btn secondary" style="margin-top:6px;" data-load="'+kind+'">Carica/aggiorna tabella</button></div>';
   });
   html += '</div>';
@@ -1205,8 +1216,13 @@ function renderTabelle(){
       var kind = btn.getAttribute('data-load');
       var text = document.getElementById('ta-'+kind).value;
       if (!text.trim()) return;
-      var parsed = parseCsv(text, kind);
-      state.tables[kind] = parsed;
+      if (kind === 'appartamenti'){
+        var parsedApp = parseCsv(text, 'appartamenti').map(function(x){ return { id:x.codice, nome:x.nome }; });
+        state.tables.appartamenti = parsedApp;
+      } else {
+        var parsed = parseCsv(text, kind);
+        state.tables[kind] = parsed;
+      }
       saveTables();
       render();
     };
@@ -1419,7 +1435,10 @@ function renderGenera(){
         var sendBox = document.createElement('div');
         sendBox.style.marginTop = '14px';
         sendBox.innerHTML =
-          '<div class="as-field"><label>ID Appartamento (Questura) — lascia vuoto se il tuo account non è "Gestione Appartamenti"</label><input id="as-id-appartamento" value="'+(state.backend.idAppartamento||'')+'" placeholder="es. 1"></div>' +
+          '<div class="as-field"><label>Appartamento (Questura) — lascia "Nessuno" se il tuo account non è "Gestione Appartamenti"</label><select id="as-id-appartamento">' +
+            '<option value="">Nessuno</option>' +
+            state.tables.appartamenti.map(function(a){ return '<option value="'+a.id+'" '+(state.backend.idAppartamento===a.id?'selected':'')+'>'+a.nome+'</option>'; }).join('') +
+          '</select></div>' +
           '<div class="as-row">' +
             '<button class="as-btn secondary" id="as-test-btn">Valida con la Questura (senza inviare)</button>' +
             '<button class="as-btn" id="as-send-btn">Invia alla Questura</button>' +
