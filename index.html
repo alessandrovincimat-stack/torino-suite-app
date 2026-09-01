@@ -834,7 +834,7 @@ lucide-react/dist/esm/lucide-react.js:
 
 (function(){
 
-var state = { guests: [], tables: { comuni: [], stati: [], documenti: [], appartamenti: [] }, backend: { url: '', secret: '' }, archivio: [] };
+var state = { guests: [], tables: { comuni: [], stati: [], documenti: [], appartamenti: [] }, backend: { url: '', secret: '' }, archivio: [], invii: [] };
 
 function uid(){ return 'g' + Math.random().toString(36).slice(2,9); }
 
@@ -875,6 +875,10 @@ async function loadState(){
   try {
     var a = await window.storage.get('as-archivio', false);
     if (a && a.value) state.archivio = JSON.parse(a.value);
+  } catch(e){}
+  try {
+    var iv = await window.storage.get('as-invii', false);
+    if (iv && iv.value) state.invii = JSON.parse(iv.value);
   } catch(e){}
 }
 async function saveGuests(){
@@ -1452,10 +1456,10 @@ function renderGenera(){
           '<div id="as-send-result" style="margin-top:10px;"></div>';
         document.getElementById('as-preview-wrap').appendChild(sendBox);
 
-        document.getElementById('as-test-btn').onclick = function(){ sendToBackend(lines, false, idAppartamento); };
+        document.getElementById('as-test-btn').onclick = function(){ sendToBackend(lines, false, idAppartamento, ordered); };
         document.getElementById('as-send-btn').onclick = function(){
           if (confirm('Confermi l\'invio ufficiale di ' + lines.length + ' schedine alla Questura? Non è reversibile.')) {
-            sendToBackend(lines, true, idAppartamento);
+            sendToBackend(lines, true, idAppartamento, ordered);
           }
         };
       }
@@ -1463,7 +1467,7 @@ function renderGenera(){
   }
 }
 
-async function sendToBackend(lines, real, idAppartamento){
+async function sendToBackend(lines, real, idAppartamento, ordered){
   var out = document.getElementById('as-send-result');
   out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>'+(real?'invio':'validazione')+' in corso…</span>';
   try {
@@ -1480,10 +1484,55 @@ async function sendToBackend(lines, real, idAppartamento){
       html += '<div class="as-err">Errori per riga:<br>' + errori.map(function(e,i){return (i+1)+': '+e;}).join('<br>') + '</div>';
     } else if (real) {
       html += '<p class="as-ok">Inviato correttamente alla Questura.</p>';
+      await archiveInvio(ordered, idAppartamento, lines.length);
+      html += '<p class="as-sub">Ospiti spostati nell\'archivio invii.</p>';
+      html += '<button class="as-btn secondary" id="as-ricevuta-btn" style="margin-top:8px;">Scarica ricevuta di oggi</button>';
     }
     out.innerHTML = html;
+    var ricBtn = document.getElementById('as-ricevuta-btn');
+    if (ricBtn) ricBtn.onclick = function(){ scaricaRicevuta(todayISO(), ricBtn); };
+    if (real && !errori.length){ render(); }
   } catch(e){
     out.innerHTML = '<div class="as-err">'+e.message+'</div>';
+  }
+}
+
+async function archiveInvio(ordered, idAppartamento, nRighe){
+  var appNome = (state.tables.appartamenti.find(function(a){ return a.id===idAppartamento; })||{}).nome || idAppartamento || '';
+  var entry = {
+    id: uid(),
+    dataInvio: new Date().toISOString(),
+    idAppartamento: idAppartamento || '',
+    appartamentoNome: appNome,
+    nRighe: nRighe,
+    ospiti: ordered.map(function(g){ return { cognome: g.cognome, nome: g.nome }; })
+  };
+  state.invii.push(entry);
+  var sentIds = ordered.map(function(g){ return g.id; });
+  state.guests = state.guests.filter(function(g){ return sentIds.indexOf(g.id) === -1; });
+  try { await window.storage.set('as-invii', JSON.stringify(state.invii), false); } catch(e){}
+  await saveGuests();
+}
+
+async function scaricaRicevuta(dataISO, btn){
+  var orig = btn.textContent;
+  btn.textContent = 'Scaricamento…'; btn.disabled = true;
+  try {
+    var resp = await fetch(backendUrl('/api/ricevuta?data='+dataISO), { headers: backendHeaders() });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'ricevuta non disponibile');
+    var byteChars = atob(data.pdfBase64);
+    var bytes = new Uint8Array(byteChars.length);
+    for (var i=0;i<byteChars.length;i++) bytes[i] = byteChars.charCodeAt(i);
+    var blob = new Blob([bytes], { type: 'application/pdf' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = 'ricevuta_' + dataISO + '.pdf'; a.click();
+    URL.revokeObjectURL(url);
+    btn.textContent = orig; btn.disabled = false;
+  } catch(e){
+    alert('Ricevuta non disponibile: ' + e.message);
+    btn.textContent = orig; btn.disabled = false;
   }
 }
 
@@ -1503,8 +1552,34 @@ function groupKey(e){ return (e.cognomeCapogruppo+'|'+e.nomeCapogruppo+'|'+e.dat
 
 function renderArchivio(){
   var el = document.getElementById('tab-archivio');
+  var html = '';
+
+  if (state.invii.length){
+    html += '<div class="as-card">';
+    html += '<p class="as-title" style="font-size:16px;">Invii alla Questura</p>';
+    var invOrdinati = state.invii.slice().sort(function(a,b){ return b.dataInvio.localeCompare(a.dataInvio); });
+    var dateUniche = [];
+    invOrdinati.forEach(function(iv){
+      var g = new Date(iv.dataInvio);
+      var dataLocale = g.toLocaleDateString('it-IT') + ' ' + g.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+      var dataISO = iv.dataInvio.slice(0,10);
+      var nomi = iv.ospiti.map(function(o){ return (o.cognome+' '+o.nome).trim(); }).join(', ');
+      html += '<div style="border-bottom:1px solid var(--border);padding:8px 0;">' +
+        '<div>' + dataLocale + ' — ' + (iv.appartamentoNome||'nessun appartamento') + ' (' + iv.nRighe + ' schedine)</div>' +
+        '<div class="as-sub" style="margin:0;">' + nomi + '</div>' +
+        (dateUniche.indexOf(dataISO)===-1 ? '<button class="as-btn ghost" data-ricevuta="'+dataISO+'" style="margin-top:6px;">Scarica ricevuta del '+g.toLocaleDateString('it-IT')+'</button>' : '') +
+        '</div>';
+      if (dateUniche.indexOf(dataISO)===-1) dateUniche.push(dataISO);
+    });
+    html += '</div>';
+  }
+
   if (!state.archivio.length){
-    el.innerHTML = '<div class="as-card"><p class="as-sub">Nessun documento archiviato. Le foto caricate nella scheda "Ospiti" vengono salvate qui automaticamente, con cognome/nome del capogruppo e periodo di soggiorno.</p></div>';
+    html += '<div class="as-card"><p class="as-sub">Nessun documento archiviato. Le foto caricate nella scheda "Ospiti" vengono salvate qui automaticamente, con cognome/nome del capogruppo e periodo di soggiorno.</p></div>';
+    el.innerHTML = html;
+    el.querySelectorAll('[data-ricevuta]').forEach(function(btn){
+      btn.onclick = function(){ scaricaRicevuta(btn.getAttribute('data-ricevuta'), btn); };
+    });
     return;
   }
   var groups = {};
@@ -1515,7 +1590,7 @@ function renderArchivio(){
     groups[k].push(e);
   });
 
-  var html = '<div class="as-card">';
+  html += '<div class="as-card">';
   order.forEach(function(k){
     var items = groups[k];
     var head = items[0];
@@ -1534,6 +1609,9 @@ function renderArchivio(){
   });
   html += '</div>';
   el.innerHTML = html;
+  el.querySelectorAll('[data-ricevuta]').forEach(function(btn){
+    btn.onclick = function(){ scaricaRicevuta(btn.getAttribute('data-ricevuta'), btn); };
+  });
 
   el.querySelectorAll('img[data-photo]').forEach(function(img){
     var key = img.getAttribute('data-photo');
