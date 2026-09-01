@@ -1254,6 +1254,32 @@ async function fetchTabella(kind){
     if (kind==='luoghi'){
       document.getElementById('import-comuni').onclick = function(){ doImport('comuni'); };
       document.getElementById('import-stati').onclick = function(){ doImport('stati'); };
+      var autoBtn = document.createElement('button');
+      autoBtn.className = 'as-btn';
+      autoBtn.style.marginTop = '8px';
+      autoBtn.textContent = 'Importa automatico: separa comuni (con provincia) da stati (senza)';
+      autoBtn.onclick = function(){
+        var ic = parseInt(document.getElementById('col-codice').value, 10);
+        var inm = parseInt(document.getElementById('col-nome').value, 10);
+        var ip = parseInt(document.getElementById('col-prov').value, 10);
+        var comuni = [], stati = [];
+        lines.forEach(function(l){
+          var sep = l.indexOf(';') !== -1 ? ';' : ',';
+          var r = l.split(sep).map(function(p){return p.trim();});
+          if (!r[ic] || !r[inm]) return;
+          var prov = ip>=0 ? (r[ip]||'') : '';
+          if (prov && prov.length <= 3){
+            comuni.push({ codice:r[ic], nome:r[inm], provincia: prov });
+          } else {
+            stati.push({ codice:r[ic], nome:r[inm] });
+          }
+        });
+        state.tables.comuni = comuni;
+        state.tables.stati = stati;
+        saveTables(); render();
+        alert('Importati ' + comuni.length + ' comuni e ' + stati.length + ' stati.');
+      };
+      document.getElementById('as-fetch-preview').appendChild(autoBtn);
     } else {
       document.getElementById('import-doc').onclick = function(){ doImport('documenti'); };
     }
