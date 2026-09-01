@@ -1045,7 +1045,7 @@ function renderOspiti(){
 
     html += '<div class="as-guest" data-id="'+g.id+'">';
     html += '<div class="as-guest-head"><div><span class="as-name">'+(g.cognome||g.nome? (g.cognome+' '+g.nome).trim() : 'Nuovo ospite')+'</span><span class="as-role">'+roleLabel(g.ruolo)+'</span></div>' +
-            (g.ocrPending? '<span class="as-warn"><span class="as-spin"></span>estrazione in corso…</span>' : '<button class="as-remove" data-remove="'+g.id+'">rimuovi</button>') +
+            (g.ocrPending? '<span class="as-warn"><span class="as-spin"></span>estrazione in corso… <button class="as-remove" data-remove="'+g.id+'">annulla</button></span>' : '<button class="as-remove" data-remove="'+g.id+'">rimuovi</button>') +
             '</div>';
 
     html += '<div class="as-row">';
