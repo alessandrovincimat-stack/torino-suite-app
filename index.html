@@ -135,7 +135,6 @@
     <div class="as-tab active" data-tab="ospiti">Ospiti</div>
     <div class="as-tab" data-tab="genera">Genera file</div>
     <div class="as-tab" data-tab="archivio">Archivio documenti</div>
-    <div class="as-tab" data-tab="link">Portali</div>
     <div class="as-tab" id="as-admin-tab" style="opacity:.55;">🔒 Admin</div>
   </div>
 
@@ -1637,8 +1636,14 @@ document.getElementById('as-admin-tab').onclick = function(){
     backendBtn.setAttribute('data-tab','backend');
     backendBtn.textContent = 'Backend';
     backendBtn.onclick = function(){ switchTab('backend'); };
+    var linkBtn = document.createElement('div');
+    linkBtn.className = 'as-tab';
+    linkBtn.setAttribute('data-tab','link');
+    linkBtn.textContent = 'Portali';
+    linkBtn.onclick = function(){ switchTab('link'); };
     adminBtn.parentNode.insertBefore(tabelleBtn, adminBtn);
     adminBtn.parentNode.insertBefore(backendBtn, adminBtn);
+    adminBtn.parentNode.insertBefore(linkBtn, adminBtn);
     switchTab('backend');
   } else {
     alert('Codice errato');
