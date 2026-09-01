@@ -834,7 +834,7 @@ lucide-react/dist/esm/lucide-react.js:
 
 (function(){
 
-var state = { guests: [], tables: { comuni: [], stati: [], documenti: [], appartamenti: [] }, backend: { url: '', secret: '' }, archivio: [], invii: [] };
+var state = { guests: [], tables: { comuni: [], stati: [], documenti: [], appartamenti: [] }, backend: { url: '', secret: '' }, archivio: [], invii: [], istatUltimaData: '' };
 
 function uid(){ return 'g' + Math.random().toString(36).slice(2,9); }
 
@@ -880,6 +880,28 @@ async function loadState(){
     var iv = await window.storage.get('as-invii', false);
     if (iv && iv.value) state.invii = JSON.parse(iv.value);
   } catch(e){}
+  try {
+    var iu = await window.storage.get('as-istat-ultima-data', false);
+    if (iu && iu.value) state.istatUltimaData = iu.value;
+  } catch(e){}
+}
+async function segnaIstatInviato(dataISO){
+  if (!state.istatUltimaData || dataISO > state.istatUltimaData){
+    state.istatUltimaData = dataISO;
+    try { await window.storage.set('as-istat-ultima-data', dataISO, false); } catch(e){}
+  }
+}
+function giorniIstatMancanti(){
+  if (!state.istatUltimaData) return [];
+  var out = [];
+  var d = new Date(state.istatUltimaData);
+  d.setDate(d.getDate() + 1);
+  var ieri = new Date(); ieri.setDate(ieri.getDate() - 1);
+  while (d <= ieri && out.length < 60){
+    out.push(d.toISOString().slice(0,10));
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
 }
 async function saveGuests(){
   try { await window.storage.set('as-guests', JSON.stringify(state.guests), false); } catch(e){}
@@ -1535,6 +1557,7 @@ async function inviaIstatArrivi(arriviOggi, allOrdered){
   });
   var data = await resp.json();
   if (!resp.ok) throw new Error(data.error || 'errore invio ISTAT');
+  await segnaIstatInviato(todayISO());
   return data;
 }
 
@@ -1611,6 +1634,34 @@ async function archiveInvio(ordered, idAppartamento, nRighe){
   await saveGuests();
 }
 
+async function inviaGiorniMancantiIstat(giorni, btn){
+  var out = document.getElementById('as-gap-result');
+  btn.disabled = true;
+  var okCount = 0;
+  for (var i=0;i<giorni.length;i++){
+    var dISO = giorni[i];
+    out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>invio '+(i+1)+'/'+giorni.length+' ('+toItDate(dISO)+')…</span>';
+    try {
+      var resp = await fetch(backendUrl('/api/istat/movimento'), {
+        method: 'POST',
+        headers: backendHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ data: dISO.replace(/-/g,''), camereOccupate: 0, arrivi: [], partenze: [] })
+      });
+      var data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'errore');
+      await segnaIstatInviato(dISO);
+      okCount++;
+    } catch(e){
+      out.innerHTML = '<div class="as-err">Fermato al '+toItDate(dISO)+': '+e.message+' — inviati '+okCount+' su '+giorni.length+'.</div>';
+      btn.disabled = false;
+      render();
+      return;
+    }
+  }
+  out.innerHTML = '<p class="as-ok">Inviata conferma apertura per '+okCount+' giorni.</p>';
+  render();
+}
+
 async function segnalaPartenza(invioId, btn){
   var iv = state.invii.find(function(x){ return x.id === invioId; });
   if (!iv) return;
@@ -1641,6 +1692,7 @@ async function segnalaPartenza(invioId, btn){
     if (!resp.ok) throw new Error(data.error || 'errore invio ISTAT');
     iv.partenzaSegnalata = true;
     await window.storage.set('as-invii', JSON.stringify(state.invii), false);
+    await segnaIstatInviato(dataPartenza);
     out.innerHTML = '<p class="as-ok">Partenza segnalata correttamente.</p>';
     render();
   } catch(e){
@@ -1688,6 +1740,18 @@ function renderArchivio(){
   var el = document.getElementById('tab-archivio');
   var html = '';
 
+  if (state.backend.url && state.istatUltimaData){
+    var mancanti = giorniIstatMancanti();
+    if (mancanti.length){
+      html += '<div class="as-card">' +
+        '<p class="as-title" style="font-size:16px;">Conferma apertura ISTAT</p>' +
+        '<p class="as-sub">Mancano '+mancanti.length+' giorni senza nessuna comunicazione a Piemonte Dati Turismo (dal '+toItDate(mancanti[0])+' al '+toItDate(mancanti[mancanti.length-1])+'). Dato che la struttura è sempre aperta, puoi confermarli tutti insieme.</p>' +
+        '<button class="as-btn secondary" id="as-gap-btn">Invia conferma apertura ('+mancanti.length+' giorni)</button>' +
+        '<div id="as-gap-result" style="margin-top:8px;"></div>' +
+        '</div>';
+    }
+  }
+
   if (state.invii.length){
     html += '<div class="as-card">';
     html += '<p class="as-title" style="font-size:16px;">Invii alla Questura</p>';
@@ -1721,6 +1785,8 @@ function renderArchivio(){
     el.querySelectorAll('[data-partenza]').forEach(function(btn){
       btn.onclick = function(){ segnalaPartenza(btn.getAttribute('data-partenza'), btn); };
     });
+    var gapBtn1 = document.getElementById('as-gap-btn');
+    if (gapBtn1) gapBtn1.onclick = function(){ inviaGiorniMancantiIstat(giorniIstatMancanti(), gapBtn1); };
     return;
   }
   var groups = {};
@@ -1756,6 +1822,8 @@ function renderArchivio(){
   el.querySelectorAll('[data-partenza]').forEach(function(btn){
     btn.onclick = function(){ segnalaPartenza(btn.getAttribute('data-partenza'), btn); };
   });
+  var gapBtn2 = document.getElementById('as-gap-btn');
+  if (gapBtn2) gapBtn2.onclick = function(){ inviaGiorniMancantiIstat(giorniIstatMancanti(), gapBtn2); };
 
   el.querySelectorAll('img[data-photo]').forEach(function(img){
     var key = img.getAttribute('data-photo');
