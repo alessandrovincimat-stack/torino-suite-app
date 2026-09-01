@@ -994,29 +994,16 @@ function fileToBase64(file){
 async function ocrDocument(file, guest){
   guest.ocrPending = true; render();
   try {
+    if (!state.backend.url) throw new Error("Configura prima l'indirizzo del backend nella scheda \"Backend\" (serve per leggere i documenti)");
     var b64 = await fileToBase64(file);
     var mediaType = file.type || 'image/jpeg';
-    var sys = "Estrai i dati anagrafici da un documento d'identita' italiano o straniero (carta d'identita', passaporto, patente). Rispondi SOLO con un oggetto JSON valido, nessun altro testo, con queste chiavi esatte: cognome, nome, sesso (M o F), data_nascita (formato AAAA-MM-GG), luogo_nascita (nome del comune se italiano, altrimenti nome dello stato), nascita_estero (true/false), cittadinanza (nome dello stato), tipo_documento (CARTA D'IDENTITA, PASSAPORTO, PATENTE o altro), numero_documento, luogo_rilascio (nome comune o stato), rilascio_estero (true/false). Se un campo non e' leggibile lascialo stringa vuota.";
-    var resp = await fetch("https://api.anthropic.com/v1/messages", {
+    var resp = await fetch(backendUrl('/api/ocr'), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1000,
-        system: sys,
-        messages: [{
-          role: "user",
-          content: [
-            { type: "image", source: { type: "base64", media_type: mediaType, data: b64 } },
-            { type: "text", text: "Estrai i dati in JSON come da istruzioni." }
-          ]
-        }]
-      })
+      headers: backendHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ imageBase64: b64, mediaType: mediaType })
     });
-    var data = await resp.json();
-    var textBlock = (data.content || []).filter(function(c){return c.type==='text';}).map(function(c){return c.text;}).join('');
-    var clean = textBlock.replace(/```json|```/g, '').trim();
-    var parsed = JSON.parse(clean);
+    var parsed = await resp.json();
+    if (!resp.ok) throw new Error(parsed.error || 'estrazione fallita sul backend');
     guest.cognome = (parsed.cognome || '').toUpperCase();
     guest.nome = (parsed.nome || '').toUpperCase();
     guest.sesso = parsed.sesso === 'F' ? 'F' : 'M';
