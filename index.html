@@ -1085,6 +1085,11 @@ function roleLabel(r){
 function renderOspiti(){
   var el = document.getElementById('tab-ospiti');
   var html = '';
+
+  if (state.backend.url){
+    html += '<div class="as-card" id="as-smoobu-arrivi"><p class="as-sub"><span class="as-spin"></span> caricamento prossimi arrivi da Smoobu…</p></div>';
+  }
+
   html += '<div class="as-card"><div class="as-photobox" id="as-add-photo">+ Aggiungi ospite da foto documento</div>' +
           '<input type="file" id="as-file-input" accept="image/*" multiple style="display:none">' +
           '<div style="margin-top:10px;"><button class="as-btn ghost" id="as-add-manual">+ Aggiungi ospite manualmente</button></div></div>';
@@ -1213,6 +1218,63 @@ function renderOspiti(){
       saveGuests(); render();
     };
   });
+
+  if (state.backend.url) caricaArriviSmoobu();
+}
+
+async function caricaArriviSmoobu(){
+  var box = document.getElementById('as-smoobu-arrivi');
+  if (!box) return;
+  try {
+    var oggi = new Date();
+    var tra7 = new Date(); tra7.setDate(tra7.getDate() + 7);
+    var from = oggi.toISOString().slice(0,10);
+    var to = tra7.toISOString().slice(0,10);
+    var resp = await fetch(backendUrl('/api/smoobu/reservations?from='+from+'&to='+to), { headers: backendHeaders() });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'errore Smoobu');
+    var bookings = (data.bookings || []).filter(function(b){ return b.type !== 'blocked-booking' && b.type !== 'cancellation'; });
+    if (!bookings.length){
+      box.innerHTML = '<p class="as-sub">Nessun arrivo previsto nei prossimi 7 giorni su Smoobu.</p>';
+      return;
+    }
+    var esistenti = state.guests.map(function(g){ return (g.cognome||'').toUpperCase()+'|'+g.dataArrivo; });
+    var righe = bookings.map(function(b){
+      var nomeCompleto = b['guest-name'] || '';
+      var parti = nomeCompleto.trim().split(/\s+/);
+      var cognomeGuess = (parti[parti.length-1]||'').toUpperCase();
+      var giaCreato = esistenti.indexOf(cognomeGuess+'|'+b.arrival) !== -1;
+      var appMatch = state.tables.appartamenti.find(function(a){ return a.smoobuId && b.apartment && String(a.smoobuId) === String(b.apartment.id); });
+      return { b: b, nomeCompleto: nomeCompleto, parti: parti, giaCreato: giaCreato, appMatch: appMatch };
+    });
+    box.innerHTML = '<p class="as-title" style="font-size:15px;">Prossimi arrivi (Smoobu)</p>' +
+      righe.map(function(r){
+        var b = r.b;
+        return '<div style="border-bottom:1px solid var(--border);padding:6px 0;display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
+          '<div><div>'+toItDate(b.arrival)+' → '+toItDate(b.departure)+' · '+(r.nomeCompleto||'ospite senza nome')+'</div>' +
+          '<div class="as-sub" style="margin:0;">'+(b.apartment?b.apartment.name:'')+(r.appMatch?'':' <span style="color:var(--danger)">(appartamento non abbinato)</span>')+'</div></div>' +
+          (r.giaCreato ? '<span class="as-ok">già creata</span>' : '<button class="as-btn secondary" data-crea-smoobu="'+encodeURIComponent(JSON.stringify(b))+'">Crea scheda</button>') +
+          '</div>';
+      }).join('');
+    box.querySelectorAll('[data-crea-smoobu]').forEach(function(btn){
+      btn.onclick = function(){
+        var b = JSON.parse(decodeURIComponent(btn.getAttribute('data-crea-smoobu')));
+        var parti = (b['guest-name']||'').trim().split(/\s+/);
+        var g = newGuest();
+        g.cognome = (parti[parti.length-1]||'').toUpperCase();
+        g.nome = parti.slice(0,-1).join(' ').toUpperCase();
+        g.dataArrivo = b.arrival;
+        var arr = new Date(b.arrival), dep = new Date(b.departure);
+        g.permanenza = String(Math.max(1, Math.round((dep-arr)/86400000)));
+        var appMatch = state.tables.appartamenti.find(function(a){ return a.smoobuId && b.apartment && String(a.smoobuId) === String(b.apartment.id); });
+        if (appMatch) g.idAppartamento = appMatch.id;
+        state.guests.push(g);
+        saveGuests(); render();
+      };
+    });
+  } catch(e){
+    box.innerHTML = '<div class="as-err">Arrivi Smoobu non disponibili: '+e.message+'</div>';
+  }
 }
 
 function validateGuest(g){
@@ -1250,7 +1312,7 @@ function renderTabelle(){
   html += '<p class="as-sub" style="margin-bottom:14px;">Incolla qui le tabelle ufficiali scaricate una volta dal portale Alloggiati Web (menu Area Download → Tabelle, formato Excel: converti i fogli Comuni / Stati / Tipi Documento in testo con formato <code>codice;nome</code>, per i comuni <code>codice;nome;provincia</code>). Restano salvate in questo dispositivo.</p>';
 
   ['comuni','stati','documenti','appartamenti'].forEach(function(kind){
-    var label = kind==='comuni' ? 'Comuni (codice;nome;provincia)' : kind==='stati' ? 'Stati (codice;nome) — includi ITALIA' : kind==='documenti' ? 'Tipi documento (codice;nome)' : 'Appartamenti (id;nome)';
+    var label = kind==='comuni' ? 'Comuni (codice;nome;provincia)' : kind==='stati' ? 'Stati (codice;nome) — includi ITALIA' : kind==='documenti' ? 'Tipi documento (codice;nome)' : 'Appartamenti (id;nome;idSmoobu opzionale)';
     html += '<div class="as-field"><label>'+label+' — '+state.tables[kind].length+' voci caricate</label>' +
             '<textarea rows="4" id="ta-'+kind+'" placeholder="'+(kind==='comuni'?'058091;TORINO;TO':kind==='appartamenti'?'0;CARLO ALBERTO':'100000100;ITALIA')+'"></textarea>' +
             '<button class="as-btn secondary" style="margin-top:6px;" data-load="'+kind+'">Carica/aggiorna tabella</button></div>';
@@ -1264,7 +1326,12 @@ function renderTabelle(){
       var text = document.getElementById('ta-'+kind).value;
       if (!text.trim()) return;
       if (kind === 'appartamenti'){
-        var parsedApp = parseCsv(text, 'appartamenti').map(function(x){ return { id:x.codice, nome:x.nome }; });
+        var lines2 = text.split(/\r?\n/).map(function(l){return l.trim();}).filter(Boolean);
+        var parsedApp = lines2.map(function(l){
+          var sep = l.indexOf(';') !== -1 ? ';' : ',';
+          var parts = l.split(sep).map(function(p){return p.trim();});
+          return { id: parts[0], nome: parts[1], smoobuId: parts[2] || '' };
+        }).filter(function(x){ return x.id && x.nome; });
         state.tables.appartamenti = parsedApp;
       } else {
         var parsed = parseCsv(text, kind);
@@ -1289,6 +1356,29 @@ function renderTabelle(){
 
     document.getElementById('as-fetch-doc').onclick = function(){ fetchTabella('documenti'); };
     document.getElementById('as-fetch-luoghi').onclick = function(){ fetchTabella('luoghi'); };
+
+    var smoobuBox = document.createElement('div');
+    smoobuBox.className = 'as-card';
+    smoobuBox.innerHTML =
+      '<p class="as-sub">Scarica l\'elenco dei tuoi appartamenti su Smoobu, per abbinare l\'ID Smoobu a ciascun appartamento nella tabella qui sopra (terzo campo, opzionale).</p>' +
+      '<button class="as-btn secondary" id="as-fetch-smoobu-app">Scarica appartamenti da Smoobu</button>' +
+      '<div id="as-smoobu-app-result" style="margin-top:10px;"></div>';
+    el.appendChild(smoobuBox);
+    document.getElementById('as-fetch-smoobu-app').onclick = async function(){
+      var out = document.getElementById('as-smoobu-app-result');
+      out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>scaricamento…</span>';
+      try {
+        var resp = await fetch(backendUrl('/api/smoobu/apartments'), { headers: backendHeaders() });
+        var data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'errore');
+        var list = data.apartments || data || [];
+        out.innerHTML = '<div id="as-file-preview" style="max-height:160px;">' +
+          list.map(function(a){ return a.id + ' — ' + (a.name||a.nome||''); }).join('\n') +
+          '</div>';
+      } catch(e){
+        out.innerHTML = '<div class="as-err">'+e.message+'</div>';
+      }
+    };
   }
 }
 
