@@ -956,11 +956,22 @@ function parseCsv(text, kind){
   return out;
 }
 
+function normName(s){
+  return (s||'').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
 function findByName(list, name){
   if (!name) return null;
   var n = name.trim().toLowerCase();
   var exact = list.find(function(x){ return x.nome.toLowerCase() === n; });
   if (exact) return exact;
+  var nn = normName(name);
+  var normMatch = list.find(function(x){ return normName(x.nome) === nn; });
+  if (normMatch) return normMatch;
+  var contains = list.find(function(x){
+    var xn = normName(x.nome);
+    return xn.indexOf(nn) !== -1 || nn.indexOf(xn) !== -1;
+  });
+  if (contains) return contains;
   return list.find(function(x){ return x.nome.toLowerCase().indexOf(n) === 0; }) || null;
 }
 
@@ -1236,7 +1247,16 @@ async function fetchTabella(kind){
           : '<button class="as-btn" id="import-doc">Importa come tipi documento</button>') +
       '</div>';
 
-    function doImport(target){
+function mergeTable(existing, incoming){
+  var out = existing.slice();
+  incoming.forEach(function(item){
+    var i = out.findIndex(function(x){ return x.codice === item.codice; });
+    if (i >= 0) out[i] = item; else out.push(item);
+  });
+  return out;
+}
+
+function doImport(target){
       var ic = parseInt(document.getElementById('col-codice').value, 10);
       var inm = parseInt(document.getElementById('col-nome').value, 10);
       var ip = kind==='luoghi' ? parseInt(document.getElementById('col-prov').value, 10) : -1;
@@ -1245,9 +1265,9 @@ async function fetchTabella(kind){
         return l.split(sep).map(function(p){return p.trim();});
       }).filter(function(r){ return r[ic] && r[inm]; });
       if (target === 'comuni'){
-        state.tables.comuni = rows.map(function(r){ return { codice:r[ic], nome:r[inm], provincia: ip>=0? (r[ip]||'') : '' }; });
+        state.tables.comuni = mergeTable(state.tables.comuni, rows.map(function(r){ return { codice:r[ic], nome:r[inm], provincia: ip>=0? (r[ip]||'') : '' }; }));
       } else {
-        state.tables[target] = rows.map(function(r){ return { codice:r[ic], nome:r[inm] }; });
+        state.tables[target] = mergeTable(state.tables[target], rows.map(function(r){ return { codice:r[ic], nome:r[inm] }; }));
       }
       saveTables(); render();
     }
@@ -1274,8 +1294,8 @@ async function fetchTabella(kind){
             stati.push({ codice:r[ic], nome:r[inm] });
           }
         });
-        state.tables.comuni = comuni;
-        state.tables.stati = stati;
+        state.tables.comuni = mergeTable(state.tables.comuni, comuni);
+        state.tables.stati = mergeTable(state.tables.stati, stati);
         saveTables(); render();
         alert('Importati ' + comuni.length + ' comuni e ' + stati.length + ' stati.');
       };
