@@ -859,14 +859,21 @@ async function loadState(){
   }
   if (!state.tables.appartamenti || !state.tables.appartamenti.length){
     state.tables.appartamenti = [
-      { id:'0', nome:'CARLO ALBERTO' },
-      { id:'1', nome:'CARLO FELICE' },
-      { id:'2', nome:'SAN CARLO' },
-      { id:'3', nome:'CARIGNANO' },
-      { id:'4', nome:'CASA BORGONE' },
-      { id:'5', nome:'VITTORIO' }
+      { id:'0', nome:'CARLO ALBERTO', smoobuId:'1104946' },
+      { id:'1', nome:'CARLO FELICE', smoobuId:'1953902' },
+      { id:'2', nome:'SAN CARLO', smoobuId:'1104940' },
+      { id:'3', nome:'CARIGNANO', smoobuId:'1953899' },
+      { id:'4', nome:'CASA BORGONE', smoobuId:'1953905' },
+      { id:'5', nome:'VITTORIO', smoobuId:'1104943' }
     ];
     saveTables();
+  } else {
+    var smoobuIds = { 'CARLO ALBERTO':'1104946', 'CARLO FELICE':'1953902', 'SAN CARLO':'1104940', 'CARIGNANO':'1953899', 'CASA BORGONE':'1953905', 'VITTORIO':'1104943' };
+    var aggiornato = false;
+    state.tables.appartamenti.forEach(function(a){
+      if (!a.smoobuId && smoobuIds[a.nome]){ a.smoobuId = smoobuIds[a.nome]; aggiornato = true; }
+    });
+    if (aggiornato) saveTables();
   }
   try {
     var b = await window.storage.get('as-backend', false);
