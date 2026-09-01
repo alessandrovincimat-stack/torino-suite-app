@@ -1498,6 +1498,46 @@ function renderGenera(){
   }
 }
 
+function buildIstatArrivo(g, allOrdered){
+  var comune = g.nascitaEstero ? null : findByName(state.tables.comuni, g.comuneNascitaNome);
+  var statoNascita = g.nascitaEstero ? findByName(state.tables.stati, g.statoNascitaNome) : italiaEntry();
+  var cittadinanza = findByName(state.tables.stati, g.cittadinanzaNome);
+  var comuneRes = g.residenzaEstero ? null : findByName(state.tables.comuni, g.comuneResidenzaNome);
+  var statoRes = g.residenzaEstero ? findByName(state.tables.stati, g.statoResidenzaNome) : italiaEntry();
+  var head = (g.ruolo==='familiare'||g.ruolo==='membro') ? allOrdered.find(function(x){ return x.id===g.groupOf; }) : null;
+  return {
+    idswh: g.id,
+    tipoalloggiato: ruoloCode[g.ruolo] || '16',
+    idcapo: head ? head.id : '',
+    cognome: g.cognome, nome: g.nome, sesso: g.sesso === 'F' ? 'F' : 'M',
+    cittadinanza: cittadinanza ? cittadinanza.codice : '',
+    statoresidenza: statoRes ? statoRes.codice : '',
+    luogoresidenza: g.residenzaEstero ? (g.comuneResidenzaNome||'') : (comuneRes ? comuneRes.codice : ''),
+    datanascita: (g.dataNascita||'').replace(/-/g,''),
+    statonascita: statoNascita ? statoNascita.codice : '',
+    comunenascita: comune ? comune.codice : '',
+    tipoturismo: g.tipoTurismo || 'Non specificato',
+    mezzotrasporto: g.mezzoTrasporto || 'Non specificato'
+  };
+}
+
+async function inviaIstatArrivi(arriviOggi, allOrdered){
+  if (!arriviOggi.length) throw new Error('nessun ospite con arrivo odierno');
+  var arrivi = arriviOggi.map(function(g){ return buildIstatArrivo(g, allOrdered); });
+  var resp = await fetch(backendUrl('/api/istat/movimento'), {
+    method: 'POST',
+    headers: backendHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({
+      data: todayISO().replace(/-/g,''),
+      camereOccupate: new Set(arriviOggi.map(function(g){ return g.idAppartamento; })).size,
+      arrivi: arrivi
+    })
+  });
+  var data = await resp.json();
+  if (!resp.ok) throw new Error(data.error || 'errore invio ISTAT');
+  return data;
+}
+
 async function inviaIstat(ordered){
   var out = document.getElementById('as-istat-result');
   var oggiISO = todayISO();
@@ -1506,42 +1546,10 @@ async function inviaIstat(ordered){
     out.innerHTML = '<div class="as-err">Nessun ospite con data di arrivo odierna tra quelli generati.</div>';
     return;
   }
-  var arrivi = arriviOggi.map(function(g){
-    var comune = g.nascitaEstero ? null : findByName(state.tables.comuni, g.comuneNascitaNome);
-    var statoNascita = g.nascitaEstero ? findByName(state.tables.stati, g.statoNascitaNome) : italiaEntry();
-    var cittadinanza = findByName(state.tables.stati, g.cittadinanzaNome);
-    var comuneRes = g.residenzaEstero ? null : findByName(state.tables.comuni, g.comuneResidenzaNome);
-    var statoRes = g.residenzaEstero ? findByName(state.tables.stati, g.statoResidenzaNome) : italiaEntry();
-    var head = (g.ruolo==='familiare'||g.ruolo==='membro') ? ordered.find(function(x){ return x.id===g.groupOf; }) : null;
-    return {
-      idswh: g.id,
-      tipoalloggiato: ruoloCode[g.ruolo] || '16',
-      idcapo: head ? head.id : '',
-      cognome: g.cognome, nome: g.nome, sesso: g.sesso === 'F' ? 'F' : 'M',
-      cittadinanza: cittadinanza ? cittadinanza.codice : '',
-      statoresidenza: statoRes ? statoRes.codice : '',
-      luogoresidenza: g.residenzaEstero ? (g.comuneResidenzaNome||'') : (comuneRes ? comuneRes.codice : ''),
-      datanascita: (g.dataNascita||'').replace(/-/g,''),
-      statonascita: statoNascita ? statoNascita.codice : '',
-      comunenascita: comune ? comune.codice : '',
-      tipoturismo: g.tipoTurismo || 'Non specificato',
-      mezzotrasporto: g.mezzoTrasporto || 'Non specificato'
-    };
-  });
   out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>invio in corso…</span>';
   try {
-    var resp = await fetch(backendUrl('/api/istat/movimento'), {
-      method: 'POST',
-      headers: backendHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({
-        data: oggiISO.replace(/-/g,''),
-        camereOccupate: new Set(arriviOggi.map(function(g){ return g.idAppartamento; })).size,
-        arrivi: arrivi
-      })
-    });
-    var data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || 'errore invio ISTAT');
-    out.innerHTML = '<p class="as-ok">Inviato correttamente a Piemonte Dati Turismo (' + arrivi.length + ' ospiti).</p>';
+    await inviaIstatArrivi(arriviOggi, ordered);
+    out.innerHTML = '<p class="as-ok">Inviato correttamente a Piemonte Dati Turismo (' + arriviOggi.length + ' ospiti).</p>';
   } catch(e){
     out.innerHTML = '<div class="as-err">'+e.message+'</div>';
   }
@@ -1564,6 +1572,14 @@ async function sendToBackend(lines, real, idAppartamento, ordered){
       html += '<div class="as-err">Errori per riga:<br>' + errori.map(function(e,i){return (i+1)+': '+e;}).join('<br>') + '</div>';
     } else if (real) {
       html += '<p class="as-ok">Inviato correttamente alla Questura.</p>';
+      if (state.backend.url){
+        try {
+          await inviaIstatArrivi(ordered.filter(function(g){ return g.dataArrivo === todayISO(); }), ordered);
+          html += '<p class="as-ok">Inviato correttamente anche a Piemonte Dati Turismo (ISTAT).</p>';
+        } catch(e){
+          html += '<div class="as-err">Questura OK, ma invio ISTAT fallito: '+e.message+'. Puoi ripeterlo da "Genera file".</div>';
+        }
+      }
       await archiveInvio(ordered, idAppartamento, lines.length);
       html += '<p class="as-sub">Ospiti spostati nell\'archivio invii.</p>';
       html += '<button class="as-btn secondary" id="as-ricevuta-btn" style="margin-top:8px;">Scarica ricevuta di oggi</button>';
@@ -1585,13 +1601,51 @@ async function archiveInvio(ordered, idAppartamento, nRighe){
     idAppartamento: idAppartamento || '',
     appartamentoNome: appNome,
     nRighe: nRighe,
-    ospiti: ordered.map(function(g){ return { cognome: g.cognome, nome: g.nome }; })
+    ospiti: ordered.map(function(g){ return { id: g.id, cognome: g.cognome, nome: g.nome, ruolo: g.ruolo, dataArrivo: g.dataArrivo, permanenza: g.permanenza }; }),
+    partenzaSegnalata: false
   };
   state.invii.push(entry);
   var sentIds = ordered.map(function(g){ return g.id; });
   state.guests = state.guests.filter(function(g){ return sentIds.indexOf(g.id) === -1; });
   try { await window.storage.set('as-invii', JSON.stringify(state.invii), false); } catch(e){}
   await saveGuests();
+}
+
+async function segnalaPartenza(invioId, btn){
+  var iv = state.invii.find(function(x){ return x.id === invioId; });
+  if (!iv) return;
+  var suggerita = '';
+  if (iv.ospiti[0] && iv.ospiti[0].dataArrivo && iv.ospiti[0].permanenza){
+    var d = new Date(iv.ospiti[0].dataArrivo);
+    d.setDate(d.getDate() + parseInt(iv.ospiti[0].permanenza, 10));
+    suggerita = d.toISOString().slice(0,10);
+  }
+  var dataPartenza = prompt('Data di partenza effettiva (AAAA-MM-GG):', suggerita || todayISO());
+  if (!dataPartenza) return;
+  var out = document.getElementById('as-partenza-result-'+invioId);
+  out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>invio in corso…</span>';
+  try {
+    var partenze = iv.ospiti.map(function(o){
+      return { idswh: o.id, tipoalloggiato: ruoloCode[o.ruolo] || '16', arrivo: (o.dataArrivo||'').replace(/-/g,'') };
+    });
+    var resp = await fetch(backendUrl('/api/istat/movimento'), {
+      method: 'POST',
+      headers: backendHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        data: dataPartenza.replace(/-/g,''),
+        camereOccupate: 0,
+        partenze: partenze
+      })
+    });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'errore invio ISTAT');
+    iv.partenzaSegnalata = true;
+    await window.storage.set('as-invii', JSON.stringify(state.invii), false);
+    out.innerHTML = '<p class="as-ok">Partenza segnalata correttamente.</p>';
+    render();
+  } catch(e){
+    out.innerHTML = '<div class="as-err">'+e.message+'</div>';
+  }
 }
 
 async function scaricaRicevuta(dataISO, btn){
@@ -1648,6 +1702,10 @@ function renderArchivio(){
         '<div>' + dataLocale + ' — ' + (iv.appartamentoNome||'nessun appartamento') + ' (' + iv.nRighe + ' schedine)</div>' +
         '<div class="as-sub" style="margin:0;">' + nomi + '</div>' +
         (dateUniche.indexOf(dataISO)===-1 ? '<button class="as-btn ghost" data-ricevuta="'+dataISO+'" style="margin-top:6px;">Scarica ricevuta del '+g.toLocaleDateString('it-IT')+'</button>' : '') +
+        (iv.partenzaSegnalata
+          ? '<span class="as-ok" style="margin-left:8px;">Partenza segnalata (ISTAT)</span>'
+          : '<button class="as-btn secondary" data-partenza="'+iv.id+'" style="margin-top:6px;margin-left:8px;">Segnala partenza (ISTAT)</button>') +
+        '<div id="as-partenza-result-'+iv.id+'" style="margin-top:6px;"></div>' +
         '</div>';
       if (dateUniche.indexOf(dataISO)===-1) dateUniche.push(dataISO);
     });
@@ -1659,6 +1717,9 @@ function renderArchivio(){
     el.innerHTML = html;
     el.querySelectorAll('[data-ricevuta]').forEach(function(btn){
       btn.onclick = function(){ scaricaRicevuta(btn.getAttribute('data-ricevuta'), btn); };
+    });
+    el.querySelectorAll('[data-partenza]').forEach(function(btn){
+      btn.onclick = function(){ segnalaPartenza(btn.getAttribute('data-partenza'), btn); };
     });
     return;
   }
@@ -1691,6 +1752,9 @@ function renderArchivio(){
   el.innerHTML = html;
   el.querySelectorAll('[data-ricevuta]').forEach(function(btn){
     btn.onclick = function(){ scaricaRicevuta(btn.getAttribute('data-ricevuta'), btn); };
+  });
+  el.querySelectorAll('[data-partenza]').forEach(function(btn){
+    btn.onclick = function(){ segnalaPartenza(btn.getAttribute('data-partenza'), btn); };
   });
 
   el.querySelectorAll('img[data-photo]').forEach(function(img){
