@@ -1235,7 +1235,7 @@ function renderOspiti(){
           '<input type="file" id="as-file-input" accept="image/*" multiple style="display:none">' +
           '<div style="margin-top:10px;"><button class="as-btn ghost" id="as-add-manual">+ Aggiungi ospite manualmente</button></div></div>';
 
-  var guestsSenzaPrenotazione = state.guests.filter(function(g){ return !g.smoobuBookingId; });
+  var guestsSenzaPrenotazione = state.backend.url ? state.guests.filter(function(g){ return !g.smoobuBookingId; }) : state.guests;
   guestsSenzaPrenotazione.forEach(function(g){ html += buildGuestCardHtml(g); });
 
   html += '<datalist id="dl-comuni">' + state.tables.comuni.map(function(c){return '<option value="'+c.nome+'">';}).join('') + '</datalist>';
@@ -1333,7 +1333,14 @@ async function caricaArriviSmoobu(){
     });
     attachGuestHandlers(box);
   } catch(e){
-    box.innerHTML = '<div class="as-err">Arrivi Smoobu non disponibili: '+(e.name==='AbortError'?'il server non ha risposto in tempo (15s)':e.message)+'</div>';
+    var orfani = state.guests.filter(function(g){ return g.smoobuBookingId; });
+    var msg = '<div class="as-err">Arrivi Smoobu non disponibili: '+(e.name==='AbortError'?'il server non ha risposto in tempo (15s)':e.message)+'</div>';
+    if (orfani.length){
+      msg += '<p class="as-warn" style="margin-top:8px;">'+orfani.length+' ospiti erano collegati a una prenotazione Smoobu: li vedi qui sotto finché la connessione non torna, per non perderli.</p>';
+      msg += orfani.map(buildGuestCardHtml).join('');
+    }
+    box.innerHTML = msg;
+    attachGuestHandlers(box);
   }
 }
 
