@@ -196,6 +196,17 @@
             if (r.ok){
               var d = await r.json();
               if (d && d.value != null) return { key:key, value:d.value, shared: !!shared };
+              var loc = localGet(key);
+              if (loc && loc.value){
+                try {
+                  await fetch(cfg.url.replace(/\/$/,'')+'/api/store', {
+                    method:'POST',
+                    headers: Object.assign({'Content-Type':'application/json'}, cfg.secret?{'x-app-secret':cfg.secret}:{}),
+                    body: JSON.stringify({key:key, value:loc.value})
+                  });
+                } catch(e){}
+                return loc;
+              }
             }
           } catch(e){}
         }
