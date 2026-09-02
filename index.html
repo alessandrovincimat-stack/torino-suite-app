@@ -2245,8 +2245,14 @@ function renderBackend(){
 function render(){
   var scrollY = window.scrollY || document.documentElement.scrollTop || 0;
   renderOspiti(); renderTabelle(); renderGenera(); renderArchivio(); renderBackend(); renderLink();
-  window.scrollTo(0, scrollY);
-  requestAnimationFrame(function(){ window.scrollTo(0, scrollY); });
+  function restore(){ window.scrollTo(0, scrollY); }
+  restore();
+  requestAnimationFrame(restore);
+  requestAnimationFrame(function(){ requestAnimationFrame(restore); });
+  setTimeout(restore, 30);
+  setTimeout(restore, 100);
+  setTimeout(restore, 250);
+  setTimeout(restore, 500);
 }
 
 var adminUnlocked = false;
