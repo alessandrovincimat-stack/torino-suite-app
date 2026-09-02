@@ -156,7 +156,7 @@
 <script>
 (function(){
   var PREFIX = 'torino-suite:';
-  var LOCAL_ONLY = ['as-backend'];
+  var LOCAL_ONLY = ['as-backend', 'app-lock-code', 'porte-codici-sms'];
   function localGet(key){
     try { var v = window.localStorage.getItem(PREFIX+key); return v===null?null:{key:key,value:v,shared:false}; } catch(e){ return null; }
   }
