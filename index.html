@@ -1981,6 +1981,52 @@ function renderBackend(){
       out.innerHTML = '<div class="as-err">'+e.message+'</div>';
     }
   };
+
+  if (state.backend.url){
+    var settingsBox = document.createElement('div');
+    settingsBox.className = 'as-card';
+    settingsBox.innerHTML =
+      '<p class="as-title" style="font-size:16px;">Altre integrazioni</p>' +
+      '<p class="as-sub">Smoobu e Piemonte Dati Turismo (ISTAT). Salvate direttamente sul server, senza dover toccare Docker.</p>' +
+      '<p class="as-sub" style="margin-top:14px;"><strong>Smoobu</strong></p>' +
+      '<div class="as-field"><label>API Key</label><input id="cfg-SMOOBU_API_KEY"></div>' +
+      '<div class="as-field"><label>API Secret</label><input id="cfg-SMOOBU_API_SECRET" type="password"></div>' +
+      '<p class="as-sub" style="margin-top:14px;"><strong>Piemonte Dati Turismo (ISTAT)</strong></p>' +
+      '<div class="as-field"><label>Utente</label><input id="cfg-ISTAT_UTENTE"></div>' +
+      '<div class="as-field"><label>Password</label><input id="cfg-ISTAT_PASSWORD" type="password"></div>' +
+      '<div class="as-field"><label>Codice struttura</label><input id="cfg-ISTAT_CODICE_STRUTTURA"></div>' +
+      '<div class="as-row">' +
+        '<div class="as-field"><label>Camere disponibili</label><input id="cfg-ISTAT_CAMERE_DISPONIBILI"></div>' +
+        '<div class="as-field"><label>Letti disponibili</label><input id="cfg-ISTAT_LETTI_DISPONIBILI"></div>' +
+      '</div>' +
+      '<button class="as-btn secondary" id="cfg-save">Salva impostazioni</button>' +
+      '<div id="cfg-result" style="margin-top:10px;"></div>';
+    document.getElementById('tab-backend').appendChild(settingsBox);
+
+    var cfgKeys = ['SMOOBU_API_KEY','SMOOBU_API_SECRET','ISTAT_UTENTE','ISTAT_PASSWORD','ISTAT_CODICE_STRUTTURA','ISTAT_CAMERE_DISPONIBILI','ISTAT_LETTI_DISPONIBILI'];
+    fetch(backendUrl('/api/settings'), { headers: backendHeaders() }).then(function(r){ return r.json(); }).then(function(data){
+      cfgKeys.forEach(function(k){ var el2 = document.getElementById('cfg-'+k); if (el2 && data[k]) el2.value = data[k]; });
+    }).catch(function(){});
+
+    document.getElementById('cfg-save').onclick = async function(){
+      var out2 = document.getElementById('cfg-result');
+      out2.innerHTML = '<span class="as-warn"><span class="as-spin"></span>salvataggio…</span>';
+      var payload = {};
+      cfgKeys.forEach(function(k){ payload[k] = document.getElementById('cfg-'+k).value.trim(); });
+      try {
+        var resp2 = await fetch(backendUrl('/api/settings'), {
+          method: 'POST',
+          headers: backendHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify(payload)
+        });
+        var data2 = await resp2.json();
+        if (!resp2.ok) throw new Error(data2.error || 'errore salvataggio');
+        out2.innerHTML = '<p class="as-ok">Impostazioni salvate sul server.</p>';
+      } catch(e){
+        out2.innerHTML = '<div class="as-err">'+e.message+'</div>';
+      }
+    };
+  }
 }
 
 /* ---------- Tabs & main render ---------- */
