@@ -1272,11 +1272,14 @@ async function caricaArriviSmoobu(){
           var nomiInviati = r.invioCollegato.ospiti.filter(function(o){return o.smoobuBookingId===String(b.id);}).map(function(o){return (o.cognome+' '+o.nome).trim();}).join(', ');
           stato = '<p class="as-ok" style="margin:4px 0 0;">Già inviata alla Questura (' + nomiInviati + ')</p>';
         } else if (r.collegate.length){
+          var capo = r.collegate.find(function(g){ return g.ruolo==='capofamiglia'||g.ruolo==='capogruppo'; });
           stato = '<details style="margin-top:6px;"><summary style="cursor:pointer;color:var(--brass);font-size:13px;">' +
             r.collegate.length + ' scheda/e: ' + r.collegate.map(function(g){ return (g.cognome+' '+g.nome).trim() || '(dati da inserire)'; }).join(', ') +
             '</summary><div style="margin-top:8px;">' +
             r.collegate.map(buildGuestCardHtml).join('') +
-            '<button class="as-btn ghost" data-crea-smoobu="'+encodeURIComponent(JSON.stringify(b))+'">+ altro ospite in questa prenotazione</button>' +
+            (capo
+              ? '<button class="as-btn ghost" data-crea-smoobu="'+encodeURIComponent(JSON.stringify(b))+'" data-capo-id="'+capo.id+'">+ altro ospite in questa prenotazione</button>'
+              : '<p class="as-sub">Per aggiungere altri ospiti a questa prenotazione, cambia prima il Ruolo in "Capofamiglia" o "Capogruppo".</p>') +
             '</div></details>';
         } else {
           stato = '<button class="as-btn secondary" style="margin-top:6px;" data-crea-smoobu="'+encodeURIComponent(JSON.stringify(b))+'">Crea scheda</button>';
@@ -1290,6 +1293,7 @@ async function caricaArriviSmoobu(){
     box.querySelectorAll('[data-crea-smoobu]').forEach(function(btn){
       btn.onclick = function(){
         var b = JSON.parse(decodeURIComponent(btn.getAttribute('data-crea-smoobu')));
+        var capoId = btn.getAttribute('data-capo-id');
         var g = newGuest();
         g.dataArrivo = b.arrival;
         g.smoobuBookingId = String(b.id);
@@ -1297,6 +1301,7 @@ async function caricaArriviSmoobu(){
         g.permanenza = String(Math.max(1, Math.round((dep-arr)/86400000)));
         var appMatch = state.tables.appartamenti.find(function(a){ return a.smoobuId && b.apartment && String(a.smoobuId) === String(b.apartment.id); });
         if (appMatch) g.idAppartamento = appMatch.id;
+        if (capoId){ g.ruolo = 'familiare'; g.groupOf = capoId; }
         state.guests.push(g);
         saveGuests(); render();
       };
