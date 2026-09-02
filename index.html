@@ -1237,7 +1237,10 @@ async function caricaArriviSmoobu(){
     var tra7 = new Date(); tra7.setDate(tra7.getDate() + 7);
     var from = oggi.toISOString().slice(0,10);
     var to = tra7.toISOString().slice(0,10);
-    var resp = await fetch(backendUrl('/api/smoobu/reservations?from='+from+'&to='+to), { headers: backendHeaders() });
+    var controller = new AbortController();
+    var timeoutId = setTimeout(function(){ controller.abort(); }, 15000);
+    var resp = await fetch(backendUrl('/api/smoobu/reservations?from='+from+'&to='+to), { headers: backendHeaders(), signal: controller.signal });
+    clearTimeout(timeoutId);
     var data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'errore Smoobu');
     var bookings = (data.bookings || []).filter(function(b){ return b.type !== 'blocked-booking' && b.type !== 'cancellation'; });
@@ -1280,7 +1283,7 @@ async function caricaArriviSmoobu(){
       };
     });
   } catch(e){
-    box.innerHTML = '<div class="as-err">Arrivi Smoobu non disponibili: '+e.message+'</div>';
+    box.innerHTML = '<div class="as-err">Arrivi Smoobu non disponibili: '+(e.name==='AbortError'?'il server non ha risposto in tempo (15s)':e.message)+'</div>';
   }
 }
 
