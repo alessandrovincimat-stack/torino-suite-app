@@ -1108,6 +1108,11 @@ function buildGuestCardHtml(g){
           (g.ocrPending? '<span class="as-warn"><span class="as-spin"></span>estrazione in corso… <button class="as-remove" data-remove="'+g.id+'">annulla</button></span>' : '<button class="as-remove" data-remove="'+g.id+'">rimuovi</button>') +
           '</div>';
 
+  if (!g.ocrPending){
+    html += '<div class="as-photobox" data-doc-trigger="'+g.id+'" style="margin-bottom:12px;font-size:13px;padding:12px;">📷 Carica/sostituisci foto documento</div>' +
+            '<input type="file" accept="image/*" data-doc-input="'+g.id+'" style="display:none">';
+  }
+
   html += '<div class="as-row">';
   html += '<div class="as-field"><label>Ruolo</label><select data-f="ruolo" data-id="'+g.id+'">';
   ['singolo','capofamiglia','capogruppo','familiare','membro'].forEach(function(r){
@@ -1199,6 +1204,21 @@ function attachGuestHandlers(root){
       if (f === 'nascitaEstero' || f === 'rilascioEstero' || f === 'residenzaEstero') v = (v === 'true');
       g[f] = v;
       saveGuests(); render();
+    };
+  });
+  root.querySelectorAll('[data-doc-trigger]').forEach(function(box){
+    var id = box.getAttribute('data-doc-trigger');
+    var input = root.querySelector('[data-doc-input="'+id+'"]');
+    if (input) box.onclick = function(){ input.click(); };
+  });
+  root.querySelectorAll('[data-doc-input]').forEach(function(input){
+    input.onchange = function(e){
+      var id = input.getAttribute('data-doc-input');
+      var g = state.guests.find(function(x){ return x.id === id; });
+      var file = e.target.files[0];
+      if (!g || !file) return;
+      ocrDocument(file, g).then(function(){ archiveDocument(file, g); });
+      e.target.value = '';
     };
   });
 }
