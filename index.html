@@ -138,7 +138,6 @@
 
   <div class="as-tabs">
     <div class="as-tab active" data-tab="ospiti">Ospiti</div>
-    <div class="as-tab" data-tab="genera">Genera file</div>
     <div class="as-tab" data-tab="archivio">Archivio documenti</div>
     <div class="as-tab" id="as-admin-tab" style="opacity:.55;">🔒 Admin</div>
   </div>
@@ -2393,6 +2392,11 @@ document.getElementById('as-admin-tab').onclick = function(){
     var adminBtn = document.getElementById('as-admin-tab');
     adminBtn.textContent = 'Admin';
     adminBtn.style.opacity = '1';
+    var generaBtn = document.createElement('div');
+    generaBtn.className = 'as-tab';
+    generaBtn.setAttribute('data-tab','genera');
+    generaBtn.textContent = 'Genera file (cumulativo)';
+    generaBtn.onclick = function(){ switchTab('genera'); };
     var tabelleBtn = document.createElement('div');
     tabelleBtn.className = 'as-tab';
     tabelleBtn.setAttribute('data-tab','tabelle');
@@ -2408,6 +2412,7 @@ document.getElementById('as-admin-tab').onclick = function(){
     linkBtn.setAttribute('data-tab','link');
     linkBtn.textContent = 'Portali';
     linkBtn.onclick = function(){ switchTab('link'); };
+    adminBtn.parentNode.insertBefore(generaBtn, adminBtn);
     adminBtn.parentNode.insertBefore(tabelleBtn, adminBtn);
     adminBtn.parentNode.insertBefore(backendBtn, adminBtn);
     adminBtn.parentNode.insertBefore(linkBtn, adminBtn);
