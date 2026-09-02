@@ -2226,7 +2226,7 @@ loadState().then(render);
   var root = document.getElementById('root');
   var giaSbloccato = false;
   function checkUnlocked(){
-    if (!giaSbloccato && root.querySelector('.app-root')) {
+    if (!giaSbloccato && root.querySelector('.app-root') && !root.querySelector('.lock-screen')) {
       giaSbloccato = true;
       switcher.classList.add('ts-visible');
       showQuestura();
