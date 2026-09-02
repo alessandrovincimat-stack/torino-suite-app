@@ -1414,7 +1414,12 @@ function renderOspiti(){
   el.innerHTML = html;
 
   document.getElementById('as-add-manual').onclick = function(){
-    state.guests.push(newGuest()); saveGuests(); render();
+    var g = newGuest();
+    state.guests.push(g); saveGuests(); render();
+    setTimeout(function(){
+      var card = document.querySelector('.as-guest[data-id="'+g.id+'"]');
+      if (card) card.scrollIntoView({ behavior:'smooth', block:'start' });
+    }, 550);
   };
   attachGuestHandlers(el);
 
@@ -1491,6 +1496,10 @@ async function caricaArriviSmoobu(){
         state.guests.push(g);
         smoobuDetailsAperti[b.id] = true;
         saveGuests(); render();
+        setTimeout(function(){
+          var card = document.querySelector('.as-guest[data-id="'+g.id+'"]');
+          if (card) card.scrollIntoView({ behavior:'smooth', block:'start' });
+        }, 550);
       };
     });
     box.querySelectorAll('[data-smoobu-details]').forEach(function(det){
