@@ -123,6 +123,10 @@
   .as-doc .n { font-size:10px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .as-group-head { font-size:14px; font-weight:600; color:var(--brass); margin:18px 0 4px; }
   .as-group-period { font-size:12px; color:var(--text-muted); margin-bottom:6px; }
+  .as-booking { border:1.5px solid var(--border); border-radius:10px; padding:14px; margin-bottom:14px; background:var(--surface); }
+  .as-booking summary { list-style:none; }
+  .as-booking summary::-webkit-details-marker { display:none; }
+  .as-booking .as-guest { background:var(--surface-2); border-color:var(--brass); border-left-width:3px; }
   .as-spin { display:inline-block; width:12px; height:12px; border:2px solid var(--border); border-top-color:var(--brass); border-radius:50%; animation:asspin .7s linear infinite; margin-right:6px; vertical-align:-2px; }
   @keyframes asspin { to { transform:rotate(360deg); } }
 </style>
@@ -1273,9 +1277,9 @@ async function caricaArriviSmoobu(){
           stato = '<p class="as-ok" style="margin:4px 0 0;">Già inviata alla Questura (' + nomiInviati + ')</p>';
         } else if (r.collegate.length){
           var capo = r.collegate.find(function(g){ return g.ruolo==='capofamiglia'||g.ruolo==='capogruppo'; });
-          stato = '<details style="margin-top:6px;"><summary style="cursor:pointer;color:var(--brass);font-size:13px;">' +
+          stato = '<details style="margin-top:6px;"><summary style="cursor:pointer;color:var(--brass);font-size:13px;font-weight:600;">▸ ' +
             r.collegate.length + ' scheda/e: ' + r.collegate.map(function(g){ return (g.cognome+' '+g.nome).trim() || '(dati da inserire)'; }).join(', ') +
-            '</summary><div style="margin-top:8px;">' +
+            '</summary><div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);">' +
             r.collegate.map(buildGuestCardHtml).join('') +
             (capo
               ? '<button class="as-btn ghost" data-crea-smoobu="'+encodeURIComponent(JSON.stringify(b))+'" data-capo-id="'+capo.id+'">+ altro ospite in questa prenotazione</button>'
@@ -1284,7 +1288,7 @@ async function caricaArriviSmoobu(){
         } else {
           stato = '<button class="as-btn secondary" style="margin-top:6px;" data-crea-smoobu="'+encodeURIComponent(JSON.stringify(b))+'">Crea scheda</button>';
         }
-        return '<div style="border-bottom:1px solid var(--border);padding:6px 0;">' +
+        return '<div class="as-booking">' +
           '<div>'+toItDate(b.arrival)+' → '+toItDate(b.departure)+' · prenotazione a nome '+(r.nomeCompleto||'sconosciuto')+'</div>' +
           '<div class="as-sub" style="margin:0;">'+(b.apartment?b.apartment.name:'')+(r.appMatch?'':' <span style="color:var(--danger)">(appartamento non abbinato)</span>')+'</div>' +
           stato +
