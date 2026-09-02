@@ -2392,6 +2392,8 @@ function renderBackend(){
       '</div>' +
       '<p class="as-sub" style="margin-top:14px;"><strong>Fatture in Cloud</strong></p>' +
       '<div class="as-field"><label>Access Token</label><input id="cfg-FIC_ACCESS_TOKEN" type="password"></div>' +
+      '<button class="as-btn ghost" id="cfg-fic-trova-aziende" type="button" style="margin-bottom:10px;">Trova ID azienda dal token</button>' +
+      '<div id="cfg-fic-aziende-result" style="margin-bottom:10px;"></div>' +
       '<div class="as-field"><label>ID Azienda (Company ID)</label><input id="cfg-FIC_COMPANY_ID"></div>' +
       '<div class="as-field"><label>Aliquota IVA predefinita</label><select id="cfg-FIC_VAT_ID"><option value="">— scegli dopo aver salvato token e ID azienda —</option></select></div>' +
       '<button class="as-btn secondary" id="cfg-save">Salva impostazioni</button>' +
@@ -2421,6 +2423,36 @@ function renderBackend(){
         if (payload.FIC_ACCESS_TOKEN && payload.FIC_COMPANY_ID) caricaAliquoteIva(payload.FIC_VAT_ID);
       } catch(e){
         out2.innerHTML = '<div class="as-err">'+e.message+'</div>';
+      }
+    };
+
+    document.getElementById('cfg-fic-trova-aziende').onclick = async function(){
+      var out3 = document.getElementById('cfg-fic-aziende-result');
+      var token = document.getElementById('cfg-FIC_ACCESS_TOKEN').value.trim();
+      if (!token){ out3.innerHTML = '<div class="as-err">Inserisci prima l\'Access Token qui sopra.</div>'; return; }
+      out3.innerHTML = '<span class="as-warn"><span class="as-spin"></span>salvo il token e cerco le aziende…</span>';
+      try {
+        await fetch(backendUrl('/api/settings'), {
+          method: 'POST',
+          headers: backendHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ FIC_ACCESS_TOKEN: token })
+        });
+        var resp3 = await fetch(backendUrl('/api/fattura/companies'), { headers: backendHeaders() });
+        var data3 = await resp3.json();
+        if (!resp3.ok) throw new Error(data3.error || 'errore');
+        var aziende = (data3.data && data3.data.companies) || data3.data || [];
+        if (!aziende.length){ out3.innerHTML = '<p class="as-sub">Nessuna azienda trovata con questo token.</p>'; return; }
+        out3.innerHTML = aziende.map(function(a){
+          return '<button class="as-btn ghost" data-fic-azienda-id="'+a.id+'" style="margin:4px 4px 0 0;">'+(a.name||a.id)+' (ID '+a.id+')</button>';
+        }).join('');
+        out3.querySelectorAll('[data-fic-azienda-id]').forEach(function(b){
+          b.onclick = function(){
+            document.getElementById('cfg-FIC_COMPANY_ID').value = b.getAttribute('data-fic-azienda-id');
+            out3.innerHTML = '<p class="as-ok">ID azienda selezionato. Ora tocca "Salva impostazioni".</p>';
+          };
+        });
+      } catch(e){
+        out3.innerHTML = '<div class="as-err">'+e.message+'</div>';
       }
     };
   }
