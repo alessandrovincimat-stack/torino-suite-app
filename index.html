@@ -16,11 +16,12 @@
   html, body { margin: 0; padding: 0; background: #0a0a0a; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
   #root { min-height: 100vh; }
 
-  .ts-switcher { position: sticky; top: 0; z-index: 40; display: none; gap: 8px; padding: calc(10px + env(safe-area-inset-top)) 14px 10px; background: rgba(10,9,8,0.98); backdrop-filter: blur(6px); border-bottom: 1px solid var(--border); }
+  .ts-switcher { position: sticky; top: 0; z-index: 40; display: flex; gap: 8px; padding: calc(10px + env(safe-area-inset-top)) 14px 10px; background: rgba(10,9,8,0.98); backdrop-filter: blur(6px); border-bottom: 1px solid var(--border); }
   .ts-switcher.ts-visible { display: flex; }
   .ts-switch-btn { flex: 1; max-width: 220px; background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; letter-spacing: .3px; cursor: pointer; text-align: center; }
   .ts-switch-btn.ts-active { border-color: var(--brass); color: var(--brass); background: var(--surface-2); }
-  #questura-section { display: none; min-height: 100vh; background: var(--bg); }
+  #porte-section { display: none; }
+  #questura-section { display: block; min-height: 100vh; background: var(--bg); }
 
   #app * { box-sizing: border-box; }
   #app { background:var(--bg); }
@@ -72,7 +73,7 @@
 </style>
 </head>
 <body>
-<div class="ts-switcher" id="ts-switcher"><button class="ts-switch-btn ts-active" id="ts-btn-porte">Gestione porte</button><button class="ts-switch-btn" id="ts-btn-questura">Questura e ISTAT</button></div><div id="porte-section">
+<div class="ts-switcher ts-visible" id="ts-switcher"><button class="ts-switch-btn" id="ts-btn-porte">Gestione porte</button><button class="ts-switch-btn ts-active" id="ts-btn-questura">Questura e ISTAT</button></div><div id="porte-section">
 <div id="root"></div>
 </div>
 <div id="questura-section">
@@ -2122,7 +2123,6 @@ loadState().then(render);
 </script>
 <script>
 (function(){
-  var switcher = document.getElementById('ts-switcher');
   var porteSection = document.getElementById('porte-section');
   var questuraSection = document.getElementById('questura-section');
   var btnPorte = document.getElementById('ts-btn-porte');
@@ -2142,13 +2142,6 @@ loadState().then(render);
   }
   btnPorte.onclick = showPorte;
   btnQuestura.onclick = showQuestura;
-
-  var root = document.getElementById('root');
-  function checkUnlocked(){
-    switcher.classList.toggle('ts-visible', !!root.querySelector('.app-root'));
-  }
-  checkUnlocked();
-  new MutationObserver(checkUnlocked).observe(root, { childList: true, subtree: true });
 })();
 </script>
 </body>
