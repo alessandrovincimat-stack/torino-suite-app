@@ -1439,14 +1439,18 @@ function renderOspiti(){
   document.getElementById('as-add-manual').onclick = function(){
     var g = newGuest();
     state.guests.push(g); saveGuests(); render();
-    setTimeout(function(){
-      var card = document.querySelector('.as-guest[data-id="'+g.id+'"]');
-      if (card) card.scrollIntoView({ behavior:'smooth', block:'start' });
-    }, 550);
+    Promise.resolve(window.__lastSmoobuLoad).catch(function(){}).then(function(){
+      function scrollToNewCard(){
+        var card = document.querySelector('.as-guest[data-id="'+g.id+'"]');
+        if (card) card.scrollIntoView({ behavior:'smooth', block:'start' });
+      }
+      setTimeout(scrollToNewCard, 80);
+      setTimeout(scrollToNewCard, 700);
+    });
   };
   attachGuestHandlers(el);
 
-  if (state.backend.url) caricaArriviSmoobu();
+  window.__lastSmoobuLoad = state.backend.url ? caricaArriviSmoobu() : Promise.resolve();
 }
 
 var smoobuDetailsAperti = {};
@@ -1519,10 +1523,14 @@ async function caricaArriviSmoobu(){
         state.guests.push(g);
         smoobuDetailsAperti[b.id] = true;
         saveGuests(); render();
-        setTimeout(function(){
-          var card = document.querySelector('.as-guest[data-id="'+g.id+'"]');
-          if (card) card.scrollIntoView({ behavior:'smooth', block:'start' });
-        }, 550);
+        Promise.resolve(window.__lastSmoobuLoad).catch(function(){}).then(function(){
+          function scrollToNewCard(){
+            var card = document.querySelector('.as-guest[data-id="'+g.id+'"]');
+            if (card) card.scrollIntoView({ behavior:'smooth', block:'start' });
+          }
+          setTimeout(scrollToNewCard, 80);
+          setTimeout(scrollToNewCard, 700);
+        });
       };
     });
     box.querySelectorAll('[data-smoobu-details]').forEach(function(det){
