@@ -1336,6 +1336,11 @@ function buildGuestCardHtml(g){
   if (problems.length) html += '<div class="as-err">' + problems.join(' · ') + '</div>';
   else html += '<div class="as-ok">Dati completi</div>';
 
+  if (!isDependent){
+    html += '<button class="as-btn secondary" data-gen-invia="'+g.id+'" style="margin-top:10px;">📄 Genera e invia questa scheda</button>';
+    html += '<div class="as-gen-wrap" data-gen-wrap="'+g.id+'" style="margin-top:10px;"></div>';
+  }
+
   html += '</div>';
   return html;
 }
@@ -1390,6 +1395,24 @@ function attachGuestHandlers(root){
       if (!g || !file) return;
       ocrDocument(file, g).then(function(){ archiveDocument(file, g); });
       e.target.value = '';
+    };
+  });
+  root.querySelectorAll('[data-gen-invia]').forEach(function(btn){
+    btn.onclick = function(){
+      var headId = btn.getAttribute('data-gen-invia');
+      var groupOrdered = orderedGuestsFor(headId);
+      var problems = [];
+      groupOrdered.forEach(function(g){
+        var p = validateGuest(g);
+        if (p.length) problems.push((g.cognome||'(senza nome)') + ': ' + p.join(', '));
+      });
+      var wrapEl = root.querySelector('[data-gen-wrap="'+headId+'"]');
+      if (!wrapEl) return;
+      if (problems.length){
+        wrapEl.innerHTML = '<div class="as-err">Correggi prima di generare:<br>' + problems.join('<br>') + '</div>';
+        return;
+      }
+      generaEInviaPanel(groupOrdered, wrapEl);
     };
   });
 }
@@ -1753,6 +1776,17 @@ function buildLine(g){
   return line;
 }
 
+function orderedGuestsFor(headId){
+  var out = [];
+  var head = state.guests.find(function(g){ return g.id === headId; });
+  if (!head) return out;
+  out.push(head);
+  state.guests.forEach(function(d){
+    if ((d.ruolo === 'familiare' || d.ruolo === 'membro') && d.groupOf === head.id) out.push(d);
+  });
+  return out;
+}
+
 function orderedGuests(){
   var out = [];
   state.guests.forEach(function(g){
@@ -1793,63 +1827,69 @@ function renderGenera(){
   var genBtn = document.getElementById('as-gen-btn');
   if (genBtn){
     genBtn.onclick = function(){
-      var lines = ordered.map(buildLine);
-      var content = lines.join('\r\n');
-      document.getElementById('as-preview-wrap').innerHTML =
-        '<p class="as-sub">Anteprima (' + lines.length + ' righe, ' + (lines[0]||'').length + ' caratteri/riga):</p>' +
-        '<div id="as-file-preview"></div>' +
-        '<button class="as-btn secondary" style="margin-top:10px;" id="as-download-btn">Scarica file .txt</button>';
-      document.getElementById('as-file-preview').textContent = content;
-      document.getElementById('as-download-btn').onclick = function(){
-        var blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-        var url = URL.createObjectURL(blob);
-        var a = document.createElement('a');
-        var stamp = new Date().toISOString().slice(0,10).replace(/-/g,'');
-        a.href = url;
-        a.download = 'alloggiati_torinosuite_' + stamp + '.txt';
-        a.click();
-        URL.revokeObjectURL(url);
-      };
+      generaEInviaPanel(ordered, document.getElementById('as-preview-wrap'));
+    };
+  }
+}
 
-      if (state.backend.url){
-        var headsWithApp = ordered.filter(function(g){ return g.ruolo!=='familiare' && g.ruolo!=='membro'; });
-        var appIds = Array.from(new Set(headsWithApp.map(function(g){ return g.idAppartamento || ''; })));
-        var idAppartamento = appIds[0] || '';
-        var appNome = (state.tables.appartamenti.find(function(a){ return a.id===idAppartamento; })||{}).nome;
-        var sendBox = document.createElement('div');
-        sendBox.style.marginTop = '14px';
-        var appLine = idAppartamento
-          ? '<p class="as-sub">Appartamento: <strong>'+(appNome||idAppartamento)+'</strong> (scelto nella scheda ospite)</p>'
-          : '<p class="as-sub">Nessun appartamento selezionato negli ospiti — invio senza riferimento appartamento.</p>';
-        if (appIds.length > 1) appLine += '<p class="as-warn">Attenzione: gli ospiti hanno appartamenti diversi tra loro; verrà usato solo "'+(appNome||idAppartamento)+'". Invia gli altri separatamente.</p>';
-        sendBox.innerHTML =
-          appLine +
-          '<div class="as-row">' +
-            '<button class="as-btn secondary" id="as-test-btn">Valida con la Questura (senza inviare)</button>' +
-            '<button class="as-btn" id="as-send-btn">Invia alla Questura</button>' +
-          '</div>' +
-          '<div id="as-send-result" style="margin-top:10px;"></div>';
-        document.getElementById('as-preview-wrap').appendChild(sendBox);
+function generaEInviaPanel(ordered, wrapEl){
+  var lines = ordered.map(buildLine);
+  var content = lines.join('\r\n');
+  wrapEl.innerHTML =
+    '<p class="as-sub">Anteprima (' + lines.length + ' righe, ' + (lines[0]||'').length + ' caratteri/riga):</p>' +
+    '<div class="as-file-preview"></div>' +
+    '<button class="as-btn secondary" style="margin-top:10px;" data-role="download">Scarica file .txt</button>';
+  wrapEl.querySelector('.as-file-preview').textContent = content;
+  wrapEl.querySelector('[data-role="download"]').onclick = function(){
+    var blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    var stamp = new Date().toISOString().slice(0,10).replace(/-/g,'');
+    a.href = url;
+    a.download = 'alloggiati_torinosuite_' + stamp + '.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
-        document.getElementById('as-test-btn').onclick = function(){ sendToBackend(lines, false, idAppartamento, ordered); };
-        document.getElementById('as-send-btn').onclick = function(){
-          if (confirm('Confermi l\'invio ufficiale di ' + lines.length + ' schedine alla Questura? Non è reversibile.')) {
-            sendToBackend(lines, true, idAppartamento, ordered);
-          }
-        };
+  if (state.backend.url){
+    var headsWithApp = ordered.filter(function(g){ return g.ruolo!=='familiare' && g.ruolo!=='membro'; });
+    var appIds = Array.from(new Set(headsWithApp.map(function(g){ return g.idAppartamento || ''; })));
+    var idAppartamento = appIds[0] || '';
+    var appNome = (state.tables.appartamenti.find(function(a){ return a.id===idAppartamento; })||{}).nome;
+    var sendBox = document.createElement('div');
+    sendBox.style.marginTop = '14px';
+    var appLine = idAppartamento
+      ? '<p class="as-sub">Appartamento: <strong>'+(appNome||idAppartamento)+'</strong> (scelto nella scheda ospite)</p>'
+      : '<p class="as-sub">Nessun appartamento selezionato negli ospiti — invio senza riferimento appartamento.</p>';
+    if (appIds.length > 1) appLine += '<p class="as-warn">Attenzione: gli ospiti hanno appartamenti diversi tra loro; verrà usato solo "'+(appNome||idAppartamento)+'". Invia gli altri separatamente.</p>';
+    sendBox.innerHTML =
+      appLine +
+      '<div class="as-row">' +
+        '<button class="as-btn secondary" data-role="test">Valida con la Questura (senza inviare)</button>' +
+        '<button class="as-btn" data-role="send">Invia alla Questura</button>' +
+      '</div>' +
+      '<div class="as-send-result" style="margin-top:10px;"></div>';
+    wrapEl.appendChild(sendBox);
 
-        var istatBox = document.createElement('div');
-        istatBox.style.marginTop = '18px';
-        istatBox.style.borderTop = '1px solid var(--border)';
-        istatBox.style.paddingTop = '14px';
-        istatBox.innerHTML =
-          '<p class="as-sub"><strong>Piemonte Dati Turismo (ISTAT)</strong> — invia gli arrivi di oggi (' + toItDate(todayISO()) + '). Le partenze vanno inviate separatamente il giorno della partenza.</p>' +
-          '<button class="as-btn secondary" id="as-istat-btn">Invia dati ISTAT (arrivi di oggi)</button>' +
-          '<div id="as-istat-result" style="margin-top:10px;"></div>';
-        document.getElementById('as-preview-wrap').appendChild(istatBox);
-        document.getElementById('as-istat-btn').onclick = function(){ inviaIstat(ordered); };
+    var resultEl = sendBox.querySelector('.as-send-result');
+    sendBox.querySelector('[data-role="test"]').onclick = function(){ sendToBackend(lines, false, idAppartamento, ordered, resultEl); };
+    sendBox.querySelector('[data-role="send"]').onclick = function(){
+      if (confirm('Confermi l\'invio ufficiale di ' + lines.length + ' schedine alla Questura? Non è reversibile.')) {
+        sendToBackend(lines, true, idAppartamento, ordered, resultEl);
       }
     };
+
+    var istatBox = document.createElement('div');
+    istatBox.style.marginTop = '18px';
+    istatBox.style.borderTop = '1px solid var(--border)';
+    istatBox.style.paddingTop = '14px';
+    istatBox.innerHTML =
+      '<p class="as-sub"><strong>Piemonte Dati Turismo (ISTAT)</strong> — invia gli arrivi di oggi (' + toItDate(todayISO()) + '). Le partenze vanno inviate separatamente il giorno della partenza.</p>' +
+      '<button class="as-btn secondary" data-role="istat">Invia dati ISTAT (arrivi di oggi)</button>' +
+      '<div class="as-istat-result" style="margin-top:10px;"></div>';
+    wrapEl.appendChild(istatBox);
+    var istatResultEl = istatBox.querySelector('.as-istat-result');
+    istatBox.querySelector('[data-role="istat"]').onclick = function(){ inviaIstat(ordered, istatResultEl); };
   }
 }
 
@@ -1894,8 +1934,8 @@ async function inviaIstatArrivi(arriviOggi, allOrdered){
   return data;
 }
 
-async function inviaIstat(ordered){
-  var out = document.getElementById('as-istat-result');
+async function inviaIstat(ordered, outEl){
+  var out = outEl || document.getElementById('as-istat-result');
   var oggiISO = todayISO();
   var arriviOggi = ordered.filter(function(g){ return g.dataArrivo === oggiISO; });
   if (!arriviOggi.length){
@@ -1911,8 +1951,8 @@ async function inviaIstat(ordered){
   }
 }
 
-async function sendToBackend(lines, real, idAppartamento, ordered){
-  var out = document.getElementById('as-send-result');
+async function sendToBackend(lines, real, idAppartamento, ordered, outEl){
+  var out = outEl || document.getElementById('as-send-result');
   out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>'+(real?'invio':'validazione')+' in corso…</span>';
   try {
     var resp = await fetch(backendUrl(real ? '/api/schedine/send' : '/api/schedine/test'), {
@@ -1938,10 +1978,10 @@ async function sendToBackend(lines, real, idAppartamento, ordered){
       }
       await archiveInvio(ordered, idAppartamento, lines.length);
       html += '<p class="as-sub">Ospiti spostati nell\'archivio invii.</p>';
-      html += '<button class="as-btn secondary" id="as-ricevuta-btn" style="margin-top:8px;">Scarica ricevuta di oggi</button>';
+      html += '<button class="as-btn secondary" data-role="ricevuta" style="margin-top:8px;">Scarica ricevuta di oggi</button>';
     }
     out.innerHTML = html;
-    var ricBtn = document.getElementById('as-ricevuta-btn');
+    var ricBtn = out.querySelector('[data-role="ricevuta"]');
     if (ricBtn) ricBtn.onclick = function(){ scaricaRicevuta(todayISO(), ricBtn); };
     if (real && !errori.length){ render(); }
   } catch(e){
