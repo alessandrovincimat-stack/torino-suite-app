@@ -2278,6 +2278,11 @@ function switchTab(name){
   document.querySelectorAll('.as-tab[data-tab]').forEach(function(t){ t.classList.remove('active'); });
   var btn = document.querySelector('.as-tab[data-tab="'+name+'"]');
   if (btn) btn.classList.add('active');
+  if (name === 'tabelle') renderTabelle();
+  else if (name === 'genera') renderGenera();
+  else if (name === 'archivio') renderArchivio();
+  else if (name === 'backend') renderBackend();
+  else if (name === 'link') renderLink();
   ['ospiti','tabelle','genera','archivio','backend','link'].forEach(function(n){
     var el = document.getElementById('tab-'+n);
     if (el) el.classList.toggle('as-hidden', n !== name);
