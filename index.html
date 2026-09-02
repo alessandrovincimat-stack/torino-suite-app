@@ -1213,7 +1213,7 @@ function buildGuestCardHtml(g){
     html += '</div>';
   }
 
-  html += '<details style="margin-top:10px;"><summary style="cursor:pointer;color:var(--text-muted);font-size:12px;">Dati ISTAT (Piemonte Dati Turismo) — facoltativi</summary>';
+  html += '<details style="margin-top:10px;" data-istat-details="'+g.id+'"'+(smoobuDetailsAperti['istat-'+g.id]?' open':'')+'><summary style="cursor:pointer;color:var(--text-muted);font-size:12px;">Dati ISTAT (Piemonte Dati Turismo) — facoltativi</summary>';
   html += '<div class="as-row" style="margin-top:8px;">';
   html += '<div class="as-field"><label>Residente all\'estero?</label><select data-f="residenzaEstero" data-id="'+g.id+'"><option value="false" '+(!g.residenzaEstero?'selected':'')+'>No, in Italia</option><option value="true" '+(g.residenzaEstero?'selected':'')+'>Sì</option></select></div>';
   if (g.residenzaEstero){
@@ -1263,6 +1263,11 @@ function attachGuestHandlers(root){
     var id = box.getAttribute('data-doc-trigger');
     var input = root.querySelector('[data-doc-input="'+id+'"]');
     if (input) box.onclick = function(){ input.click(); };
+  });
+  root.querySelectorAll('[data-istat-details]').forEach(function(det){
+    det.addEventListener('toggle', function(){
+      smoobuDetailsAperti['istat-'+det.getAttribute('data-istat-details')] = det.open;
+    });
   });
   root.querySelectorAll('[data-doc-input]').forEach(function(input){
     input.onchange = function(e){
@@ -1316,6 +1321,8 @@ function renderOspiti(){
   if (state.backend.url) caricaArriviSmoobu();
 }
 
+var smoobuDetailsAperti = {};
+
 async function caricaArriviSmoobu(){
   var box = document.getElementById('as-smoobu-arrivi');
   if (!box) return;
@@ -1351,7 +1358,8 @@ async function caricaArriviSmoobu(){
           stato = '<p class="as-ok" style="margin:4px 0 0;">Già inviata alla Questura (' + nomiInviati + ')</p>';
         } else if (r.collegate.length){
           var capo = r.collegate.find(function(g){ return g.ruolo==='capofamiglia'||g.ruolo==='capogruppo'; });
-          stato = '<details style="margin-top:6px;"><summary style="cursor:pointer;color:var(--brass);font-size:13px;font-weight:600;">▸ ' +
+          var aperto = smoobuDetailsAperti[b.id] ? ' open' : '';
+          stato = '<details style="margin-top:6px;" data-smoobu-details="'+b.id+'"'+aperto+'><summary style="cursor:pointer;color:var(--brass);font-size:13px;font-weight:600;">▸ ' +
             r.collegate.length + ' scheda/e: ' + r.collegate.map(function(g){ return (g.cognome+' '+g.nome).trim() || '(dati da inserire)'; }).join(', ') +
             '</summary><div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);">' +
             r.collegate.map(buildGuestCardHtml).join('') +
@@ -1381,8 +1389,14 @@ async function caricaArriviSmoobu(){
         if (appMatch) g.idAppartamento = appMatch.id;
         if (capoId){ g.ruolo = 'familiare'; g.groupOf = capoId; }
         state.guests.push(g);
+        smoobuDetailsAperti[b.id] = true;
         saveGuests(); render();
       };
+    });
+    box.querySelectorAll('[data-smoobu-details]').forEach(function(det){
+      det.addEventListener('toggle', function(){
+        smoobuDetailsAperti[det.getAttribute('data-smoobu-details')] = det.open;
+      });
     });
     attachGuestHandlers(box);
   } catch(e){
