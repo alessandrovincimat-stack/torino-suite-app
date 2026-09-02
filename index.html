@@ -1075,8 +1075,19 @@ function compressImage(file, maxWidth, quality){
 async function archiveDocument(file, guest){
   try {
     var isPdf = (file.type === 'application/pdf');
-    var b64 = isPdf ? await fileToBase64(file) : await compressImage(file, 1100, 0.72);
-    if (!isPdf && b64.length > 4.5 * 1024 * 1024) { b64 = await compressImage(file, 700, 0.6); }
+    var LIMITE_SICURO = 1.4 * 1024 * 1024;
+    var b64;
+    if (isPdf) {
+      b64 = await fileToBase64(file);
+      if (b64.length > LIMITE_SICURO) {
+        alert('Questo PDF è troppo grande (oltre 1,4 MB) per essere archiviato tramite l\'app. I dati sono comunque stati estratti; carica il documento separatamente se serve conservarlo.');
+        return;
+      }
+    } else {
+      b64 = await compressImage(file, 1100, 0.72);
+      if (b64.length > LIMITE_SICURO) b64 = await compressImage(file, 700, 0.55);
+      if (b64.length > LIMITE_SICURO) b64 = await compressImage(file, 450, 0.4);
+    }
     var isDependent = guest.ruolo === 'familiare' || guest.ruolo === 'membro';
     var head = isDependent ? state.guests.find(function(x){ return x.id === guest.groupOf; }) : guest;
     var entry = {
@@ -1215,8 +1226,17 @@ async function ocrDocument(file, guest){
   guest.ocrPending = true; render();
   try {
     if (!state.backend.url) throw new Error("Configura prima l'indirizzo del backend nella scheda \"Backend\" (serve per leggere i documenti)");
-    var b64 = await fileToBase64(file);
-    var mediaType = file.type || 'image/jpeg';
+    var isPdf = (file.type === 'application/pdf');
+    var b64, mediaType;
+    if (isPdf) {
+      b64 = await fileToBase64(file);
+      mediaType = 'application/pdf';
+      if (b64.length > 7 * 1024 * 1024) throw new Error('PDF troppo grande (oltre 7 MB): prova con un file più leggero o una foto della pagina.');
+    } else {
+      b64 = await compressImage(file, 1600, 0.85);
+      if (b64.length > 3 * 1024 * 1024) b64 = await compressImage(file, 1100, 0.72);
+      mediaType = 'image/jpeg';
+    }
     var resp = await fetch(backendUrl('/api/ocr'), {
       method: "POST",
       headers: backendHeaders({ "Content-Type": "application/json" }),
