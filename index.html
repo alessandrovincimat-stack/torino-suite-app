@@ -1355,7 +1355,24 @@ function attachGuestHandlers(root){
       var v = inp.value;
       if (f === 'nascitaEstero' || f === 'rilascioEstero' || f === 'residenzaEstero') v = (v === 'true');
       g[f] = v;
-      saveGuests(); render();
+      saveGuests();
+
+      var structurale = ['ruolo','nascitaEstero','rilascioEstero','residenzaEstero'].indexOf(f) !== -1;
+      if (structurale){
+        render();
+      } else {
+        var card = inp.closest('.as-guest');
+        if (card){
+          var nameEl = card.querySelector('.as-name');
+          if (nameEl) nameEl.textContent = (g.cognome||g.nome? (g.cognome+' '+g.nome).trim() : 'Nuovo ospite');
+          var problems = validateGuest(g);
+          var msgEl = card.querySelector('.as-err, .as-ok');
+          if (msgEl){
+            msgEl.className = problems.length ? 'as-err' : 'as-ok';
+            msgEl.textContent = problems.length ? problems.join(' · ') : 'Dati completi';
+          }
+        }
+      }
     };
   });
   root.querySelectorAll('[data-doc-trigger]').forEach(function(box){
