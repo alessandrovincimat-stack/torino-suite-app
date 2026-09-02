@@ -1963,7 +1963,7 @@ async function inviaIstatArrivi(arriviOggi, allOrdered){
 }
 
 async function inviaIstat(ordered, outEl){
-  var out = outEl || document.getElementById('as-istat-result');
+  var out = outEl;
   var oggiISO = todayISO();
   var arriviOggi = ordered.filter(function(g){ return g.dataArrivo === oggiISO; });
   if (!arriviOggi.length){
@@ -1980,7 +1980,7 @@ async function inviaIstat(ordered, outEl){
 }
 
 async function sendToBackend(lines, real, idAppartamento, ordered, outEl){
-  var out = outEl || document.getElementById('as-send-result');
+  var out = outEl;
   out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>'+(real?'invio':'validazione')+' in corso…</span>';
   try {
     var resp = await fetch(backendUrl(real ? '/api/schedine/send' : '/api/schedine/test'), {
