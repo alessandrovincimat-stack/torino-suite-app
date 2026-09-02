@@ -1089,6 +1089,115 @@ function roleLabel(r){
   return { singolo:'Ospite singolo', capofamiglia:'Capofamiglia', capogruppo:'Capogruppo', familiare:'Familiare', membro:'Membro gruppo' }[r] || r;
 }
 
+function getCapiOptions(){
+  return state.guests.filter(function(g){ return g.ruolo==='capofamiglia'||g.ruolo==='capogruppo'; });
+}
+
+function buildGuestCardHtml(g){
+  var isDependent = g.ruolo === 'familiare' || g.ruolo === 'membro';
+  var capiOptions = getCapiOptions();
+  var html = '';
+
+  html += '<div class="as-guest" data-id="'+g.id+'">';
+  html += '<div class="as-guest-head"><div><span class="as-name">'+(g.cognome||g.nome? (g.cognome+' '+g.nome).trim() : 'Nuovo ospite')+'</span><span class="as-role">'+roleLabel(g.ruolo)+'</span></div>' +
+          (g.ocrPending? '<span class="as-warn"><span class="as-spin"></span>estrazione in corso… <button class="as-remove" data-remove="'+g.id+'">annulla</button></span>' : '<button class="as-remove" data-remove="'+g.id+'">rimuovi</button>') +
+          '</div>';
+
+  html += '<div class="as-row">';
+  html += '<div class="as-field"><label>Ruolo</label><select data-f="ruolo" data-id="'+g.id+'">';
+  ['singolo','capofamiglia','capogruppo','familiare','membro'].forEach(function(r){
+    html += '<option value="'+r+'" '+(g.ruolo===r?'selected':'')+'>'+roleLabel(r)+'</option>';
+  });
+  html += '</select></div>';
+  if (isDependent){
+    html += '<div class="as-field"><label>Collegato a</label><select data-f="groupOf" data-id="'+g.id+'"><option value="">—</option>';
+    capiOptions.forEach(function(c){
+      html += '<option value="'+c.id+'" '+(g.groupOf===c.id?'selected':'')+'>'+(c.cognome+' '+c.nome).trim()+'</option>';
+    });
+    html += '</select></div>';
+  } else {
+    html += '<div class="as-field"><label>Data arrivo</label><input type="date" data-f="dataArrivo" data-id="'+g.id+'" value="'+g.dataArrivo+'"></div>';
+    html += '<div class="as-field"><label>Giorni permanenza</label><input type="number" min="1" max="30" data-f="permanenza" data-id="'+g.id+'" value="'+g.permanenza+'"></div>';
+    html += '<div class="as-field"><label>Appartamento</label><select data-f="idAppartamento" data-id="'+g.id+'"><option value="">—</option>' +
+      state.tables.appartamenti.map(function(a){ return '<option value="'+a.id+'" '+(g.idAppartamento===a.id?'selected':'')+'>'+a.nome+'</option>'; }).join('') +
+      '</select></div>';
+  }
+  html += '</div>';
+
+  html += '<div class="as-row">';
+  html += '<div class="as-field"><label>Cognome</label><input data-f="cognome" data-id="'+g.id+'" value="'+g.cognome+'"></div>';
+  html += '<div class="as-field"><label>Nome</label><input data-f="nome" data-id="'+g.id+'" value="'+g.nome+'"></div>';
+  html += '<div class="as-field"><label>Sesso</label><select data-f="sesso" data-id="'+g.id+'"><option value="M" '+(g.sesso==='M'?'selected':'')+'>M</option><option value="F" '+(g.sesso==='F'?'selected':'')+'>F</option></select></div>';
+  html += '<div class="as-field"><label>Data nascita</label><input type="date" data-f="dataNascita" data-id="'+g.id+'" value="'+g.dataNascita+'"></div>';
+  html += '</div>';
+
+  html += '<div class="as-row">';
+  html += '<div class="as-field"><label>Nato/a all\'estero?</label><select data-f="nascitaEstero" data-id="'+g.id+'"><option value="false" '+(!g.nascitaEstero?'selected':'')+'>No, in Italia</option><option value="true" '+(g.nascitaEstero?'selected':'')+'>Sì</option></select></div>';
+  if (g.nascitaEstero){
+    html += '<div class="as-field"><label>Stato di nascita</label><input list="dl-stati" data-f="statoNascitaNome" data-id="'+g.id+'" value="'+g.statoNascitaNome+'"></div>';
+  } else {
+    html += '<div class="as-field"><label>Comune di nascita</label><input list="dl-comuni" data-f="comuneNascitaNome" data-id="'+g.id+'" value="'+g.comuneNascitaNome+'"></div>';
+  }
+  html += '<div class="as-field"><label>Cittadinanza</label><input list="dl-stati" data-f="cittadinanzaNome" data-id="'+g.id+'" value="'+g.cittadinanzaNome+'"></div>';
+  html += '</div>';
+
+  if (!isDependent){
+    html += '<div class="as-row">';
+    html += '<div class="as-field"><label>Tipo documento</label><input list="dl-doc" data-f="tipoDocumentoNome" data-id="'+g.id+'" value="'+g.tipoDocumentoNome+'"></div>';
+    html += '<div class="as-field"><label>Numero documento</label><input data-f="numeroDocumento" data-id="'+g.id+'" value="'+g.numeroDocumento+'"></div>';
+    html += '<div class="as-field"><label>Rilascio all\'estero?</label><select data-f="rilascioEstero" data-id="'+g.id+'"><option value="false" '+(!g.rilascioEstero?'selected':'')+'>No, in Italia</option><option value="true" '+(g.rilascioEstero?'selected':'')+'>Sì</option></select></div>';
+    html += '<div class="as-field"><label>Luogo rilascio</label><input list="'+(g.rilascioEstero?'dl-stati':'dl-comuni')+'" data-f="luogoRilascioNome" data-id="'+g.id+'" value="'+g.luogoRilascioNome+'"></div>';
+    html += '</div>';
+  }
+
+  html += '<details style="margin-top:10px;"><summary style="cursor:pointer;color:var(--text-muted);font-size:12px;">Dati ISTAT (Piemonte Dati Turismo) — facoltativi</summary>';
+  html += '<div class="as-row" style="margin-top:8px;">';
+  html += '<div class="as-field"><label>Residente all\'estero?</label><select data-f="residenzaEstero" data-id="'+g.id+'"><option value="false" '+(!g.residenzaEstero?'selected':'')+'>No, in Italia</option><option value="true" '+(g.residenzaEstero?'selected':'')+'>Sì</option></select></div>';
+  if (g.residenzaEstero){
+    html += '<div class="as-field"><label>Stato di residenza</label><input list="dl-stati" data-f="statoResidenzaNome" data-id="'+g.id+'" value="'+g.statoResidenzaNome+'"></div>';
+  } else {
+    html += '<div class="as-field"><label>Comune di residenza</label><input list="dl-comuni" data-f="comuneResidenzaNome" data-id="'+g.id+'" value="'+g.comuneResidenzaNome+'"></div>';
+  }
+  html += '</div>';
+  html += '<div class="as-row">';
+  html += '<div class="as-field"><label>Tipo turismo</label><select data-f="tipoTurismo" data-id="'+g.id+'">' +
+    ['Non specificato','Culturale','Balneare','Congressuale/Affari','Fieristico','Sportivo/Fitness','Scolastico','Religioso','Sociale','Parchi Tematici','Termale/Trattamenti salute','Enogastronomico','Cicloturismo','Escursionistico/Naturalistico','Altro motivo'].map(function(t){ return '<option '+(g.tipoTurismo===t?'selected':'')+'>'+t+'</option>'; }).join('') +
+    '</select></div>';
+  html += '<div class="as-field"><label>Mezzo di trasporto</label><select data-f="mezzoTrasporto" data-id="'+g.id+'">' +
+    ['Non specificato','Auto','Aereo','Aereo+Pullman','Aereo+Navetta/Taxi/Auto','Aereo+Treno','Treno','Pullman','Caravan/Autocaravan','Barca/Nave/Traghetto','Moto','Bicicletta','A piedi','Altro mezzo'].map(function(t){ return '<option '+(g.mezzoTrasporto===t?'selected':'')+'>'+t+'</option>'; }).join('') +
+    '</select></div>';
+  html += '</div></details>';
+
+  var problems = validateGuest(g);
+  if (problems.length) html += '<div class="as-err">' + problems.join(' · ') + '</div>';
+  else html += '<div class="as-ok">Dati completi</div>';
+
+  html += '</div>';
+  return html;
+}
+
+function attachGuestHandlers(root){
+  root.querySelectorAll('[data-remove]').forEach(function(btn){
+    btn.onclick = function(){
+      var id = btn.getAttribute('data-remove');
+      state.guests = state.guests.filter(function(g){ return g.id !== id; });
+      saveGuests(); render();
+    };
+  });
+  root.querySelectorAll('[data-f]').forEach(function(inp){
+    inp.onchange = function(){
+      var id = inp.getAttribute('data-id');
+      var f = inp.getAttribute('data-f');
+      var g = state.guests.find(function(x){ return x.id === id; });
+      if (!g) return;
+      var v = inp.value;
+      if (f === 'nascitaEstero' || f === 'rilascioEstero' || f === 'residenzaEstero') v = (v === 'true');
+      g[f] = v;
+      saveGuests(); render();
+    };
+  });
+}
+
 function renderOspiti(){
   var el = document.getElementById('tab-ospiti');
   var html = '';
@@ -1101,90 +1210,8 @@ function renderOspiti(){
           '<input type="file" id="as-file-input" accept="image/*" multiple style="display:none">' +
           '<div style="margin-top:10px;"><button class="as-btn ghost" id="as-add-manual">+ Aggiungi ospite manualmente</button></div></div>';
 
-  var capiOptions = state.guests.filter(function(g){ return g.ruolo==='capofamiglia'||g.ruolo==='capogruppo'; });
-
-  state.guests.forEach(function(g, idx){
-    var comuniOpts = state.tables.comuni.map(function(c){return c.nome;});
-    var statiOpts = state.tables.stati.map(function(c){return c.nome;});
-    var docOpts = state.tables.documenti.map(function(c){return c.nome;});
-    var isDependent = g.ruolo === 'familiare' || g.ruolo === 'membro';
-
-    html += '<div class="as-guest" data-id="'+g.id+'">';
-    html += '<div class="as-guest-head"><div><span class="as-name">'+(g.cognome||g.nome? (g.cognome+' '+g.nome).trim() : 'Nuovo ospite')+'</span><span class="as-role">'+roleLabel(g.ruolo)+'</span></div>' +
-            (g.ocrPending? '<span class="as-warn"><span class="as-spin"></span>estrazione in corso… <button class="as-remove" data-remove="'+g.id+'">annulla</button></span>' : '<button class="as-remove" data-remove="'+g.id+'">rimuovi</button>') +
-            '</div>';
-
-    html += '<div class="as-row">';
-    html += '<div class="as-field"><label>Ruolo</label><select data-f="ruolo" data-id="'+g.id+'">';
-    ['singolo','capofamiglia','capogruppo','familiare','membro'].forEach(function(r){
-      html += '<option value="'+r+'" '+(g.ruolo===r?'selected':'')+'>'+roleLabel(r)+'</option>';
-    });
-    html += '</select></div>';
-    if (isDependent){
-      html += '<div class="as-field"><label>Collegato a</label><select data-f="groupOf" data-id="'+g.id+'"><option value="">—</option>';
-      capiOptions.forEach(function(c){
-        html += '<option value="'+c.id+'" '+(g.groupOf===c.id?'selected':'')+'>'+(c.cognome+' '+c.nome).trim()+'</option>';
-      });
-      html += '</select></div>';
-    } else {
-      html += '<div class="as-field"><label>Data arrivo</label><input type="date" data-f="dataArrivo" data-id="'+g.id+'" value="'+g.dataArrivo+'"></div>';
-      html += '<div class="as-field"><label>Giorni permanenza</label><input type="number" min="1" max="30" data-f="permanenza" data-id="'+g.id+'" value="'+g.permanenza+'"></div>';
-      html += '<div class="as-field"><label>Appartamento</label><select data-f="idAppartamento" data-id="'+g.id+'"><option value="">—</option>' +
-        state.tables.appartamenti.map(function(a){ return '<option value="'+a.id+'" '+(g.idAppartamento===a.id?'selected':'')+'>'+a.nome+'</option>'; }).join('') +
-        '</select></div>';
-    }
-    html += '</div>';
-
-    html += '<div class="as-row">';
-    html += '<div class="as-field"><label>Cognome</label><input data-f="cognome" data-id="'+g.id+'" value="'+g.cognome+'"></div>';
-    html += '<div class="as-field"><label>Nome</label><input data-f="nome" data-id="'+g.id+'" value="'+g.nome+'"></div>';
-    html += '<div class="as-field"><label>Sesso</label><select data-f="sesso" data-id="'+g.id+'"><option value="M" '+(g.sesso==='M'?'selected':'')+'>M</option><option value="F" '+(g.sesso==='F'?'selected':'')+'>F</option></select></div>';
-    html += '<div class="as-field"><label>Data nascita</label><input type="date" data-f="dataNascita" data-id="'+g.id+'" value="'+g.dataNascita+'"></div>';
-    html += '</div>';
-
-    html += '<div class="as-row">';
-    html += '<div class="as-field"><label>Nato/a all\'estero?</label><select data-f="nascitaEstero" data-id="'+g.id+'"><option value="false" '+(!g.nascitaEstero?'selected':'')+'>No, in Italia</option><option value="true" '+(g.nascitaEstero?'selected':'')+'>Sì</option></select></div>';
-    if (g.nascitaEstero){
-      html += '<div class="as-field"><label>Stato di nascita</label><input list="dl-stati" data-f="statoNascitaNome" data-id="'+g.id+'" value="'+g.statoNascitaNome+'"></div>';
-    } else {
-      html += '<div class="as-field"><label>Comune di nascita</label><input list="dl-comuni" data-f="comuneNascitaNome" data-id="'+g.id+'" value="'+g.comuneNascitaNome+'"></div>';
-    }
-    html += '<div class="as-field"><label>Cittadinanza</label><input list="dl-stati" data-f="cittadinanzaNome" data-id="'+g.id+'" value="'+g.cittadinanzaNome+'"></div>';
-    html += '</div>';
-
-    if (!isDependent){
-      html += '<div class="as-row">';
-      html += '<div class="as-field"><label>Tipo documento</label><input list="dl-doc" data-f="tipoDocumentoNome" data-id="'+g.id+'" value="'+g.tipoDocumentoNome+'"></div>';
-      html += '<div class="as-field"><label>Numero documento</label><input data-f="numeroDocumento" data-id="'+g.id+'" value="'+g.numeroDocumento+'"></div>';
-      html += '<div class="as-field"><label>Rilascio all\'estero?</label><select data-f="rilascioEstero" data-id="'+g.id+'"><option value="false" '+(!g.rilascioEstero?'selected':'')+'>No, in Italia</option><option value="true" '+(g.rilascioEstero?'selected':'')+'>Sì</option></select></div>';
-      html += '<div class="as-field"><label>Luogo rilascio</label><input list="'+(g.rilascioEstero?'dl-stati':'dl-comuni')+'" data-f="luogoRilascioNome" data-id="'+g.id+'" value="'+g.luogoRilascioNome+'"></div>';
-      html += '</div>';
-    }
-
-    html += '<details style="margin-top:10px;"><summary style="cursor:pointer;color:var(--text-muted);font-size:12px;">Dati ISTAT (Piemonte Dati Turismo) — facoltativi</summary>';
-    html += '<div class="as-row" style="margin-top:8px;">';
-    html += '<div class="as-field"><label>Residente all\'estero?</label><select data-f="residenzaEstero" data-id="'+g.id+'"><option value="false" '+(!g.residenzaEstero?'selected':'')+'>No, in Italia</option><option value="true" '+(g.residenzaEstero?'selected':'')+'>Sì</option></select></div>';
-    if (g.residenzaEstero){
-      html += '<div class="as-field"><label>Stato di residenza</label><input list="dl-stati" data-f="statoResidenzaNome" data-id="'+g.id+'" value="'+g.statoResidenzaNome+'"></div>';
-    } else {
-      html += '<div class="as-field"><label>Comune di residenza</label><input list="dl-comuni" data-f="comuneResidenzaNome" data-id="'+g.id+'" value="'+g.comuneResidenzaNome+'"></div>';
-    }
-    html += '</div>';
-    html += '<div class="as-row">';
-    html += '<div class="as-field"><label>Tipo turismo</label><select data-f="tipoTurismo" data-id="'+g.id+'">' +
-      ['Non specificato','Culturale','Balneare','Congressuale/Affari','Fieristico','Sportivo/Fitness','Scolastico','Religioso','Sociale','Parchi Tematici','Termale/Trattamenti salute','Enogastronomico','Cicloturismo','Escursionistico/Naturalistico','Altro motivo'].map(function(t){ return '<option '+(g.tipoTurismo===t?'selected':'')+'>'+t+'</option>'; }).join('') +
-      '</select></div>';
-    html += '<div class="as-field"><label>Mezzo di trasporto</label><select data-f="mezzoTrasporto" data-id="'+g.id+'">' +
-      ['Non specificato','Auto','Aereo','Aereo+Pullman','Aereo+Navetta/Taxi/Auto','Aereo+Treno','Treno','Pullman','Caravan/Autocaravan','Barca/Nave/Traghetto','Moto','Bicicletta','A piedi','Altro mezzo'].map(function(t){ return '<option '+(g.mezzoTrasporto===t?'selected':'')+'>'+t+'</option>'; }).join('') +
-      '</select></div>';
-    html += '</div></details>';
-
-    var problems = validateGuest(g);
-    if (problems.length) html += '<div class="as-err">' + problems.join(' · ') + '</div>';
-    else html += '<div class="as-ok">Dati completi</div>';
-
-    html += '</div>';
-  });
+  var guestsSenzaPrenotazione = state.guests.filter(function(g){ return !g.smoobuBookingId; });
+  guestsSenzaPrenotazione.forEach(function(g){ html += buildGuestCardHtml(g); });
 
   html += '<datalist id="dl-comuni">' + state.tables.comuni.map(function(c){return '<option value="'+c.nome+'">';}).join('') + '</datalist>';
   html += '<datalist id="dl-stati">' + state.tables.stati.map(function(c){return '<option value="'+c.nome+'">';}).join('') + '</datalist>';
@@ -1206,25 +1233,7 @@ function renderOspiti(){
   document.getElementById('as-add-manual').onclick = function(){
     state.guests.push(newGuest()); saveGuests(); render();
   };
-  el.querySelectorAll('[data-remove]').forEach(function(btn){
-    btn.onclick = function(){
-      var id = btn.getAttribute('data-remove');
-      state.guests = state.guests.filter(function(g){ return g.id !== id; });
-      saveGuests(); render();
-    };
-  });
-  el.querySelectorAll('[data-f]').forEach(function(inp){
-    inp.onchange = function(){
-      var id = inp.getAttribute('data-id');
-      var f = inp.getAttribute('data-f');
-      var g = state.guests.find(function(x){ return x.id === id; });
-      if (!g) return;
-      var v = inp.value;
-      if (f === 'nascitaEstero' || f === 'rilascioEstero' || f === 'residenzaEstero') v = (v === 'true');
-      g[f] = v;
-      saveGuests(); render();
-    };
-  });
+  attachGuestHandlers(el);
 
   if (state.backend.url) caricaArriviSmoobu();
 }
@@ -1258,15 +1267,24 @@ async function caricaArriviSmoobu(){
     box.innerHTML = '<p class="as-title" style="font-size:15px;">Prossimi arrivi (Smoobu)</p>' +
       righe.map(function(r){
         var b = r.b;
-        var nomiCollegati = r.collegate.map(function(g){ return (g.cognome+' '+g.nome).trim() || '(dati non ancora inseriti)'; });
         var stato;
-        if (r.invioCollegato) stato = '<span class="as-ok">già inviata (' + r.invioCollegato.ospiti.filter(function(o){return o.smoobuBookingId===String(b.id);}).map(function(o){return (o.cognome+' '+o.nome).trim();}).join(', ') + ')</span>';
-        else if (nomiCollegati.length) stato = '<span class="as-ok">scheda creata: ' + nomiCollegati.join(', ') + '</span> <button class="as-btn ghost" data-crea-smoobu="'+encodeURIComponent(JSON.stringify(b))+'">+ altro ospite</button>';
-        else stato = '<button class="as-btn secondary" data-crea-smoobu="'+encodeURIComponent(JSON.stringify(b))+'">Crea scheda</button>';
+        if (r.invioCollegato){
+          var nomiInviati = r.invioCollegato.ospiti.filter(function(o){return o.smoobuBookingId===String(b.id);}).map(function(o){return (o.cognome+' '+o.nome).trim();}).join(', ');
+          stato = '<p class="as-ok" style="margin:4px 0 0;">Già inviata alla Questura (' + nomiInviati + ')</p>';
+        } else if (r.collegate.length){
+          stato = '<details style="margin-top:6px;"><summary style="cursor:pointer;color:var(--brass);font-size:13px;">' +
+            r.collegate.length + ' scheda/e: ' + r.collegate.map(function(g){ return (g.cognome+' '+g.nome).trim() || '(dati da inserire)'; }).join(', ') +
+            '</summary><div style="margin-top:8px;">' +
+            r.collegate.map(buildGuestCardHtml).join('') +
+            '<button class="as-btn ghost" data-crea-smoobu="'+encodeURIComponent(JSON.stringify(b))+'">+ altro ospite in questa prenotazione</button>' +
+            '</div></details>';
+        } else {
+          stato = '<button class="as-btn secondary" style="margin-top:6px;" data-crea-smoobu="'+encodeURIComponent(JSON.stringify(b))+'">Crea scheda</button>';
+        }
         return '<div style="border-bottom:1px solid var(--border);padding:6px 0;">' +
           '<div>'+toItDate(b.arrival)+' → '+toItDate(b.departure)+' · prenotazione a nome '+(r.nomeCompleto||'sconosciuto')+'</div>' +
           '<div class="as-sub" style="margin:0;">'+(b.apartment?b.apartment.name:'')+(r.appMatch?'':' <span style="color:var(--danger)">(appartamento non abbinato)</span>')+'</div>' +
-          '<div style="margin-top:6px;">'+stato+'</div>' +
+          stato +
           '</div>';
       }).join('');
     box.querySelectorAll('[data-crea-smoobu]').forEach(function(btn){
@@ -1283,6 +1301,7 @@ async function caricaArriviSmoobu(){
         saveGuests(); render();
       };
     });
+    attachGuestHandlers(box);
   } catch(e){
     box.innerHTML = '<div class="as-err">Arrivi Smoobu non disponibili: '+(e.name==='AbortError'?'il server non ha risposto in tempo (15s)':e.message)+'</div>';
   }
