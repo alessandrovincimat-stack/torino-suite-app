@@ -1261,8 +1261,8 @@ function buildGuestCardHtml(g){
           '</div>';
 
   if (!g.ocrPending){
-    html += '<div class="as-photobox" data-doc-trigger="'+g.id+'" style="margin-bottom:12px;font-size:13px;padding:12px;">📷 Carica/sostituisci foto documento</div>' +
-            '<input type="file" accept="image/*" data-doc-input="'+g.id+'" style="display:none">';
+    html += '<label for="doc-input-'+g.id+'" class="as-photobox" style="margin-bottom:12px;font-size:13px;padding:12px;display:block;">📷 Carica/sostituisci foto documento</label>' +
+            '<input type="file" accept="image/*" id="doc-input-'+g.id+'" data-doc-input="'+g.id+'" style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;">';
   }
 
   html += '<div class="as-row">';
@@ -1374,11 +1374,6 @@ function attachGuestHandlers(root){
         }
       }
     };
-  });
-  root.querySelectorAll('[data-doc-trigger]').forEach(function(box){
-    var id = box.getAttribute('data-doc-trigger');
-    var input = root.querySelector('[data-doc-input="'+id+'"]');
-    if (input) box.onclick = function(){ input.click(); };
   });
   root.querySelectorAll('[data-istat-details]').forEach(function(det){
     det.addEventListener('toggle', function(){
