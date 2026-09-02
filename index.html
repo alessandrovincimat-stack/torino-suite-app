@@ -1074,13 +1074,15 @@ function compressImage(file, maxWidth, quality){
 
 async function archiveDocument(file, guest){
   try {
-    var b64 = await compressImage(file, 1100, 0.72);
-    if (b64.length > 4.5 * 1024 * 1024) { b64 = await compressImage(file, 700, 0.6); }
+    var isPdf = (file.type === 'application/pdf');
+    var b64 = isPdf ? await fileToBase64(file) : await compressImage(file, 1100, 0.72);
+    if (!isPdf && b64.length > 4.5 * 1024 * 1024) { b64 = await compressImage(file, 700, 0.6); }
     var isDependent = guest.ruolo === 'familiare' || guest.ruolo === 'membro';
     var head = isDependent ? state.guests.find(function(x){ return x.id === guest.groupOf; }) : guest;
     var entry = {
       id: uid(),
       fotoKey: 'as-doc-' + Math.random().toString(36).slice(2,10),
+      isPdf: isPdf,
       dataCaricamento: new Date().toISOString(),
       cognomeCapogruppo: (head && head.cognome) || guest.cognome || '',
       nomeCapogruppo: (head && head.nome) || guest.nome || '',
@@ -1262,7 +1264,7 @@ function buildGuestCardHtml(g){
 
   if (!g.ocrPending){
     html += '<label for="doc-input-'+g.id+'" class="as-photobox" style="margin-bottom:12px;font-size:13px;padding:12px;display:block;">📷 Carica/sostituisci foto documento</label>' +
-            '<input type="file" accept="image/*" id="doc-input-'+g.id+'" data-doc-input="'+g.id+'" style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;">';
+            '<input type="file" accept="image/*,application/pdf" id="doc-input-'+g.id+'" data-doc-input="'+g.id+'" style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;">';
   }
 
   html += '<div class="as-row">';
@@ -2129,7 +2131,9 @@ function renderArchivio(){
     html += '<div class="as-doc-grid">';
     items.forEach(function(e){
       html += '<div class="as-doc" data-entry="'+e.id+'">' +
-              '<img data-photo="'+e.fotoKey+'" alt="documento">' +
+              (e.isPdf
+                ? '<div data-pdf-doc="'+e.fotoKey+'" style="width:100%;height:64px;display:flex;align-items:center;justify-content:center;font-size:28px;cursor:pointer;background:var(--surface-2);border-radius:4px;">📄</div>'
+                : '<img data-photo="'+e.fotoKey+'" alt="documento">') +
               '<div class="n">'+(e.cognomeOspite+' '+e.nomeOspite).trim()+'</div>' +
               '<button class="as-remove" data-remove-doc="'+e.id+'" style="margin-top:4px;">rimuovi</button>' +
               '</div>';
@@ -2157,6 +2161,21 @@ function renderArchivio(){
         if (res && res.value){
           var w = window.open();
           w.document.write('<img src="data:image/jpeg;base64,'+res.value+'" style="max-width:100%">');
+        }
+      }).catch(function(){});
+    };
+  });
+  el.querySelectorAll('[data-pdf-doc]').forEach(function(box){
+    var key = box.getAttribute('data-pdf-doc');
+    box.onclick = function(){
+      remoteStorage.get(key).then(function(res){
+        if (res && res.value){
+          var byteChars = atob(res.value);
+          var bytes = new Uint8Array(byteChars.length);
+          for (var i=0;i<byteChars.length;i++) bytes[i] = byteChars.charCodeAt(i);
+          var blob = new Blob([bytes], { type: 'application/pdf' });
+          var url = URL.createObjectURL(blob);
+          window.open(url, '_blank');
         }
       }).catch(function(){});
     };
