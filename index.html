@@ -1991,7 +1991,7 @@ async function caricaConfigTassa(){
     var resp = await fetch(backendUrl('/api/settings'), { headers: backendHeaders() });
     var data = await resp.json();
     tassaConfigCache = {
-      importo: parseFloat(data.TASSA_SOGGIORNO_IMPORTO) || 0,
+      importo: parseFloat(String(data.TASSA_SOGGIORNO_IMPORTO || '').replace(',', '.')) || 0,
       eta: data.TASSA_SOGGIORNO_ETA_ESENZIONE !== '' ? parseInt(data.TASSA_SOGGIORNO_ETA_ESENZIONE, 10) : 0,
       maxNotti: parseInt(data.TASSA_SOGGIORNO_MAX_NOTTI, 10) || 0,
       vatId: data.TASSA_SOGGIORNO_VAT_ID || ''
@@ -2580,6 +2580,7 @@ function renderBackend(){
       out2.innerHTML = '<span class="as-warn"><span class="as-spin"></span>salvataggio…</span>';
       var payload = {};
       cfgKeys.forEach(function(k){ var el3 = document.getElementById('cfg-'+k); payload[k] = (el3.value||'').trim(); });
+      if (payload.TASSA_SOGGIORNO_IMPORTO) payload.TASSA_SOGGIORNO_IMPORTO = payload.TASSA_SOGGIORNO_IMPORTO.replace(',', '.');
       try {
         var resp2 = await fetch(backendUrl('/api/settings'), {
           method: 'POST',
@@ -2589,6 +2590,7 @@ function renderBackend(){
         var data2 = await resp2.json();
         if (!resp2.ok) throw new Error(data2.error || 'errore salvataggio');
         out2.innerHTML = '<p class="as-ok">Impostazioni salvate sul server.</p>';
+        tassaConfigCache = null;
         if (payload.FIC_ACCESS_TOKEN && payload.FIC_COMPANY_ID){
           caricaAliquoteIva('cfg-FIC_VAT_ID', payload.FIC_VAT_ID);
           caricaAliquoteIva('cfg-TASSA_SOGGIORNO_VAT_ID', payload.TASSA_SOGGIORNO_VAT_ID);
