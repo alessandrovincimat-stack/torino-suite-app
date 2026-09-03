@@ -1370,13 +1370,19 @@ function buildGuestCardHtml(g){
     html += '<button class="as-btn ghost" data-fattura-toggle="'+g.id+'" style="margin-top:8px;">🧾 Crea fattura</button>';
     html += '<div class="as-fattura-form" data-fattura-form="'+g.id+'" style="display:none;margin-top:10px;">';
     html += '<div class="as-field"><label>Intestazione</label><select data-fattura-tipo="'+g.id+'"><option value="privato">Privato (persona fisica)</option><option value="azienda">Azienda</option></select></div>';
-    html += '<div data-fattura-privato="'+g.id+'"><div class="as-field"><label>Nome e cognome</label><input data-fattura-nomeprivato="'+g.id+'" value="'+(g.cognome+' '+g.nome).trim()+'"></div></div>';
+    html += '<input type="hidden" data-fattura-clientid="'+g.id+'" value="">';
+    html += '<div data-fattura-privato="'+g.id+'">' +
+      '<div class="as-field" style="position:relative;"><label>Cliente esistente (opzionale — scrivi per cercare)</label>' +
+      '<input type="text" data-fattura-clientsearch-priv="'+g.id+'" placeholder="Scrivi almeno 2 lettere…" autocomplete="off">' +
+      '<div data-fattura-clientdropdown-priv="'+g.id+'" style="display:none;position:absolute;z-index:20;left:0;right:0;background:#1c1a14;border:1px solid var(--border);border-radius:8px;max-height:220px;overflow-y:auto;margin-top:2px;"></div>' +
+      '</div>' +
+      '<div class="as-field"><label>Nome e cognome</label><input data-fattura-nomeprivato="'+g.id+'" value="'+(g.cognome+' '+g.nome).trim()+'"></div>' +
+      '</div>';
     html += '<div data-fattura-azienda="'+g.id+'" style="display:none;">' +
       '<div class="as-field" style="position:relative;"><label>Cliente esistente (opzionale — scrivi per cercare)</label>' +
       '<input type="text" data-fattura-clientsearch="'+g.id+'" placeholder="Scrivi almeno 2 lettere…" autocomplete="off">' +
       '<div data-fattura-clientdropdown="'+g.id+'" style="display:none;position:absolute;z-index:20;left:0;right:0;background:#1c1a14;border:1px solid var(--border);border-radius:8px;max-height:220px;overflow-y:auto;margin-top:2px;"></div>' +
       '</div>' +
-      '<input type="hidden" data-fattura-clientid="'+g.id+'" value="">' +
       '<div class="as-row"><div class="as-field"><label>Ragione sociale</label><input data-fattura-ragsoc="'+g.id+'"></div><div class="as-field"><label>Partita IVA</label><input data-fattura-piva="'+g.id+'"></div></div>' +
       '</div>';
     html += '<div class="as-field"><label>Descrizione</label><input data-fattura-descr="'+g.id+'" value="'+descrizioneDefault+'"></div>';
@@ -1472,24 +1478,24 @@ function attachGuestHandlers(root){
       var id = sel.getAttribute('data-fattura-tipo');
       var privatoBox = root.querySelector('[data-fattura-privato="'+id+'"]');
       var aziendaBox = root.querySelector('[data-fattura-azienda="'+id+'"]');
+      var idInput = root.querySelector('[data-fattura-clientid="'+id+'"]');
       if (privatoBox) privatoBox.style.display = (sel.value === 'privato') ? 'block' : 'none';
       if (aziendaBox) aziendaBox.style.display = (sel.value === 'azienda') ? 'block' : 'none';
-      if (sel.value === 'azienda') caricaClientiFic();
+      if (idInput) idInput.value = '';
+      caricaClientiFic();
     };
   });
-  root.querySelectorAll('[data-fattura-clientsearch]').forEach(function(input){
-    var id = input.getAttribute('data-fattura-clientsearch');
-    var dropdown = root.querySelector('[data-fattura-clientdropdown="'+id+'"]');
+
+  function attachClientSearch(input, dropdownAttr, riempi){
+    var id = input.getAttribute('data-fattura-clientsearch') || input.getAttribute('data-fattura-clientsearch-priv');
+    var dropdown = root.querySelector('['+dropdownAttr+'="'+id+'"]');
     var idInput = root.querySelector('[data-fattura-clientid="'+id+'"]');
-    var ragsocInput = root.querySelector('[data-fattura-ragsoc="'+id+'"]');
-    var pivaInput = root.querySelector('[data-fattura-piva="'+id+'"]');
     if (!dropdown) return;
 
     function selezionaCliente(c){
       input.value = c.name || '';
-      if (idInput) idInput.value = c.id;
-      if (ragsocInput) ragsocInput.value = c.name || '';
-      if (pivaInput) pivaInput.value = c.vat_number || '';
+      if (idInput){ idInput.value = c.id; idInput.__lastName = c.name; }
+      riempi(c);
       dropdown.style.display = 'none';
     }
 
@@ -1512,7 +1518,7 @@ function attachGuestHandlers(root){
         opt.onmousedown = function(e){ e.preventDefault(); };
         opt.onclick = function(){
           var c = match.find(function(cl){ return String(cl.id) === opt.getAttribute('data-client-opt'); });
-          if (c){ idInput.__lastName = c.name; selezionaCliente(c); }
+          if (c) selezionaCliente(c);
         };
       });
     }
@@ -1520,6 +1526,23 @@ function attachGuestHandlers(root){
     input.oninput = function(){ mostraRisultati(); };
     input.onfocus = function(){ if (input.value.trim().length >= 2) mostraRisultati(); };
     input.addEventListener('blur', function(){ setTimeout(function(){ dropdown.style.display = 'none'; }, 150); });
+  }
+
+  root.querySelectorAll('[data-fattura-clientsearch]').forEach(function(input){
+    var id = input.getAttribute('data-fattura-clientsearch');
+    attachClientSearch(input, 'data-fattura-clientdropdown', function(c){
+      var ragsocInput = root.querySelector('[data-fattura-ragsoc="'+id+'"]');
+      var pivaInput = root.querySelector('[data-fattura-piva="'+id+'"]');
+      if (ragsocInput) ragsocInput.value = c.name || '';
+      if (pivaInput) pivaInput.value = c.vat_number || '';
+    });
+  });
+  root.querySelectorAll('[data-fattura-clientsearch-priv]').forEach(function(input){
+    var id = input.getAttribute('data-fattura-clientsearch-priv');
+    attachClientSearch(input, 'data-fattura-clientdropdown-priv', function(c){
+      var nomeInput = root.querySelector('[data-fattura-nomeprivato="'+id+'"]');
+      if (nomeInput) nomeInput.value = c.name || '';
+    });
   });
   root.querySelectorAll('[data-fattura-crea]').forEach(function(btn){
     btn.onclick = async function(){
@@ -1529,11 +1552,11 @@ function attachGuestHandlers(root){
       var descr = root.querySelector('[data-fattura-descr="'+id+'"]').value;
       var out = root.querySelector('[data-fattura-result="'+id+'"]');
       var payload = { descrizione: descr, prezzo: prezzo };
+      var clientIdInput = root.querySelector('[data-fattura-clientid="'+id+'"]');
+      if (clientIdInput && clientIdInput.value) payload.clientId = clientIdInput.value;
       if (tipo === 'azienda'){
         payload.ragioneSociale = root.querySelector('[data-fattura-ragsoc="'+id+'"]').value.trim();
         payload.partitaIva = root.querySelector('[data-fattura-piva="'+id+'"]').value.trim();
-        var clientIdInput = root.querySelector('[data-fattura-clientid="'+id+'"]');
-        if (clientIdInput && clientIdInput.value) payload.clientId = clientIdInput.value;
         if (!payload.ragioneSociale){ out.innerHTML = '<div class="as-err">Inserisci la ragione sociale.</div>'; return; }
       } else {
         var nomeCompleto = root.querySelector('[data-fattura-nomeprivato="'+id+'"]').value.trim();
