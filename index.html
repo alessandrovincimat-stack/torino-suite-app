@@ -137,12 +137,20 @@
   <p class="as-sub">Foto del documento → dati estratti → file per Alloggiati Web (Questura)</p>
 
   <div class="as-tabs">
-    <div class="as-tab active" data-tab="ospiti">Ospiti</div>
+    <div class="as-tab active" data-tab="oggi">Oggi</div>
+    <div class="as-tab" data-tab="ospiti">Ospiti</div>
     <div class="as-tab" data-tab="archivio">Archivio documenti</div>
     <div class="as-tab" id="as-admin-tab" style="opacity:.55;">🔒 Admin</div>
   </div>
+  <div class="as-tabs" id="as-subtabs-impostazioni" style="display:none;">
+    <div class="as-tab" data-subtab="backend">Backend</div>
+    <div class="as-tab" data-subtab="tabelle">Tabelle codici</div>
+    <div class="as-tab" data-subtab="genera">Genera file</div>
+    <div class="as-tab" data-subtab="link">Portali</div>
+  </div>
 
-  <div id="tab-ospiti"></div>
+  <div id="tab-oggi"></div>
+  <div id="tab-ospiti" class="as-hidden"></div>
   <div id="tab-tabelle" class="as-hidden"></div>
   <div id="tab-genera" class="as-hidden"></div>
   <div id="tab-archivio" class="as-hidden"></div>
@@ -1621,6 +1629,92 @@ function attachGuestHandlers(root){
   });
 }
 
+function calcolaProssimaScadenzaSoggiornamo(){
+  var oggi = new Date();
+  var anno = oggi.getFullYear();
+  var scadenze = [
+    { data: new Date(anno, 0, 15), label: '15 gennaio ' + anno + ' (4° trimestre ' + (anno - 1) + ')' },
+    { data: new Date(anno, 3, 15), label: '15 aprile ' + anno + ' (1° trimestre ' + anno + ')' },
+    { data: new Date(anno, 6, 15), label: '15 luglio ' + anno + ' (2° trimestre ' + anno + ')' },
+    { data: new Date(anno, 9, 15), label: '15 ottobre ' + anno + ' (3° trimestre ' + anno + ')' }
+  ];
+  var prossima = scadenze.find(function(s){ return s.data >= oggi; });
+  if (!prossima) prossima = { data: new Date(anno + 1, 0, 15), label: '15 gennaio ' + (anno + 1) + ' (4° trimestre ' + anno + ')' };
+  var giorni = Math.ceil((prossima.data - oggi) / 86400000);
+  return { label: prossima.label, giorni: giorni };
+}
+
+function renderOggi(){
+  var el = document.getElementById('tab-oggi');
+  if (!el) return;
+  var oggiISO = todayISO();
+  var domaniD = new Date(); domaniD.setDate(domaniD.getDate() + 1);
+  var domaniISO = domaniD.toISOString().slice(0, 10);
+
+  var gruppi = [];
+  state.guests.forEach(function(g){
+    var isDependent = g.ruolo === 'familiare' || g.ruolo === 'membro';
+    if (isDependent) return;
+    var notti = parseInt(g.permanenza, 10) || 0;
+    var partenza = null;
+    if (g.dataArrivo){
+      var d = new Date(g.dataArrivo);
+      if (!isNaN(d)){ d.setDate(d.getDate() + notti); partenza = d.toISOString().slice(0, 10); }
+    }
+    var app = state.tables.appartamenti.find(function(a){ return a.id === g.idAppartamento; });
+    var membri = orderedGuestsFor(g.id);
+    var nomeVis = membri.length > 1
+      ? 'Gruppo di ' + membri.length + ' — ' + (g.cognome || '(senza cognome)')
+      : ((g.cognome || '') + ' ' + (g.nome || '')).trim() || '(senza nome)';
+    gruppi.push({
+      id: g.id, nome: nomeVis, appartamento: app ? app.nome : '',
+      dataArrivo: g.dataArrivo, dataPartenza: partenza,
+      problemi: validateGuest(g)
+    });
+  });
+
+  var arriviOggi = gruppi.filter(function(x){ return x.dataArrivo === oggiISO; });
+  var arriviDomani = gruppi.filter(function(x){ return x.dataArrivo === domaniISO; });
+  var partenzeOggi = gruppi.filter(function(x){ return x.dataPartenza === oggiISO; });
+  var partenzeDomani = gruppi.filter(function(x){ return x.dataPartenza === domaniISO; });
+  var schedeUrgenti = gruppi.filter(function(x){ return x.dataArrivo && x.dataArrivo <= oggiISO; });
+
+  var scadenza = calcolaProssimaScadenzaSoggiornamo();
+
+  function elenco(lista, vuoto){
+    if (!lista.length) return '<p class="as-sub">' + vuoto + '</p>';
+    return lista.map(function(x){
+      var badge = x.problemi.length ? ' <span style="color:var(--danger);font-size:12px;">⚠️ dati incompleti</span>' : '';
+      return '<div data-oggi-vai="' + x.id + '" style="padding:10px 0;border-top:1px solid var(--border);cursor:pointer;">' +
+        '<strong>' + x.nome + '</strong>' + (x.appartamento ? ' — ' + x.appartamento : '') + badge +
+        '</div>';
+    }).join('');
+  }
+
+  var html = '';
+  html += '<div class="as-card"><p class="as-title" style="font-size:16px;">Arrivi oggi</p>' + elenco(arriviOggi, 'Nessun arrivo previsto oggi.') + '</div>';
+  html += '<div class="as-card"><p class="as-title" style="font-size:16px;">Arrivi domani</p>' + elenco(arriviDomani, 'Nessun arrivo previsto domani.') + '</div>';
+  html += '<div class="as-card"><p class="as-title" style="font-size:16px;">Partenze oggi</p>' + elenco(partenzeOggi, 'Nessuna partenza prevista oggi.') + '</div>';
+  html += '<div class="as-card"><p class="as-title" style="font-size:16px;">Partenze domani</p>' + elenco(partenzeDomani, 'Nessuna partenza prevista domani.') + '</div>';
+  html += '<div class="as-card"><p class="as-title" style="font-size:16px;">Schede Questura da inviare</p>';
+  html += schedeUrgenti.length
+    ? '<p style="color:var(--danger);">⚠️ ' + schedeUrgenti.length + ' scheda/e con arrivo già avvenuto non ancora inviata/e.</p>' + elenco(schedeUrgenti, '')
+    : '<p class="as-ok">Tutto in regola: nessuna scheda arretrata.</p>';
+  html += '</div>';
+  html += '<div class="as-card"><p class="as-title" style="font-size:16px;">Tassa di soggiorno</p>' +
+    '<p class="as-sub">Prossima dichiarazione Soggiornamo: <strong>' + scadenza.label + '</strong> (tra ' + scadenza.giorni + ' giorni).</p></div>';
+
+  el.innerHTML = html;
+
+  el.querySelectorAll('[data-oggi-vai]').forEach(function(riga){
+    riga.onclick = function(){
+      var id = riga.getAttribute('data-oggi-vai');
+      switchTab('ospiti');
+      setTimeout(function(){ scrollCardIntoView(id); }, 50);
+    };
+  });
+}
+
 function renderOspiti(){
   var el = document.getElementById('tab-ospiti');
   var html = '';
@@ -3003,7 +3097,7 @@ async function caricaAliquoteIva(selectId, selezionata){
 
 function render(){
   var scrollY = window.scrollY || document.documentElement.scrollTop || 0;
-  renderOspiti(); renderTabelle(); renderGenera(); renderArchivio(); renderBackend(); renderLink();
+  renderOggi(); renderOspiti(); renderTabelle(); renderGenera(); renderArchivio(); renderBackend(); renderLink();
   function restore(){ window.scrollTo(0, scrollY); }
   restore();
   requestAnimationFrame(restore);
@@ -3016,59 +3110,68 @@ function render(){
 
 var adminUnlocked = false;
 
+var currentSubtab = 'backend';
+
 function switchTab(name){
   document.querySelectorAll('.as-tab[data-tab]').forEach(function(t){ t.classList.remove('active'); });
   var btn = document.querySelector('.as-tab[data-tab="'+name+'"]');
   if (btn) btn.classList.add('active');
+  var subtabBar = document.getElementById('as-subtabs-impostazioni');
+
+  ['oggi','ospiti','archivio'].forEach(function(n){
+    var el = document.getElementById('tab-'+n);
+    if (el) el.classList.toggle('as-hidden', n !== name);
+  });
+
+  if (name === 'oggi') renderOggi();
+  else if (name === 'archivio') renderArchivio();
+
+  if (name === 'impostazioni'){
+    if (subtabBar) subtabBar.style.display = 'flex';
+    switchSubtab(currentSubtab);
+  } else {
+    if (subtabBar) subtabBar.style.display = 'none';
+    ['tabelle','genera','backend','link'].forEach(function(n){
+      var el = document.getElementById('tab-'+n);
+      if (el) el.classList.add('as-hidden');
+    });
+  }
+}
+
+function switchSubtab(name){
+  currentSubtab = name;
+  document.querySelectorAll('#as-subtabs-impostazioni [data-subtab]').forEach(function(t){ t.classList.remove('active'); });
+  var sbtn = document.querySelector('#as-subtabs-impostazioni [data-subtab="'+name+'"]');
+  if (sbtn) sbtn.classList.add('active');
   if (name === 'tabelle') renderTabelle();
   else if (name === 'genera') renderGenera();
-  else if (name === 'archivio') renderArchivio();
   else if (name === 'backend') renderBackend();
   else if (name === 'link') renderLink();
-  ['ospiti','tabelle','genera','archivio','backend','link'].forEach(function(n){
+  ['tabelle','genera','backend','link'].forEach(function(n){
     var el = document.getElementById('tab-'+n);
     if (el) el.classList.toggle('as-hidden', n !== name);
   });
 }
+
+document.querySelectorAll('#as-subtabs-impostazioni [data-subtab]').forEach(function(t){
+  t.onclick = function(){ switchSubtab(t.getAttribute('data-subtab')); };
+});
 
 document.querySelectorAll('.as-tab[data-tab]').forEach(function(tab){
   tab.onclick = function(){ switchTab(tab.getAttribute('data-tab')); };
 });
 
 document.getElementById('as-admin-tab').onclick = function(){
-  if (adminUnlocked){ switchTab('backend'); return; }
+  if (adminUnlocked){ switchTab('impostazioni'); return; }
   var code = prompt('Codice amministratore');
   if (code === null) return;
   if (code.trim() === '050808'){
     adminUnlocked = true;
     var adminBtn = document.getElementById('as-admin-tab');
-    adminBtn.textContent = 'Admin';
+    adminBtn.textContent = '⚙️ Impostazioni';
     adminBtn.style.opacity = '1';
-    var generaBtn = document.createElement('div');
-    generaBtn.className = 'as-tab';
-    generaBtn.setAttribute('data-tab','genera');
-    generaBtn.textContent = 'Genera file (cumulativo)';
-    generaBtn.onclick = function(){ switchTab('genera'); };
-    var tabelleBtn = document.createElement('div');
-    tabelleBtn.className = 'as-tab';
-    tabelleBtn.setAttribute('data-tab','tabelle');
-    tabelleBtn.textContent = 'Tabelle codici';
-    tabelleBtn.onclick = function(){ switchTab('tabelle'); };
-    var backendBtn = document.createElement('div');
-    backendBtn.className = 'as-tab';
-    backendBtn.setAttribute('data-tab','backend');
-    backendBtn.textContent = 'Backend';
-    backendBtn.onclick = function(){ switchTab('backend'); };
-    var linkBtn = document.createElement('div');
-    linkBtn.className = 'as-tab';
-    linkBtn.setAttribute('data-tab','link');
-    linkBtn.textContent = 'Portali';
-    linkBtn.onclick = function(){ switchTab('link'); };
-    adminBtn.parentNode.insertBefore(generaBtn, adminBtn);
-    adminBtn.parentNode.insertBefore(tabelleBtn, adminBtn);
-    adminBtn.parentNode.insertBefore(backendBtn, adminBtn);
-    adminBtn.parentNode.insertBefore(linkBtn, adminBtn);
-    switchTab('backend');
+    adminBtn.setAttribute('data-tab', 'impostazioni');
+    switchTab('impostazioni');
   } else {
     alert('Codice errato');
   }
