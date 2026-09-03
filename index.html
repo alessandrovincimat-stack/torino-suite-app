@@ -1371,6 +1371,8 @@ function buildGuestCardHtml(g){
     html += '<div class="as-fattura-form" data-fattura-form="'+g.id+'" style="display:none;margin-top:10px;">';
     html += '<div class="as-field"><label>Intestazione</label><select data-fattura-tipo="'+g.id+'"><option value="privato">Privato (persona fisica)</option><option value="azienda">Azienda</option></select></div>';
     html += '<input type="hidden" data-fattura-clientid="'+g.id+'" value="">';
+    html += '<input type="hidden" data-fattura-prodottoid="'+g.id+'" value="">';
+    html += '<input type="hidden" data-fattura-tassaprodottoid="'+g.id+'" value="">';
     html += '<div data-fattura-privato="'+g.id+'">' +
       '<div class="as-field" style="position:relative;"><label>Cliente esistente (opzionale — scrivi per cercare)</label>' +
       '<input type="text" data-fattura-clientsearch-priv="'+g.id+'" placeholder="Scrivi almeno 2 lettere…" autocomplete="off">' +
@@ -1386,6 +1388,7 @@ function buildGuestCardHtml(g){
       '<div class="as-row"><div class="as-field"><label>Ragione sociale</label><input data-fattura-ragsoc="'+g.id+'"></div><div class="as-field"><label>Partita IVA</label><input data-fattura-piva="'+g.id+'"></div></div>' +
       '</div>';
     html += '<div class="as-field"><label>Descrizione</label><input data-fattura-descr="'+g.id+'" value="'+descrizioneDefault+'"></div>';
+    html += '<div class="as-sub" data-fattura-prodottonote="'+g.id+'" style="margin:-4px 0 8px;"></div>';
     html += '<div class="as-field"><label>Prezzo soggiorno (€)</label><input type="number" step="0.01" min="0" data-fattura-prezzo="'+g.id+'"></div>';
     html += '<div class="as-sub" data-fattura-prezzonote="'+g.id+'" style="margin:-4px 0 8px;"></div>';
     html += '<div class="as-field"><label>Tassa di soggiorno (€) — calcolata, modificabile</label><input type="number" step="0.01" min="0" data-fattura-tassa="'+g.id+'" value="0"></div>';
@@ -1478,7 +1481,7 @@ function attachGuestHandlers(root){
       if (!form) return;
       var apro = form.style.display === 'none';
       form.style.display = apro ? 'block' : 'none';
-      if (apro){ await calcolaTassaSoggiorno(id); await precompilaPrezzoDaSmoobu(id); }
+      if (apro){ await calcolaTassaSoggiorno(id); await precompilaPrezzoDaSmoobu(id); precompilaArticoliFattura(id); }
     };
   });
   root.querySelectorAll('[data-fattura-tipo]').forEach(function(sel){
@@ -1576,11 +1579,16 @@ function attachGuestHandlers(root){
       var tassa = tassaInput ? tassaInput.value : '0';
       var descr = root.querySelector('[data-fattura-descr="'+id+'"]').value;
       var payload = { descrizione: descr, prezzo: prezzo };
+      var prodottoIdInput = root.querySelector('[data-fattura-prodottoid="'+id+'"]');
+      if (prodottoIdInput && prodottoIdInput.value) payload.productId = prodottoIdInput.value;
       if (Number(tassa) > 0){
         var cfgTassa = await caricaConfigTassa();
         payload.tassaSoggiorno = tassa;
         payload.tassaSoggiornoDescrizione = 'Tassa di soggiorno';
+        payload.tassaSoggiornoDettaglio = tassaInput.dataset.dettaglio || '';
         if (cfgTassa.vatId) payload.tassaSoggiornoVatId = cfgTassa.vatId;
+        var tassaProdottoIdInput = root.querySelector('[data-fattura-tassaprodottoid="'+id+'"]');
+        if (tassaProdottoIdInput && tassaProdottoIdInput.value) payload.tassaSoggiornoProductId = tassaProdottoIdInput.value;
       }
       var clientIdInput = root.querySelector('[data-fattura-clientid="'+id+'"]');
       if (clientIdInput && clientIdInput.value) payload.clientId = clientIdInput.value;
@@ -2038,6 +2046,7 @@ async function calcolaTassaSoggiorno(headId){
     if (noteEl) noteEl.innerHTML = '<span style="color:var(--muted);">Nessuna tariffa configurata (Admin → Backend → Tassa di soggiorno).</span>';
     tassaInput.value = '0';
     tassaInput.dataset.nostroCalcolo = '';
+    tassaInput.dataset.dettaglio = '';
     return;
   }
   var gruppo = orderedGuestsFor(headId);
@@ -2054,6 +2063,9 @@ async function calcolaTassaSoggiorno(headId){
   tassaInput.value = totale.toFixed(2);
   tassaInput.dataset.nostroCalcolo = totale.toFixed(2);
   tassaInput.dataset.mancantiDati = String(mancantiDati);
+  tassaInput.dataset.dettaglio = nottiTassate + ' pernottament' + (nottiTassate===1?'o':'i') + ' tassat' + (nottiTassate===1?'o':'i') +
+    ' — ' + tassabili + ' adult' + (tassabili===1?'o':'i') +
+    (esenti ? ', ' + esenti + ' minor' + (esenti===1?'e':'i') + ' esent' + (esenti===1?'e':'i') + ' (sotto ' + cfgTassa.eta + ' anni)' : '');
   if (noteEl){
     var nota = nottiTassate + ' nott' + (nottiTassate===1?'e':'i') +
       (cfgTassa.maxNotti && notti > cfgTassa.maxNotti ? ' (di ' + notti + ', tetto massimo raggiunto)' : '') +
@@ -2064,6 +2076,56 @@ async function calcolaTassaSoggiorno(headId){
     noteEl.textContent = nota;
   }
 }
+
+var prodottiFicCache = null;
+async function caricaProdottiFic(){
+  if (prodottiFicCache) return prodottiFicCache;
+  try {
+    var resp = await fetch(backendUrl('/api/fattura/products'), { headers: backendHeaders() });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'errore');
+    prodottiFicCache = data.data || [];
+  } catch(e){
+    prodottiFicCache = [];
+  }
+  return prodottiFicCache;
+}
+
+function normalizzaNome(s){
+  return String(s||'').trim().toLowerCase().replace(/\s+/g,' ');
+}
+
+async function precompilaArticoliFattura(headId){
+  var root = document;
+  var prodottoIdInput = root.querySelector('[data-fattura-prodottoid="'+headId+'"]');
+  var tassaProdottoIdInput = root.querySelector('[data-fattura-tassaprodottoid="'+headId+'"]');
+  var noteEl = root.querySelector('[data-fattura-prodottonote="'+headId+'"]');
+  var head = state.guests.find(function(g){ return g.id === headId; });
+  if (!prodottoIdInput || !head) return;
+  var appartamento = state.tables.appartamenti.find(function(a){ return a.id === head.idAppartamento; });
+  var nomeAppartamento = appartamento ? appartamento.nome : '';
+  var prodotti = await caricaProdottiFic();
+  if (!prodotti.length){
+    if (noteEl) noteEl.innerHTML = '<span style="color:var(--muted);">Catalogo articoli non disponibile: verrà creata una voce libera.</span>';
+    return;
+  }
+  if (nomeAppartamento){
+    var match = prodotti.find(function(p){ return normalizzaNome(p.name) === normalizzaNome(nomeAppartamento); });
+    if (!match) match = prodotti.find(function(p){ return normalizzaNome(p.name).indexOf(normalizzaNome(nomeAppartamento)) !== -1; });
+    if (match){
+      prodottoIdInput.value = match.id;
+      if (noteEl) noteEl.textContent = 'Articolo collegato dal catalogo: "' + match.name + '".';
+    } else {
+      prodottoIdInput.value = '';
+      if (noteEl) noteEl.innerHTML = '<span style="color:var(--muted);">Nessun articolo "' + nomeAppartamento + '" trovato nel catalogo Fatture in Cloud: verrà creata una voce libera.</span>';
+    }
+  }
+  if (tassaProdottoIdInput){
+    var matchTassa = prodotti.find(function(p){ return /tassa di soggiorno/i.test(p.name || ''); });
+    tassaProdottoIdInput.value = matchTassa ? matchTassa.id : '';
+  }
+}
+
 
 async function precompilaPrezzoDaSmoobu(headId){
   var root = document;
