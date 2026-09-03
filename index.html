@@ -1390,6 +1390,8 @@ function buildGuestCardHtml(g){
     html += '<div class="as-sub" data-fattura-prezzonote="'+g.id+'" style="margin:-4px 0 8px;"></div>';
     html += '<div class="as-field"><label>Tassa di soggiorno (€) — calcolata, modificabile</label><input type="number" step="0.01" min="0" data-fattura-tassa="'+g.id+'" value="0"></div>';
     html += '<div class="as-sub" data-fattura-tassanote="'+g.id+'" style="margin:-4px 0 8px;"></div>';
+    html += '<div class="as-err" data-fattura-tassaalert="'+g.id+'" style="display:none;margin:-4px 0 8px;"></div>';
+    html += '<label data-fattura-tassaokwrap="'+g.id+'" style="display:none;margin:-4px 0 10px;font-size:13px;color:var(--text);gap:6px;align-items:center;"><input type="checkbox" data-fattura-tassaok="'+g.id+'" style="margin-right:6px;"> Ho verificato e confermo l\'importo della tassa di soggiorno da fatturare.</label>';
     html += '<button class="as-btn secondary" data-fattura-crea="'+g.id+'">Crea fattura</button>';
     html += '<div class="as-fattura-result" data-fattura-result="'+g.id+'" style="margin-top:8px;"></div>';
     html += '</div>';
@@ -1561,12 +1563,18 @@ function attachGuestHandlers(root){
   root.querySelectorAll('[data-fattura-crea]').forEach(function(btn){
     btn.onclick = async function(){
       var id = btn.getAttribute('data-fattura-crea');
+      var out = root.querySelector('[data-fattura-result="'+id+'"]');
+      var alertEl = root.querySelector('[data-fattura-tassaalert="'+id+'"]');
+      var okCheck = root.querySelector('[data-fattura-tassaok="'+id+'"]');
+      if (alertEl && alertEl.style.display !== 'none' && alertEl.textContent && okCheck && !okCheck.checked){
+        out.innerHTML = '<div class="as-err">Conferma la casella sopra dopo aver verificato l\'importo della tassa di soggiorno.</div>';
+        return;
+      }
       var tipo = root.querySelector('[data-fattura-tipo="'+id+'"]').value;
       var prezzo = root.querySelector('[data-fattura-prezzo="'+id+'"]').value;
       var tassaInput = root.querySelector('[data-fattura-tassa="'+id+'"]');
       var tassa = tassaInput ? tassaInput.value : '0';
       var descr = root.querySelector('[data-fattura-descr="'+id+'"]').value;
-      var out = root.querySelector('[data-fattura-result="'+id+'"]');
       var payload = { descrizione: descr, prezzo: prezzo };
       if (Number(tassa) > 0){
         var cfgTassa = await caricaConfigTassa();
@@ -2017,31 +2025,42 @@ async function calcolaTassaSoggiorno(headId){
   var root = document;
   var tassaInput = root.querySelector('[data-fattura-tassa="'+headId+'"]');
   var noteEl = root.querySelector('[data-fattura-tassanote="'+headId+'"]');
+  var alertEl = root.querySelector('[data-fattura-tassaalert="'+headId+'"]');
+  var okWrap = root.querySelector('[data-fattura-tassaokwrap="'+headId+'"]');
+  var okCheck = root.querySelector('[data-fattura-tassaok="'+headId+'"]');
+  if (alertEl){ alertEl.style.display = 'none'; alertEl.textContent = ''; }
+  if (okWrap) okWrap.style.display = 'none';
+  if (okCheck) okCheck.checked = false;
   var head = state.guests.find(function(g){ return g.id === headId; });
   if (!tassaInput || !head) return;
   var cfgTassa = await caricaConfigTassa();
   if (!cfgTassa.importo){
     if (noteEl) noteEl.innerHTML = '<span style="color:var(--muted);">Nessuna tariffa configurata (Admin → Backend → Tassa di soggiorno).</span>';
     tassaInput.value = '0';
+    tassaInput.dataset.nostroCalcolo = '';
     return;
   }
   var gruppo = orderedGuestsFor(headId);
   var notti = parseInt(head.permanenza, 10) || 0;
   var nottiTassate = cfgTassa.maxNotti ? Math.min(notti, cfgTassa.maxNotti) : notti;
-  var tassabili = 0, esenti = 0;
+  var tassabili = 0, esenti = 0, mancantiDati = 0;
   gruppo.forEach(function(g){
+    if (!g.dataNascita) mancantiDati++;
     var eta = calcolaEta(g.dataNascita, head.dataArrivo);
     if (eta != null && eta < cfgTassa.eta) esenti++;
     else tassabili++;
   });
   var totale = nottiTassate * tassabili * cfgTassa.importo;
   tassaInput.value = totale.toFixed(2);
+  tassaInput.dataset.nostroCalcolo = totale.toFixed(2);
+  tassaInput.dataset.mancantiDati = String(mancantiDati);
   if (noteEl){
     var nota = nottiTassate + ' nott' + (nottiTassate===1?'e':'i') +
       (cfgTassa.maxNotti && notti > cfgTassa.maxNotti ? ' (di ' + notti + ', tetto massimo raggiunto)' : '') +
       ' × ' + tassabili + ' person' + (tassabili===1?'a':'e') + ' soggetta/e' +
       (esenti ? ' (esenti sotto ' + cfgTassa.eta + ' anni: ' + esenti + ')' : '') +
-      ' × €' + cfgTassa.importo.toFixed(2).replace('.', ',');
+      ' × €' + cfgTassa.importo.toFixed(2).replace('.', ',') +
+      (mancantiDati ? ' — attenzione: manca la data di nascita di ' + mancantiDati + ' ospite/i, il calcolo potrebbe non essere accurato.' : '');
     noteEl.textContent = nota;
   }
 }
@@ -2052,13 +2071,11 @@ async function precompilaPrezzoDaSmoobu(headId){
   var noteEl = root.querySelector('[data-fattura-prezzonote="'+headId+'"]');
   var tassaInput = root.querySelector('[data-fattura-tassa="'+headId+'"]');
   var tassaNoteEl = root.querySelector('[data-fattura-tassanote="'+headId+'"]');
+  var alertEl = root.querySelector('[data-fattura-tassaalert="'+headId+'"]');
+  var okWrap = root.querySelector('[data-fattura-tassaokwrap="'+headId+'"]');
   var head = state.guests.find(function(g){ return g.id === headId; });
   if (!prezzoInput || !head) return;
   if (!head.smoobuBookingId){
-    if (noteEl) noteEl.textContent = '';
-    return;
-  }
-  if (prezzoInput.value){
     if (noteEl) noteEl.textContent = '';
     return;
   }
@@ -2077,11 +2094,29 @@ async function precompilaPrezzoDaSmoobu(headId){
       if (parolaTassa.test(etichetta)){ totaleTassa += importo; trovataTassa = true; }
       else totaleResto += importo;
     });
-    if (!prezzoInput.value) prezzoInput.value = totaleResto.toFixed(2);
-    if (noteEl) noteEl.textContent = 'Importo ripreso dalla prenotazione Smoobu (modificabile).';
+    if (!prezzoInput.value){
+      prezzoInput.value = totaleResto.toFixed(2);
+      if (noteEl) noteEl.textContent = 'Importo ripreso dalla prenotazione Smoobu (modificabile).';
+    } else if (noteEl){
+      noteEl.textContent = '';
+    }
     if (trovataTassa && tassaInput){
+      var nostro = parseFloat(tassaInput.dataset.nostroCalcolo || '');
+      var mancantiDati = parseInt(tassaInput.dataset.mancantiDati || '0', 10);
+      var differisce = !isNaN(nostro) && Math.abs(nostro - totaleTassa) > 0.01;
       tassaInput.value = totaleTassa.toFixed(2);
-      if (tassaNoteEl) tassaNoteEl.textContent = 'Importo ripreso da Smoobu (voce "Tassa di soggiorno" della prenotazione), non calcolato in automatico.';
+      if (differisce){
+        var msg = '⚠️ Il calcolo automatico (€' + nostro.toFixed(2).replace('.',',') + ') non corrisponde all\'importo registrato su Smoobu (€' + totaleTassa.toFixed(2).replace('.',',') + ').';
+        if (mancantiDati) msg += ' Manca la data di nascita di ' + mancantiDati + ' ospite/i: probabile causa della differenza.';
+        msg += ' Verifica e conferma l\'importo prima di fatturare.';
+        if (alertEl){ alertEl.textContent = msg; alertEl.style.display = 'block'; }
+        if (okWrap) okWrap.style.display = 'flex';
+        if (tassaNoteEl) tassaNoteEl.textContent = '';
+      } else {
+        if (alertEl){ alertEl.style.display = 'none'; alertEl.textContent = ''; }
+        if (okWrap) okWrap.style.display = 'none';
+        if (tassaNoteEl) tassaNoteEl.textContent = 'Importo confermato da Smoobu (coincide con il calcolo automatico).';
+      }
     }
   } catch(e){
     try {
