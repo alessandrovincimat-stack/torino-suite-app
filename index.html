@@ -2759,11 +2759,19 @@ function renderBackend(){
       '</div>' +
       '<div class="as-field"><label>Notti massime tassabili</label><input id="cfg-TASSA_SOGGIORNO_MAX_NOTTI" placeholder="7"></div>' +
       '<div class="as-field"><label>Aliquota IVA tassa di soggiorno (di solito "Escluso")</label><select id="cfg-TASSA_SOGGIORNO_VAT_ID"><option value="">— scegli dopo aver salvato token e ID azienda —</option></select></div>' +
+      '<p class="as-sub" style="margin-top:14px;"><strong>Soggiorniamo (Città di Torino)</strong></p>' +
+      '<p class="as-sub">Per la compilazione automatica della dichiarazione trimestrale della tassa di soggiorno.</p>' +
+      '<div class="as-row">' +
+        '<div class="as-field"><label>Codice utente</label><input id="cfg-SOGGIORNIAMO_UTENTE"></div>' +
+        '<div class="as-field"><label>Password</label><input id="cfg-SOGGIORNIAMO_PASSWORD" type="password"></div>' +
+      '</div>' +
+      '<div class="as-field"><label>Mappatura alloggio → codice unità (un\'unità per riga: nome;codice)</label>' +
+      '<textarea rows="6" id="cfg-SOGGIORNIAMO_MAPPATURA" placeholder="Carlo Alberto;1281.119.212&#10;Vittorio;1281.119.213"></textarea></div>' +
       '<button class="as-btn secondary" id="cfg-save">Salva impostazioni</button>' +
       '<div id="cfg-result" style="margin-top:10px;"></div>';
     document.getElementById('tab-backend').appendChild(settingsBox);
 
-    var cfgKeys = ['SMOOBU_API_KEY','SMOOBU_API_SECRET','ISTAT_UTENTE','ISTAT_PASSWORD','ISTAT_CODICE_STRUTTURA','ISTAT_CAMERE_DISPONIBILI','ISTAT_LETTI_DISPONIBILI','FIC_ACCESS_TOKEN','FIC_COMPANY_ID','FIC_VAT_ID','TASSA_SOGGIORNO_IMPORTO','TASSA_SOGGIORNO_ETA_ESENZIONE','TASSA_SOGGIORNO_MAX_NOTTI','TASSA_SOGGIORNO_VAT_ID'];
+    var cfgKeys = ['SMOOBU_API_KEY','SMOOBU_API_SECRET','ISTAT_UTENTE','ISTAT_PASSWORD','ISTAT_CODICE_STRUTTURA','ISTAT_CAMERE_DISPONIBILI','ISTAT_LETTI_DISPONIBILI','FIC_ACCESS_TOKEN','FIC_COMPANY_ID','FIC_VAT_ID','TASSA_SOGGIORNO_IMPORTO','TASSA_SOGGIORNO_ETA_ESENZIONE','TASSA_SOGGIORNO_MAX_NOTTI','TASSA_SOGGIORNO_VAT_ID','SOGGIORNIAMO_UTENTE','SOGGIORNIAMO_PASSWORD','SOGGIORNIAMO_MAPPATURA'];
     fetch(backendUrl('/api/settings'), { headers: backendHeaders() }).then(function(r){ return r.json(); }).then(function(data){
       cfgKeys.forEach(function(k){ var el2 = document.getElementById('cfg-'+k); if (el2 && data[k] && el2.tagName !== 'SELECT') el2.value = data[k]; });
       if (data.FIC_ACCESS_TOKEN && data.FIC_COMPANY_ID){
@@ -2874,6 +2882,91 @@ function renderBackend(){
       if (totMancanti) html += '<div class="as-err" style="margin-top:6px;">⚠️ '+totMancanti+' ospite/i in questo periodo senza data di nascita registrata: sono stati conteggiati come tassabili anche se fossero minori esenti. Controlla manualmente prima di dichiarare.</div>';
       html += '<p class="as-sub" style="margin-top:8px;">I dati dei soggiorni già archiviati prima dell\'introduzione di questo riepilogo potrebbero non avere la data di nascita salvata: verifica i mesi più vecchi.</p>';
       outR.innerHTML = html;
+    };
+
+    var sogBox = document.createElement('div');
+    sogBox.className = 'as-card';
+    sogBox.innerHTML =
+      '<p class="as-title" style="font-size:16px;">Dichiarazione automatica Soggiorniamo</p>' +
+      '<p class="as-sub">Compila in automatico la dichiarazione trimestrale sul portale del Comune (login, mese per mese, riga per riga) e si ferma prima dell\'invio: controlli lo screenshot, poi confermi tu.</p>' +
+      '<div class="as-row">' +
+        '<div class="as-field"><label>Anno</label><input id="sog-anno" type="number"></div>' +
+        '<div class="as-field"><label>Trimestre</label><select id="sog-trimestre">' +
+          '<option value="1">1° (gen-mar)</option><option value="2">2° (apr-giu)</option><option value="3">3° (lug-set)</option><option value="4">4° (ott-dic)</option>' +
+        '</select></div>' +
+      '</div>' +
+      '<button class="as-btn secondary" id="sog-prepara">Prepara dichiarazione</button>' +
+      '<div id="sog-result" style="margin-top:10px;"></div>';
+    document.getElementById('tab-backend').appendChild(sogBox);
+
+    document.getElementById('sog-anno').value = document.getElementById('riep-anno').value;
+    document.getElementById('sog-trimestre').value = document.getElementById('riep-trimestre').value;
+
+    var sogSessionId = null;
+
+    document.getElementById('sog-prepara').onclick = async function(){
+      var outS = document.getElementById('sog-result');
+      outS.innerHTML = '<span class="as-warn"><span class="as-spin"></span>login e compilazione in corso sul portale del Comune — può richiedere anche 1-2 minuti…</span>';
+      var anno = parseInt(document.getElementById('sog-anno').value, 10);
+      var trimestre = parseInt(document.getElementById('sog-trimestre').value, 10);
+      try {
+        var resp = await fetch(backendUrl('/api/soggiornamo/prepara'), {
+          method: 'POST',
+          headers: backendHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ anno: anno, trimestre: trimestre })
+        });
+        var data = await resp.json();
+        if (!resp.ok) throw Object.assign(new Error(data.error || 'errore'), { screenshotBase64: data.screenshotBase64 });
+
+        sogSessionId = data.sessionId;
+        var html = '';
+        if (data.mancantiDati) html += '<div class="as-err">⚠️ '+data.mancantiDati+' ospite/i senza data di nascita nel periodo: verifica che le righe "Minori" siano corrette prima di trasmettere.</div>';
+        if (data.righeFallite && data.righeFallite.length){
+          html += '<div class="as-err" style="margin-top:6px;">⚠️ '+data.righeFallite.length+' riga/e NON inserite correttamente sul portale:<ul style="margin:4px 0 0 18px;">' +
+            data.righeFallite.map(function(f){ return '<li>'+f.riga.appartamentoNome+' — '+f.riga.tipologiaTesto+' ('+f.riga.meseNome+'): '+f.errore+'</li>'; }).join('') +
+            '</ul>Controlla lo screenshot qui sotto prima di decidere se trasmettere comunque o annullare.</div>';
+        }
+        html += '<p class="as-sub" style="margin-top:8px;">Righe inserite correttamente: '+data.righeInserite.length+'</p>';
+        html += '<img src="data:image/png;base64,'+data.screenshotBase64+'" style="max-width:100%;border:1px solid var(--border);border-radius:8px;margin-top:8px;">';
+        html += '<p class="as-sub" style="margin-top:10px;"><strong>Controlla che i numeri sullo screenshot corrispondano a quanto ti aspetti.</strong> Solo quando confermi qui sotto, l\'app clicca "Trasmetti" sul portale.</p>';
+        html += '<button class="as-btn secondary" id="sog-conferma" style="margin-top:6px;">✅ Conferma e trasmetti</button> ';
+        html += '<button class="as-btn ghost" id="sog-annulla" style="margin-top:6px;">Annulla (non trasmettere)</button>';
+        outS.innerHTML = html;
+
+        document.getElementById('sog-conferma').onclick = async function(){
+          outS.innerHTML = '<span class="as-warn"><span class="as-spin"></span>trasmissione in corso…</span>';
+          try {
+            var respC = await fetch(backendUrl('/api/soggiornamo/conferma'), {
+              method: 'POST',
+              headers: backendHeaders({ 'Content-Type': 'application/json' }),
+              body: JSON.stringify({ sessionId: sogSessionId })
+            });
+            var dataC = await respC.json();
+            if (!respC.ok) throw Object.assign(new Error(dataC.error || 'errore'), { screenshotBase64: dataC.screenshotBase64 });
+            outS.innerHTML = '<p class="as-ok">Dichiarazione trasmessa.</p><img src="data:image/png;base64,'+dataC.screenshotBase64+'" style="max-width:100%;border:1px solid var(--border);border-radius:8px;margin-top:8px;">';
+            sogSessionId = null;
+          } catch(eC){
+            var htmlErr = '<div class="as-err">'+eC.message+'</div>';
+            if (eC.screenshotBase64) htmlErr += '<img src="data:image/png;base64,'+eC.screenshotBase64+'" style="max-width:100%;border:1px solid var(--border);border-radius:8px;margin-top:8px;">';
+            outS.innerHTML = htmlErr;
+          }
+        };
+        document.getElementById('sog-annulla').onclick = async function(){
+          try {
+            await fetch(backendUrl('/api/soggiornamo/annulla'), {
+              method: 'POST',
+              headers: backendHeaders({ 'Content-Type': 'application/json' }),
+              body: JSON.stringify({ sessionId: sogSessionId })
+            });
+          } catch(eA){}
+          sogSessionId = null;
+          outS.innerHTML = '<p class="as-sub">Operazione annullata: nulla è stato trasmesso.</p>';
+        };
+      } catch(e){
+        var htmlErr2 = '<div class="as-err">'+e.message+'</div>';
+        if (e.screenshotBase64) htmlErr2 += '<img src="data:image/png;base64,'+e.screenshotBase64+'" style="max-width:100%;border:1px solid var(--border);border-radius:8px;margin-top:8px;">';
+        outS.innerHTML = htmlErr2;
+      }
     };
   }
 }
