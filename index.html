@@ -1372,7 +1372,10 @@ function buildGuestCardHtml(g){
     html += '<div class="as-field"><label>Intestazione</label><select data-fattura-tipo="'+g.id+'"><option value="privato">Privato (persona fisica)</option><option value="azienda">Azienda</option></select></div>';
     html += '<div data-fattura-privato="'+g.id+'"><div class="as-field"><label>Nome e cognome</label><input data-fattura-nomeprivato="'+g.id+'" value="'+(g.cognome+' '+g.nome).trim()+'"></div></div>';
     html += '<div data-fattura-azienda="'+g.id+'" style="display:none;">' +
-      '<div class="as-field"><label>Cliente esistente (opzionale)</label><select data-fattura-clientsel="'+g.id+'"><option value="">— nuovo cliente —</option></select></div>' +
+      '<div class="as-field" style="position:relative;"><label>Cliente esistente (opzionale — scrivi per cercare)</label>' +
+      '<input type="text" data-fattura-clientsearch="'+g.id+'" placeholder="Scrivi almeno 2 lettere…" autocomplete="off">' +
+      '<div data-fattura-clientdropdown="'+g.id+'" style="display:none;position:absolute;z-index:20;left:0;right:0;background:#1c1a14;border:1px solid var(--border);border-radius:8px;max-height:220px;overflow-y:auto;margin-top:2px;"></div>' +
+      '</div>' +
       '<input type="hidden" data-fattura-clientid="'+g.id+'" value="">' +
       '<div class="as-row"><div class="as-field"><label>Ragione sociale</label><input data-fattura-ragsoc="'+g.id+'"></div><div class="as-field"><label>Partita IVA</label><input data-fattura-piva="'+g.id+'"></div></div>' +
       '</div>';
@@ -1471,33 +1474,52 @@ function attachGuestHandlers(root){
       var aziendaBox = root.querySelector('[data-fattura-azienda="'+id+'"]');
       if (privatoBox) privatoBox.style.display = (sel.value === 'privato') ? 'block' : 'none';
       if (aziendaBox) aziendaBox.style.display = (sel.value === 'azienda') ? 'block' : 'none';
-      if (sel.value === 'azienda'){
-        var clientSel = root.querySelector('[data-fattura-clientsel="'+id+'"]');
-        if (clientSel && clientSel.options.length <= 1){
-          clientSel.innerHTML = '<option value="">caricamento clienti…</option>';
-          caricaClientiFic().then(function(clienti){
-            clientSel.innerHTML = '<option value="">— nuovo cliente —</option>' +
-              clienti.map(function(c){ return '<option value="'+c.id+'">'+(c.name||'')+'</option>'; }).join('');
-          });
-        }
-      }
+      if (sel.value === 'azienda') caricaClientiFic();
     };
   });
-  root.querySelectorAll('[data-fattura-clientsel]').forEach(function(sel){
-    sel.onchange = async function(){
-      var id = sel.getAttribute('data-fattura-clientsel');
-      var idInput = root.querySelector('[data-fattura-clientid="'+id+'"]');
-      var ragsocInput = root.querySelector('[data-fattura-ragsoc="'+id+'"]');
-      var pivaInput = root.querySelector('[data-fattura-piva="'+id+'"]');
-      if (idInput) idInput.value = sel.value;
-      if (!sel.value) return;
+  root.querySelectorAll('[data-fattura-clientsearch]').forEach(function(input){
+    var id = input.getAttribute('data-fattura-clientsearch');
+    var dropdown = root.querySelector('[data-fattura-clientdropdown="'+id+'"]');
+    var idInput = root.querySelector('[data-fattura-clientid="'+id+'"]');
+    var ragsocInput = root.querySelector('[data-fattura-ragsoc="'+id+'"]');
+    var pivaInput = root.querySelector('[data-fattura-piva="'+id+'"]');
+    if (!dropdown) return;
+
+    function selezionaCliente(c){
+      input.value = c.name || '';
+      if (idInput) idInput.value = c.id;
+      if (ragsocInput) ragsocInput.value = c.name || '';
+      if (pivaInput) pivaInput.value = c.vat_number || '';
+      dropdown.style.display = 'none';
+    }
+
+    async function mostraRisultati(){
+      var testo = input.value.trim().toLowerCase();
+      if (idInput && idInput.value && input.value !== (idInput.__lastName || '')) idInput.value = '';
+      if (testo.length < 2){ dropdown.style.display = 'none'; return; }
+      dropdown.innerHTML = '<div style="padding:10px;color:var(--muted);">cerco…</div>';
+      dropdown.style.display = 'block';
       var clienti = await caricaClientiFic();
-      var c = clienti.find(function(cl){ return String(cl.id) === sel.value; });
-      if (c){
-        if (ragsocInput) ragsocInput.value = c.name || '';
-        if (pivaInput) pivaInput.value = c.vat_number || '';
+      var match = clienti.filter(function(c){ return (c.name||'').toLowerCase().indexOf(testo) !== -1; }).slice(0, 30);
+      if (!match.length){
+        dropdown.innerHTML = '<div style="padding:10px;color:var(--muted);">Nessun cliente trovato — verrà creato come nuovo.</div>';
+        return;
       }
-    };
+      dropdown.innerHTML = match.map(function(c){
+        return '<div data-client-opt="'+c.id+'" style="padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;">'+(c.name||'')+(c.vat_number?' <span style="color:var(--muted);font-size:12px;">('+c.vat_number+')</span>':'')+'</div>';
+      }).join('');
+      dropdown.querySelectorAll('[data-client-opt]').forEach(function(opt){
+        opt.onmousedown = function(e){ e.preventDefault(); };
+        opt.onclick = function(){
+          var c = match.find(function(cl){ return String(cl.id) === opt.getAttribute('data-client-opt'); });
+          if (c){ idInput.__lastName = c.name; selezionaCliente(c); }
+        };
+      });
+    }
+
+    input.oninput = function(){ mostraRisultati(); };
+    input.onfocus = function(){ if (input.value.trim().length >= 2) mostraRisultati(); };
+    input.addEventListener('blur', function(){ setTimeout(function(){ dropdown.style.display = 'none'; }, 150); });
   });
   root.querySelectorAll('[data-fattura-crea]').forEach(function(btn){
     btn.onclick = async function(){
