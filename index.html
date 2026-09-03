@@ -2095,9 +2095,53 @@ function normalizzaNome(s){
   return String(s||'').trim().toLowerCase().replace(/\s+/g,' ');
 }
 
+function gruppiPerRiepilogoTassa(){
+  var gruppi = [];
+  state.guests.forEach(function(g){
+    var isDependent = g.ruolo === 'familiare' || g.ruolo === 'membro';
+    if (isDependent) return;
+    gruppi.push({ dataArrivo: g.dataArrivo, permanenza: g.permanenza, membri: orderedGuestsFor(g.id) });
+  });
+  (state.invii || []).forEach(function(entry){
+    if (!entry.ospiti || !entry.ospiti.length) return;
+    var head = entry.ospiti[0];
+    gruppi.push({ dataArrivo: head.dataArrivo, permanenza: head.permanenza, membri: entry.ospiti });
+  });
+  return gruppi;
+}
+
+async function calcolaRiepilogoTassa(anno, trimestre){
+  var cfgTassa = await caricaConfigTassa();
+  var meseInizio = (trimestre-1)*3;
+  var mesi = [meseInizio, meseInizio+1, meseInizio+2];
+  var righe = mesi.map(function(m){ return { mese: m, ospiti: 0, esenti: 0, pernottamenti: 0, importo: 0, mancantiDati: 0 }; });
+  var gruppi = gruppiPerRiepilogoTassa();
+  gruppi.forEach(function(gr){
+    if (!gr.dataArrivo) return;
+    var d = new Date(gr.dataArrivo);
+    if (isNaN(d) || d.getFullYear() !== anno) return;
+    var idx = mesi.indexOf(d.getMonth());
+    if (idx === -1) return;
+    var notti = parseInt(gr.permanenza, 10) || 0;
+    var nottiTassate = cfgTassa.maxNotti ? Math.min(notti, cfgTassa.maxNotti) : notti;
+    var tassabili = 0, esenti = 0, mancanti = 0;
+    gr.membri.forEach(function(m){
+      if (!m.dataNascita) mancanti++;
+      var eta = calcolaEta(m.dataNascita, gr.dataArrivo);
+      if (eta != null && eta < cfgTassa.eta) esenti++; else tassabili++;
+    });
+    righe[idx].ospiti += tassabili;
+    righe[idx].esenti += esenti;
+    righe[idx].pernottamenti += nottiTassate * tassabili;
+    righe[idx].importo += nottiTassate * tassabili * cfgTassa.importo;
+    righe[idx].mancantiDati += mancanti;
+  });
+  return righe;
+}
+
+
 async function precompilaArticoliFattura(headId){
   var root = document;
-  var prodottoIdInput = root.querySelector('[data-fattura-prodottoid="'+headId+'"]');
   var tassaProdottoIdInput = root.querySelector('[data-fattura-tassaprodottoid="'+headId+'"]');
   var noteEl = root.querySelector('[data-fattura-prodottonote="'+headId+'"]');
   var head = state.guests.find(function(g){ return g.id === headId; });
@@ -2408,7 +2452,7 @@ async function archiveInvio(ordered, idAppartamento, nRighe){
     idAppartamento: idAppartamento || '',
     appartamentoNome: appNome,
     nRighe: nRighe,
-    ospiti: ordered.map(function(g){ return { id: g.id, cognome: g.cognome, nome: g.nome, ruolo: g.ruolo, dataArrivo: g.dataArrivo, permanenza: g.permanenza, smoobuBookingId: g.smoobuBookingId || '' }; }),
+    ospiti: ordered.map(function(g){ return { id: g.id, cognome: g.cognome, nome: g.nome, ruolo: g.ruolo, dataArrivo: g.dataArrivo, permanenza: g.permanenza, dataNascita: g.dataNascita || '', smoobuBookingId: g.smoobuBookingId || '' }; }),
     partenzaSegnalata: false
   };
   state.invii.push(entry);
@@ -2781,6 +2825,55 @@ function renderBackend(){
       } catch(e){
         out3.innerHTML = '<div class="as-err">'+e.message+'</div>';
       }
+    };
+
+    var riepilogoBox = document.createElement('div');
+    riepilogoBox.className = 'as-card';
+    riepilogoBox.innerHTML =
+      '<p class="as-title" style="font-size:16px;">Riepilogo trimestrale tassa di soggiorno</p>' +
+      '<p class="as-sub">Numeri pronti da riportare sul portale "Soggiorniamo" (torino.entrateonline.net) — dichiarazione dovuta entro il 15 del mese dopo la fine del trimestre. Ogni soggiorno è conteggiato per intero nel mese di arrivo.</p>' +
+      '<div class="as-row">' +
+        '<div class="as-field"><label>Anno</label><input id="riep-anno" type="number"></div>' +
+        '<div class="as-field"><label>Trimestre</label><select id="riep-trimestre">' +
+          '<option value="1">1° (gen-mar)</option><option value="2">2° (apr-giu)</option><option value="3">3° (lug-set)</option><option value="4">4° (ott-dic)</option>' +
+        '</select></div>' +
+      '</div>' +
+      '<button class="as-btn secondary" id="riep-calcola">Calcola</button>' +
+      '<div id="riep-result" style="margin-top:10px;"></div>';
+    document.getElementById('tab-backend').appendChild(riepilogoBox);
+
+    var oggiRiep = new Date();
+    var trimCorrente = Math.floor(oggiRiep.getMonth()/3) + 1;
+    var trimPrecedente = trimCorrente === 1 ? 4 : trimCorrente - 1;
+    var annoRiep = trimCorrente === 1 ? oggiRiep.getFullYear() - 1 : oggiRiep.getFullYear();
+    document.getElementById('riep-anno').value = annoRiep;
+    document.getElementById('riep-trimestre').value = trimPrecedente;
+
+    document.getElementById('riep-calcola').onclick = async function(){
+      var outR = document.getElementById('riep-result');
+      outR.innerHTML = '<span class="as-warn"><span class="as-spin"></span>calcolo…</span>';
+      var anno = parseInt(document.getElementById('riep-anno').value, 10);
+      var trimestre = parseInt(document.getElementById('riep-trimestre').value, 10);
+      var cfgTassaR = await caricaConfigTassa();
+      if (!cfgTassaR.importo){
+        outR.innerHTML = '<div class="as-err">Configura prima la tariffa della tassa di soggiorno qui sopra e salva.</div>';
+        return;
+      }
+      var righe = await calcolaRiepilogoTassa(anno, trimestre);
+      var nomiMesi = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+      var totOspiti = 0, totPern = 0, totImporto = 0, totMancanti = 0, totEsenti = 0;
+      var html = '<table style="width:100%;border-collapse:collapse;font-size:14px;">' +
+        '<tr style="text-align:left;color:var(--muted);"><th style="padding:4px 6px 4px 0;">Mese</th><th style="padding:4px 6px;">Ospiti</th><th style="padding:4px 6px;">Pernott.</th><th style="padding:4px 0;">Importo</th></tr>';
+      righe.forEach(function(r){
+        totOspiti += r.ospiti; totPern += r.pernottamenti; totImporto += r.importo; totMancanti += r.mancantiDati; totEsenti += r.esenti;
+        html += '<tr style="border-top:1px solid var(--border);"><td style="padding:6px 6px 6px 0;">'+nomiMesi[r.mese]+'</td><td style="padding:6px;">'+r.ospiti+'</td><td style="padding:6px;">'+r.pernottamenti+'</td><td style="padding:6px 0;">€'+r.importo.toFixed(2).replace('.',',')+'</td></tr>';
+      });
+      html += '<tr style="border-top:2px solid var(--border);font-weight:600;"><td style="padding:6px 6px 6px 0;">Totale</td><td style="padding:6px;">'+totOspiti+'</td><td style="padding:6px;">'+totPern+'</td><td style="padding:6px 0;">€'+totImporto.toFixed(2).replace('.',',')+'</td></tr>';
+      html += '</table>';
+      html += '<p class="as-sub" style="margin-top:8px;">Esenti (minori sotto '+cfgTassaR.eta+' anni) nel periodo: '+totEsenti+'. Notti tassate limitate a '+(cfgTassaR.maxNotti||'—')+' per soggiorno.</p>';
+      if (totMancanti) html += '<div class="as-err" style="margin-top:6px;">⚠️ '+totMancanti+' ospite/i in questo periodo senza data di nascita registrata: sono stati conteggiati come tassabili anche se fossero minori esenti. Controlla manualmente prima di dichiarare.</div>';
+      html += '<p class="as-sub" style="margin-top:8px;">I dati dei soggiorni già archiviati prima dell\'introduzione di questo riepilogo potrebbero non avere la data di nascita salvata: verifica i mesi più vecchi.</p>';
+      outR.innerHTML = html;
     };
   }
 }
