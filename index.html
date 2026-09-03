@@ -2142,6 +2142,7 @@ async function calcolaRiepilogoTassa(anno, trimestre){
 
 async function precompilaArticoliFattura(headId){
   var root = document;
+  var prodottoIdInput = root.querySelector('[data-fattura-prodottoid="'+headId+'"]');
   var tassaProdottoIdInput = root.querySelector('[data-fattura-tassaprodottoid="'+headId+'"]');
   var noteEl = root.querySelector('[data-fattura-prodottonote="'+headId+'"]');
   var head = state.guests.find(function(g){ return g.id === headId; });
