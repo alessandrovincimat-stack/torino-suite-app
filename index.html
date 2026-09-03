@@ -1158,6 +1158,10 @@ var remoteStorage = {
   }
 };
 
+function escapeHtml(s){
+  return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
 function parseCsv(text, kind){
   var lines = text.split(/\r?\n/).map(function(l){return l.trim();}).filter(Boolean);
   var out = [];
@@ -1887,8 +1891,20 @@ function renderTabelle(){
 
   ['comuni','stati','documenti','appartamenti'].forEach(function(kind){
     var label = kind==='comuni' ? 'Comuni (codice;nome;provincia)' : kind==='stati' ? 'Stati (codice;nome) — includi ITALIA' : kind==='documenti' ? 'Tipi documento (codice;nome)' : 'Appartamenti (id;nome;idSmoobu opzionale)';
+    var valoreAttuale = '';
+    var notaComuni = '';
+    if (kind === 'comuni'){
+      if (state.tables.comuni.length) notaComuni = '<p class="as-sub">Elenco già caricato (' + state.tables.comuni.length + ' voci) non mostrato qui per non appesantire la pagina — incolla sotto solo se vuoi sostituirlo interamente.</p>';
+    } else {
+      valoreAttuale = state.tables[kind].map(function(x){
+        return kind === 'appartamenti'
+          ? escapeHtml(x.id) + ';' + escapeHtml(x.nome) + (x.smoobuId ? ';' + escapeHtml(x.smoobuId) : '')
+          : escapeHtml(x.codice) + ';' + escapeHtml(x.nome);
+      }).join('\n');
+    }
     html += '<div class="as-field"><label>'+label+' — '+state.tables[kind].length+' voci caricate</label>' +
-            '<textarea rows="4" id="ta-'+kind+'" placeholder="'+(kind==='comuni'?'058091;TORINO;TO':kind==='appartamenti'?'0;CARLO ALBERTO':'100000100;ITALIA')+'"></textarea>' +
+            '<textarea rows="4" id="ta-'+kind+'" placeholder="'+(kind==='comuni'?'058091;TORINO;TO':kind==='appartamenti'?'0;CARLO ALBERTO':'100000100;ITALIA')+'">'+valoreAttuale+'</textarea>' +
+            notaComuni +
             '<button class="as-btn secondary" style="margin-top:6px;" data-load="'+kind+'">Carica/aggiorna tabella</button></div>';
   });
   html += '</div>';
