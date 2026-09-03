@@ -1387,6 +1387,7 @@ function buildGuestCardHtml(g){
       '</div>';
     html += '<div class="as-field"><label>Descrizione</label><input data-fattura-descr="'+g.id+'" value="'+descrizioneDefault+'"></div>';
     html += '<div class="as-field"><label>Prezzo soggiorno (€)</label><input type="number" step="0.01" min="0" data-fattura-prezzo="'+g.id+'"></div>';
+    html += '<div class="as-sub" data-fattura-prezzonote="'+g.id+'" style="margin:-4px 0 8px;"></div>';
     html += '<div class="as-field"><label>Tassa di soggiorno (€) — calcolata, modificabile</label><input type="number" step="0.01" min="0" data-fattura-tassa="'+g.id+'" value="0"></div>';
     html += '<div class="as-sub" data-fattura-tassanote="'+g.id+'" style="margin:-4px 0 8px;"></div>';
     html += '<button class="as-btn secondary" data-fattura-crea="'+g.id+'">Crea fattura</button>';
@@ -1475,7 +1476,7 @@ function attachGuestHandlers(root){
       if (!form) return;
       var apro = form.style.display === 'none';
       form.style.display = apro ? 'block' : 'none';
-      if (apro) calcolaTassaSoggiorno(id);
+      if (apro){ calcolaTassaSoggiorno(id); precompilaPrezzoDaSmoobu(id); }
     };
   });
   root.querySelectorAll('[data-fattura-tipo]').forEach(function(sel){
@@ -2042,6 +2043,39 @@ async function calcolaTassaSoggiorno(headId){
       (esenti ? ' (esenti sotto ' + cfgTassa.eta + ' anni: ' + esenti + ')' : '') +
       ' × €' + cfgTassa.importo.toFixed(2).replace('.', ',');
     noteEl.textContent = nota;
+  }
+}
+
+async function precompilaPrezzoDaSmoobu(headId){
+  var root = document;
+  var prezzoInput = root.querySelector('[data-fattura-prezzo="'+headId+'"]');
+  var noteEl = root.querySelector('[data-fattura-prezzonote="'+headId+'"]');
+  var head = state.guests.find(function(g){ return g.id === headId; });
+  if (!prezzoInput || !head) return;
+  if (!head.smoobuBookingId){
+    if (noteEl) noteEl.textContent = '';
+    return;
+  }
+  if (prezzoInput.value){
+    if (noteEl) noteEl.textContent = '';
+    return;
+  }
+  if (noteEl) noteEl.innerHTML = '<span style="color:var(--muted);">recupero importo da Smoobu…</span>';
+  try {
+    var resp = await fetch(backendUrl('/api/smoobu/reservations/' + encodeURIComponent(head.smoobuBookingId)), { headers: backendHeaders() });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'errore');
+    var prezzo = data.price != null ? Number(data.price) : null;
+    if (prezzo != null && !isNaN(prezzo) && prezzo > 0){
+      if (!prezzoInput.value){
+        prezzoInput.value = prezzo.toFixed(2);
+        if (noteEl) noteEl.textContent = 'Importo ripreso dalla prenotazione Smoobu (modificabile).';
+      }
+    } else {
+      if (noteEl) noteEl.textContent = '';
+    }
+  } catch(e){
+    if (noteEl) noteEl.innerHTML = '<span style="color:var(--muted);">Non trovato su Smoobu: inseriscilo a mano.</span>';
   }
 }
 
