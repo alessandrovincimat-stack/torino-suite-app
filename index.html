@@ -1470,13 +1470,13 @@ function attachGuestHandlers(root){
     };
   });
   root.querySelectorAll('[data-fattura-toggle]').forEach(function(btn){
-    btn.onclick = function(){
+    btn.onclick = async function(){
       var id = btn.getAttribute('data-fattura-toggle');
       var form = root.querySelector('[data-fattura-form="'+id+'"]');
       if (!form) return;
       var apro = form.style.display === 'none';
       form.style.display = apro ? 'block' : 'none';
-      if (apro){ calcolaTassaSoggiorno(id); precompilaPrezzoDaSmoobu(id); }
+      if (apro){ await calcolaTassaSoggiorno(id); await precompilaPrezzoDaSmoobu(id); }
     };
   });
   root.querySelectorAll('[data-fattura-tipo]').forEach(function(sel){
@@ -2050,6 +2050,8 @@ async function precompilaPrezzoDaSmoobu(headId){
   var root = document;
   var prezzoInput = root.querySelector('[data-fattura-prezzo="'+headId+'"]');
   var noteEl = root.querySelector('[data-fattura-prezzonote="'+headId+'"]');
+  var tassaInput = root.querySelector('[data-fattura-tassa="'+headId+'"]');
+  var tassaNoteEl = root.querySelector('[data-fattura-tassanote="'+headId+'"]');
   var head = state.guests.find(function(g){ return g.id === headId; });
   if (!prezzoInput || !head) return;
   if (!head.smoobuBookingId){
@@ -2061,21 +2063,41 @@ async function precompilaPrezzoDaSmoobu(headId){
     return;
   }
   if (noteEl) noteEl.innerHTML = '<span style="color:var(--muted);">recupero importo da Smoobu…</span>';
+  var parolaTassa = /tassa di soggiorno|city ?tax|tourist ?tax|kurtaxe/i;
   try {
-    var resp = await fetch(backendUrl('/api/smoobu/reservations/' + encodeURIComponent(head.smoobuBookingId)), { headers: backendHeaders() });
+    var resp = await fetch(backendUrl('/api/smoobu/reservations/' + encodeURIComponent(head.smoobuBookingId) + '/price-elements'), { headers: backendHeaders() });
     var data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'errore');
-    var prezzo = data.price != null ? Number(data.price) : null;
-    if (prezzo != null && !isNaN(prezzo) && prezzo > 0){
-      if (!prezzoInput.value){
-        prezzoInput.value = prezzo.toFixed(2);
-        if (noteEl) noteEl.textContent = 'Importo ripreso dalla prenotazione Smoobu (modificabile).';
-      }
-    } else {
-      if (noteEl) noteEl.textContent = '';
+    var elementi = data.priceElements || data.price_elements || [];
+    if (!elementi.length) throw new Error('nessun dettaglio prezzo');
+    var totaleTassa = 0, totaleResto = 0, trovataTassa = false;
+    elementi.forEach(function(el){
+      var importo = Number(el.amount) || 0;
+      var etichetta = String(el.name || el.type || '');
+      if (parolaTassa.test(etichetta)){ totaleTassa += importo; trovataTassa = true; }
+      else totaleResto += importo;
+    });
+    if (!prezzoInput.value) prezzoInput.value = totaleResto.toFixed(2);
+    if (noteEl) noteEl.textContent = 'Importo ripreso dalla prenotazione Smoobu (modificabile).';
+    if (trovataTassa && tassaInput){
+      tassaInput.value = totaleTassa.toFixed(2);
+      if (tassaNoteEl) tassaNoteEl.textContent = 'Importo ripreso da Smoobu (voce "Tassa di soggiorno" della prenotazione), non calcolato in automatico.';
     }
   } catch(e){
-    if (noteEl) noteEl.innerHTML = '<span style="color:var(--muted);">Non trovato su Smoobu: inseriscilo a mano.</span>';
+    try {
+      var resp2 = await fetch(backendUrl('/api/smoobu/reservations/' + encodeURIComponent(head.smoobuBookingId)), { headers: backendHeaders() });
+      var data2 = await resp2.json();
+      if (!resp2.ok) throw new Error(data2.error || 'errore');
+      var prezzo = data2.price != null ? Number(data2.price) : null;
+      if (prezzo != null && !isNaN(prezzo) && prezzo > 0 && !prezzoInput.value){
+        prezzoInput.value = prezzo.toFixed(2);
+        if (noteEl) noteEl.innerHTML = '<span style="color:var(--muted);">Importo totale da Smoobu (potrebbe includere la tassa di soggiorno: controlla).</span>';
+      } else if (noteEl){
+        noteEl.textContent = '';
+      }
+    } catch(e2){
+      if (noteEl) noteEl.innerHTML = '<span style="color:var(--muted);">Non trovato su Smoobu: inseriscilo a mano.</span>';
+    }
   }
 }
 
