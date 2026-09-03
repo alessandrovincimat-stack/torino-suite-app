@@ -1482,7 +1482,6 @@ function attachGuestHandlers(root){
       if (privatoBox) privatoBox.style.display = (sel.value === 'privato') ? 'block' : 'none';
       if (aziendaBox) aziendaBox.style.display = (sel.value === 'azienda') ? 'block' : 'none';
       if (idInput) idInput.value = '';
-      caricaClientiFic();
     };
   });
 
@@ -1500,27 +1499,36 @@ function attachGuestHandlers(root){
     }
 
     async function mostraRisultati(){
-      var testo = input.value.trim().toLowerCase();
+      var testo = input.value.trim();
       if (idInput && idInput.value && input.value !== (idInput.__lastName || '')) idInput.value = '';
       if (testo.length < 2){ dropdown.style.display = 'none'; return; }
       dropdown.innerHTML = '<div style="padding:10px;color:var(--muted);">cerco…</div>';
       dropdown.style.display = 'block';
-      var clienti = await caricaClientiFic();
-      var match = clienti.filter(function(c){ return (c.name||'').toLowerCase().indexOf(testo) !== -1; }).slice(0, 30);
-      if (!match.length){
-        dropdown.innerHTML = '<div style="padding:10px;color:var(--muted);">Nessun cliente trovato — verrà creato come nuovo.</div>';
-        return;
-      }
-      dropdown.innerHTML = match.map(function(c){
-        return '<div data-client-opt="'+c.id+'" style="padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;">'+(c.name||'')+(c.vat_number?' <span style="color:var(--muted);font-size:12px;">('+c.vat_number+')</span>':'')+'</div>';
-      }).join('');
-      dropdown.querySelectorAll('[data-client-opt]').forEach(function(opt){
-        opt.onmousedown = function(e){ e.preventDefault(); };
-        opt.onclick = function(){
-          var c = match.find(function(cl){ return String(cl.id) === opt.getAttribute('data-client-opt'); });
-          if (c) selezionaCliente(c);
-        };
-      });
+      clearTimeout(input.__ficTimer);
+      input.__ficTimer = setTimeout(async function(){
+        if (input.value.trim() !== testo) return;
+        var match = [];
+        try {
+          var resp = await fetch(backendUrl('/api/fattura/clients?search=' + encodeURIComponent(testo)), { headers: backendHeaders() });
+          var data = await resp.json();
+          if (resp.ok) match = data.data || [];
+        } catch(e){}
+        if (input.value.trim() !== testo) return;
+        if (!match.length){
+          dropdown.innerHTML = '<div style="padding:10px;color:var(--muted);">Nessun cliente trovato — verrà creato come nuovo.</div>';
+          return;
+        }
+        dropdown.innerHTML = match.map(function(c){
+          return '<div data-client-opt="'+c.id+'" style="padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;">'+(c.name||'')+(c.vat_number?' <span style="color:var(--muted);font-size:12px;">('+c.vat_number+')</span>':'')+'</div>';
+        }).join('');
+        dropdown.querySelectorAll('[data-client-opt]').forEach(function(opt){
+          opt.onmousedown = function(e){ e.preventDefault(); };
+          opt.onclick = function(){
+            var c = match.find(function(cl){ return String(cl.id) === opt.getAttribute('data-client-opt'); });
+            if (c) selezionaCliente(c);
+          };
+        });
+      }, 350);
     }
 
     input.oninput = function(){ mostraRisultati(); };
@@ -1619,20 +1627,6 @@ var smoobuDetailsAperti = {};
 
 var smoobuCache = null;
 var SMOOBU_CACHE_MS = 90000;
-var ficClientsCache = null;
-
-async function caricaClientiFic(){
-  if (ficClientsCache) return ficClientsCache;
-  try {
-    var resp = await fetch(backendUrl('/api/fattura/clients'), { headers: backendHeaders() });
-    var data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || 'errore');
-    ficClientsCache = data.data || [];
-  } catch(e){
-    ficClientsCache = [];
-  }
-  return ficClientsCache;
-}
 
 function renderSmoobuBox(box, bookings){
   if (!bookings.length){
