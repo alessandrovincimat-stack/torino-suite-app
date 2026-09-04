@@ -1875,6 +1875,21 @@ var smoobuDetailsAperti = {};
 var smoobuCache = null;
 var SMOOBU_CACHE_MS = 90000;
 
+function creaSchedaDaPrenotazioneSmoobu(b, capoId){
+  var g = newGuest();
+  g.dataArrivo = b.arrival;
+  g.smoobuBookingId = String(b.id);
+  var arr = new Date(b.arrival), dep = new Date(b.departure);
+  g.permanenza = String(Math.max(1, Math.round((dep-arr)/86400000)));
+  var appMatch = state.tables.appartamenti.find(function(a){ return a.smoobuId && b.apartment && String(a.smoobuId) === String(b.apartment.id); });
+  if (appMatch) g.idAppartamento = appMatch.id;
+  if (capoId){ g.ruolo = 'familiare'; g.groupOf = capoId; }
+  state.guests.push(g);
+  smoobuDetailsAperti[b.id] = true;
+  saveGuests(); render();
+  return g;
+}
+
 function renderSmoobuBox(box, bookings){
   if (!bookings.length){
     box.innerHTML = '<p class="as-sub">Nessun arrivo previsto nei prossimi 7 giorni su Smoobu.</p>';
@@ -1918,17 +1933,7 @@ function renderSmoobuBox(box, bookings){
     btn.onclick = function(){
       var b = JSON.parse(decodeURIComponent(btn.getAttribute('data-crea-smoobu')));
       var capoId = btn.getAttribute('data-capo-id');
-      var g = newGuest();
-      g.dataArrivo = b.arrival;
-      g.smoobuBookingId = String(b.id);
-      var arr = new Date(b.arrival), dep = new Date(b.departure);
-      g.permanenza = String(Math.max(1, Math.round((dep-arr)/86400000)));
-      var appMatch = state.tables.appartamenti.find(function(a){ return a.smoobuId && b.apartment && String(a.smoobuId) === String(b.apartment.id); });
-      if (appMatch) g.idAppartamento = appMatch.id;
-      if (capoId){ g.ruolo = 'familiare'; g.groupOf = capoId; }
-      state.guests.push(g);
-      smoobuDetailsAperti[b.id] = true;
-      saveGuests(); render();
+      var g = creaSchedaDaPrenotazioneSmoobu(b, capoId);
       setTimeout(function(){ scrollCardIntoView(g.id); }, 60);
     };
   });
@@ -3579,21 +3584,28 @@ function trovaCollegamentoOspite(bookingId){
   return null;
 }
 
-function vaiECreaFattura(bookingId){
+function vaiECreaFattura(b){
+  var bookingId = String(b.id);
   var collegamento = trovaCollegamentoOspite(bookingId);
+  var appenaCreata = false;
   if (!collegamento){
-    alert('Nessuna scheda Questura trovata per questa prenotazione. Vai su "Questura e ISTAT" → Ospiti, aggiungi l\'ospite con la foto del documento: poi la fattura potrà essere creata da lì.');
-    return;
+    var g = creaSchedaDaPrenotazioneSmoobu(b);
+    collegamento = { id: g.id, dove: 'ospiti' };
+    appenaCreata = true;
   }
   var btnQuestura = document.getElementById('ts-btn-questura');
   if (btnQuestura) btnQuestura.click();
   switchTab(collegamento.dove);
   setTimeout(function(){
     scrollCardIntoView(collegamento.id);
-    setTimeout(function(){
-      var toggleBtn = document.querySelector('[data-fattura-toggle="'+collegamento.id+'"]');
-      if (toggleBtn) toggleBtn.click();
-    }, 350);
+    if (appenaCreata){
+      alert('Non c\'era ancora una scheda Questura per questa prenotazione: te ne ho creata una precompilata (alloggio e date). Carica la foto del documento per completarla, poi potrai creare la fattura da qui.');
+    } else {
+      setTimeout(function(){
+        var toggleBtn = document.querySelector('[data-fattura-toggle="'+collegamento.id+'"]');
+        if (toggleBtn) toggleBtn.click();
+      }, 350);
+    }
   }, 100);
 }
 
@@ -3637,7 +3649,7 @@ function renderListaFatture(prenotazioni){
     html += '<div>' + puntinoStatoFattura(stato, entry && entry.eiStatus) + '<strong>' + nomeOspite + '</strong></div>';
     html += '<div class="as-sub" style="margin:2px 0 8px;">' + toItDate(b.arrival) + ' → ' + toItDate(b.departure) + ' · ' + nomeApp + '</div>';
     if (stato === 'pendente'){
-      html += '<button class="as-btn secondary" data-fatt-crea="'+b.id+'">Crea fattura</button>';
+      html += '<button class="as-btn secondary" data-fatt-crea="'+b.id+'" data-fatt-booking="'+encodeURIComponent(JSON.stringify(b))+'">Crea fattura</button>';
     } else if (stato === 'emessa'){
       html += '<p class="as-sub" style="margin:0 0 6px;">Fattura' + (entry.ficDocumentNumber ? (' n. ' + entry.ficDocumentNumber) : '') + ' creata' + (entry.dataFatturazione ? (' il ' + toItDate(entry.dataFatturazione.slice(0,10))) : '') + '.</p>';
       if (entry.ficDocumentId) html += '<button class="as-btn ghost" data-fatt-verifica="'+b.id+'">Verifica invio SDI</button>';
@@ -3653,7 +3665,7 @@ function renderListaFatture(prenotazioni){
 
 function collegaAzioniFatture(container){
   container.querySelectorAll('[data-fatt-crea]').forEach(function(btn){
-    btn.onclick = function(){ vaiECreaFattura(btn.getAttribute('data-fatt-crea')); };
+    btn.onclick = function(){ vaiECreaFattura(JSON.parse(decodeURIComponent(btn.getAttribute('data-fatt-booking')))); };
   });
   container.querySelectorAll('[data-fatt-verifica]').forEach(function(btn){
     btn.onclick = function(){ verificaStatoSdi(btn.getAttribute('data-fatt-verifica')); };
