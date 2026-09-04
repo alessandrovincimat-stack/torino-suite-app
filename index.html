@@ -1297,6 +1297,7 @@ function buildFatturaFormHtml(id, nomeCompleto, descrizioneDefault){
     '<div data-fattura-clientdropdown-priv="'+id+'" style="display:none;position:absolute;z-index:20;left:0;right:0;background:#1c1a14;border:1px solid var(--border);border-radius:8px;max-height:220px;overflow-y:auto;margin-top:2px;"></div>' +
     '</div>' +
     '<div class="as-field"><label>Nome e cognome</label><input data-fattura-nomeprivato="'+id+'" value="'+escapeHtml(nomeCompleto)+'"></div>' +
+    '<div class="as-field"><label>Codice fiscale</label><input data-fattura-cf="'+id+'" style="text-transform:uppercase;"></div>' +
     '</div>';
   html += '<div data-fattura-azienda="'+id+'" style="display:none;">' +
     '<div class="as-field" style="position:relative;"><label>Cliente esistente (opzionale — scrivi per cercare)</label>' +
@@ -1305,6 +1306,7 @@ function buildFatturaFormHtml(id, nomeCompleto, descrizioneDefault){
     '</div>' +
     '<div class="as-row"><div class="as-field"><label>Ragione sociale</label><input data-fattura-ragsoc="'+id+'"></div><div class="as-field"><label>Partita IVA</label><input data-fattura-piva="'+id+'"></div></div>' +
     '</div>';
+  html += '<div class="as-field"><label>Codice destinatario (SDI) — "0000000" se il cliente non ne ha uno proprio</label><input data-fattura-sdi="'+id+'" value="0000000" maxlength="7" style="text-transform:uppercase;"></div>';
   html += '<div class="as-field"><label>Descrizione</label><input data-fattura-descr="'+id+'" value="'+escapeHtml(descrizioneDefault)+'"></div>';
   html += '<div class="as-sub" data-fattura-prodottonote="'+id+'" style="margin:-4px 0 8px;"></div>';
   html += '<div class="as-field"><label>Prezzo soggiorno (€)</label><input type="number" step="0.01" min="0" data-fattura-prezzo="'+id+'"></div>';
@@ -1578,7 +1580,9 @@ function attachGuestHandlers(root){
     var id = input.getAttribute('data-fattura-clientsearch-priv');
     attachClientSearch(input, 'data-fattura-clientdropdown-priv', function(c){
       var nomeInput = root.querySelector('[data-fattura-nomeprivato="'+id+'"]');
+      var cfInput = root.querySelector('[data-fattura-cf="'+id+'"]');
       if (nomeInput) nomeInput.value = c.name || '';
+      if (cfInput && c.tax_code) cfInput.value = c.tax_code;
     });
   });
   root.querySelectorAll('[data-fattura-crea]').forEach(function(btn){
@@ -1597,6 +1601,8 @@ function attachGuestHandlers(root){
       var tassa = tassaInput ? tassaInput.value : '0';
       var descr = root.querySelector('[data-fattura-descr="'+id+'"]').value;
       var payload = { descrizione: descr, prezzo: prezzo };
+      var sdiInput = root.querySelector('[data-fattura-sdi="'+id+'"]');
+      if (sdiInput && sdiInput.value.trim()) payload.sdi = sdiInput.value.trim().toUpperCase();
       var prodottoIdInput = root.querySelector('[data-fattura-prodottoid="'+id+'"]');
       if (prodottoIdInput && prodottoIdInput.value) payload.productId = prodottoIdInput.value;
       if (Number(tassa) > 0){
@@ -1619,6 +1625,8 @@ function attachGuestHandlers(root){
         var parti = nomeCompleto.split(/\s+/);
         payload.cognome = parti[0] || '';
         payload.nome = parti.slice(1).join(' ');
+        var cfInput = root.querySelector('[data-fattura-cf="'+id+'"]');
+        if (cfInput && cfInput.value.trim()) payload.codiceFiscale = cfInput.value.trim().toUpperCase();
       }
       if (!prezzo || Number(prezzo) <= 0){ out.innerHTML = '<div class="as-err">Inserisci un prezzo valido.</div>'; return; }
       out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>creazione in corso…</span>';
