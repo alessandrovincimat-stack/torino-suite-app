@@ -1215,7 +1215,7 @@ function newGuest(){
     cognome: '', nome: '', sesso: 'M', dataNascita: '',
     nascitaEstero: false, comuneNascitaNome: '', statoNascitaNome: 'ITALIA',
     cittadinanzaNome: 'ITALIA',
-    residenzaEstero: false, comuneResidenzaNome: '', statoResidenzaNome: 'ITALIA',
+    residenzaEstero: false, comuneResidenzaNome: '', statoResidenzaNome: 'ITALIA', indirizzoResidenza: '',
     tipoTurismo: 'Non specificato', mezzoTrasporto: 'Non specificato',
     tipoDocumentoNome: '', numeroDocumento: '',
     rilascioEstero: false, luogoRilascioNome: '',
@@ -1267,6 +1267,12 @@ async function ocrDocument(file, guest){
     guest.numeroDocumento = (parsed.numero_documento || '').toUpperCase();
     guest.rilascioEstero = !!parsed.rilascio_estero;
     guest.luogoRilascioNome = (parsed.luogo_rilascio || '').toUpperCase();
+    if (parsed.indirizzo_residenza) guest.indirizzoResidenza = parsed.indirizzo_residenza;
+    guest.residenzaEstero = !!parsed.residenza_estero;
+    if (parsed.comune_residenza){
+      if (guest.residenzaEstero) guest.statoResidenzaNome = parsed.comune_residenza.toUpperCase();
+      else guest.comuneResidenzaNome = parsed.comune_residenza.toUpperCase();
+    }
   } catch(e){
     alert('Estrazione non riuscita, inserisci i dati manualmente. (' + e.message + ')');
   }
@@ -1401,6 +1407,7 @@ function buildGuestCardHtml(g){
     html += '<div class="as-field"><label>Comune di residenza</label><input list="dl-comuni" data-f="comuneResidenzaNome" data-id="'+g.id+'" value="'+g.comuneResidenzaNome+'"></div>';
   }
   html += '</div>';
+  html += '<div class="as-field"><label>Indirizzo di residenza (via e civico) — per la fattura</label><input data-f="indirizzoResidenza" data-id="'+g.id+'" value="'+(g.indirizzoResidenza||'')+'"></div>';
   html += '<div class="as-row">';
   html += '<div class="as-field"><label>Tipo turismo</label><select data-f="tipoTurismo" data-id="'+g.id+'">' +
     ['Non specificato','Culturale','Balneare','Congressuale/Affari','Fieristico','Sportivo/Fitness','Scolastico','Religioso','Sociale','Parchi Tematici','Termale/Trattamenti salute','Enogastronomico','Cicloturismo','Escursionistico/Naturalistico','Altro motivo'].map(function(t){ return '<option '+(g.tipoTurismo===t?'selected':'')+'>'+t+'</option>'; }).join('') +
@@ -1510,7 +1517,11 @@ function attachGuestHandlers(root){
       if (!form) return;
       var apro = form.style.display === 'none';
       form.style.display = apro ? 'block' : 'none';
-      if (apro){ await calcolaTassaSoggiorno(id); await precompilaPrezzoDaSmoobu(id); precompilaArticoliFattura(id); precompilaCodiceFiscale(id); }
+      if (apro){
+        await calcolaTassaSoggiorno(id); await precompilaPrezzoDaSmoobu(id); precompilaArticoliFattura(id); precompilaCodiceFiscale(id);
+        var tipoAttuale = root.querySelector('[data-fattura-tipo="'+id+'"]').value;
+        precompilaIndirizzoFattura(id, tipoAttuale);
+      }
     };
   });
   root.querySelectorAll('[data-fattura-tipo]').forEach(function(sel){
@@ -1522,6 +1533,7 @@ function attachGuestHandlers(root){
       if (privatoBox) privatoBox.style.display = (sel.value === 'privato') ? 'block' : 'none';
       if (aziendaBox) aziendaBox.style.display = (sel.value === 'azienda') ? 'block' : 'none';
       if (idInput) idInput.value = '';
+      precompilaIndirizzoFattura(id, sel.value);
     };
   });
 
@@ -2264,6 +2276,28 @@ async function caricaBelfiore(){
   return { comuni: belfioreComuniCache, stati: belfioreStatiCache };
 }
 
+async function precompilaIndirizzoFattura(id, tipo){
+  if (tipo !== 'privato') return;
+  var root = document;
+  var indirizzoInput = root.querySelector('[data-fattura-indirizzo="'+id+'"]');
+  var cittaInput = root.querySelector('[data-fattura-citta="'+id+'"]');
+  var provInput = root.querySelector('[data-fattura-provincia="'+id+'"]');
+  if (!indirizzoInput) return;
+  var g = trovaOspiteCompletoPerCF(id);
+  if (!g) return;
+  if (g.residenzaEstero){
+    if (indirizzoInput && !indirizzoInput.value.trim() && g.indirizzoResidenza) indirizzoInput.value = g.indirizzoResidenza;
+    if (cittaInput && !cittaInput.value.trim() && g.statoResidenzaNome) cittaInput.value = g.statoResidenzaNome;
+    return;
+  }
+  if (indirizzoInput && !indirizzoInput.value.trim() && g.indirizzoResidenza) indirizzoInput.value = g.indirizzoResidenza;
+  if (cittaInput && !cittaInput.value.trim() && g.comuneResidenzaNome) cittaInput.value = g.comuneResidenzaNome;
+  if (provInput && !provInput.value.trim() && g.comuneResidenzaNome){
+    var match = findByName(state.tables.comuni, g.comuneResidenzaNome);
+    if (match && match.provincia) provInput.value = match.provincia;
+  }
+}
+
 function trovaOspiteCompletoPerCF(id){
   var g = state.guests.find(function(x){ return x.id === id; });
   if (g) return g;
@@ -2778,7 +2812,7 @@ async function archiveInvio(ordered, idAppartamento, nRighe){
     idAppartamento: idAppartamento || '',
     appartamentoNome: appNome,
     nRighe: nRighe,
-    ospiti: ordered.map(function(g){ return { id: g.id, cognome: g.cognome, nome: g.nome, ruolo: g.ruolo, dataArrivo: g.dataArrivo, permanenza: g.permanenza, dataNascita: g.dataNascita || '', sesso: g.sesso || '', nascitaEstero: !!g.nascitaEstero, comuneNascitaNome: g.comuneNascitaNome || '', statoNascitaNome: g.statoNascitaNome || '', smoobuBookingId: g.smoobuBookingId || '' }; }),
+    ospiti: ordered.map(function(g){ return { id: g.id, cognome: g.cognome, nome: g.nome, ruolo: g.ruolo, dataArrivo: g.dataArrivo, permanenza: g.permanenza, dataNascita: g.dataNascita || '', sesso: g.sesso || '', nascitaEstero: !!g.nascitaEstero, comuneNascitaNome: g.comuneNascitaNome || '', statoNascitaNome: g.statoNascitaNome || '', residenzaEstero: !!g.residenzaEstero, comuneResidenzaNome: g.comuneResidenzaNome || '', statoResidenzaNome: g.statoResidenzaNome || '', indirizzoResidenza: g.indirizzoResidenza || '', smoobuBookingId: g.smoobuBookingId || '' }; }),
     partenzaSegnalata: false
   };
   state.invii.push(entry);
