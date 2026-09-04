@@ -2333,17 +2333,25 @@ async function precompilaCapFattura(id){
   var comune = cittaInput ? cittaInput.value.trim() : '';
   if (!via || !comune) return;
   if (capNoteEl) capNoteEl.innerHTML = '<span style="color:var(--muted);">cerco il CAP…</span>';
+
+  var lista = await caricaComuniCap();
+  var trovato = trovaBelfiore(lista, comune);
+
   try {
     var resp = await fetch(backendUrl('/api/geocode-cap?via=' + encodeURIComponent(via) + '&comune=' + encodeURIComponent(comune)), { headers: backendHeaders() });
     var data = await resp.json();
     if (resp.ok && data.cap){
-      capInput.value = data.cap;
-      if (capNoteEl) capNoteEl.textContent = 'CAP suggerito da OpenStreetMap in base all\'indirizzo — verifica prima di usarlo.';
-      return;
+      var plausibile = !trovato || trovato.capLista.indexOf(data.cap) !== -1;
+      if (plausibile){
+        capInput.value = data.cap;
+        if (capNoteEl) capNoteEl.textContent = 'CAP suggerito da OpenStreetMap in base all\'indirizzo — verifica prima di usarlo.';
+        return;
+      }
+      // Il CAP restituito non è tra quelli validi per questo comune (probabile errore di corrispondenza
+      // di OpenStreetMap, es. una via omonima altrove): lo scarto e ripiego sulla tabella statica.
     }
   } catch(e){}
-  var lista = await caricaComuniCap();
-  var trovato = trovaBelfiore(lista, comune);
+
   if (trovato && trovato.capLista.length === 1){
     capInput.value = trovato.capLista[0];
     if (capNoteEl) capNoteEl.textContent = 'CAP unico per questo comune, compilato automaticamente.';
