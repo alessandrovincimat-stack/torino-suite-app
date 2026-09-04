@@ -3713,6 +3713,7 @@ async function renderFattureTab(){
     lista.innerHTML = '<div class="as-err">Impossibile caricare le prenotazioni: ' + e.message + '</div>';
   }
 }
+window.renderFattureTab = renderFattureTab;
 
 var currentSubtab = 'backend';
 
