@@ -1322,6 +1322,7 @@ function buildFatturaFormHtml(id, nomeCompleto, descrizioneDefault){
     '<div class="as-field"><label>Comune</label><input data-fattura-citta="'+id+'"></div>' +
     '<div class="as-field"><label>Provincia (sigla)</label><input data-fattura-provincia="'+id+'" maxlength="2" style="text-transform:uppercase;"></div>' +
     '</div>';
+  html += '<div class="as-sub" data-fattura-capnote="'+id+'" style="margin:-4px 0 8px;"></div>';
   html += '<div class="as-field"><label>Descrizione</label><input data-fattura-descr="'+id+'" value="'+escapeHtml(descrizioneDefault)+'"></div>';
   html += '<div class="as-sub" data-fattura-prodottonote="'+id+'" style="margin:-4px 0 8px;"></div>';
   html += '<div class="as-field"><label>Prezzo soggiorno (€)</label><input type="number" step="0.01" min="0" data-fattura-prezzo="'+id+'"></div>';
@@ -2276,6 +2277,19 @@ async function caricaBelfiore(){
   return { comuni: belfioreComuniCache, stati: belfioreStatiCache };
 }
 
+var comuniCapCache = null;
+async function caricaComuniCap(){
+  if (comuniCapCache) return comuniCapCache;
+  try {
+    var r = await fetch('comuni-cap.csv');
+    var righe = parseCsv(await r.text(), 'belfiore'); // riusa il parsing codice;nome (qui: capLista;nome)
+    comuniCapCache = righe.map(function(x){ return { nome: x.nome, capLista: x.codice.split(',') }; });
+  } catch(e){
+    comuniCapCache = [];
+  }
+  return comuniCapCache;
+}
+
 async function precompilaIndirizzoFattura(id, tipo){
   if (tipo !== 'privato') return;
   var root = document;
@@ -2295,6 +2309,39 @@ async function precompilaIndirizzoFattura(id, tipo){
   if (provInput && !provInput.value.trim() && g.comuneResidenzaNome){
     var match = findByName(state.tables.comuni, g.comuneResidenzaNome);
     if (match && match.provincia) provInput.value = match.provincia;
+  }
+  await precompilaCapFattura(id);
+}
+
+async function precompilaCapFattura(id){
+  var root = document;
+  var capInput = root.querySelector('[data-fattura-cap="'+id+'"]');
+  var capNoteEl = root.querySelector('[data-fattura-capnote="'+id+'"]');
+  var indirizzoInput = root.querySelector('[data-fattura-indirizzo="'+id+'"]');
+  var cittaInput = root.querySelector('[data-fattura-citta="'+id+'"]');
+  if (!capInput || capInput.value.trim()) return;
+  var via = indirizzoInput ? indirizzoInput.value.trim() : '';
+  var comune = cittaInput ? cittaInput.value.trim() : '';
+  if (!via || !comune) return;
+  if (capNoteEl) capNoteEl.innerHTML = '<span style="color:var(--muted);">cerco il CAP…</span>';
+  try {
+    var resp = await fetch(backendUrl('/api/geocode-cap?via=' + encodeURIComponent(via) + '&comune=' + encodeURIComponent(comune)), { headers: backendHeaders() });
+    var data = await resp.json();
+    if (resp.ok && data.cap){
+      capInput.value = data.cap;
+      if (capNoteEl) capNoteEl.textContent = 'CAP suggerito da OpenStreetMap in base all\'indirizzo — verifica prima di usarlo.';
+      return;
+    }
+  } catch(e){}
+  var lista = await caricaComuniCap();
+  var trovato = trovaBelfiore(lista, comune);
+  if (trovato && trovato.capLista.length === 1){
+    capInput.value = trovato.capLista[0];
+    if (capNoteEl) capNoteEl.textContent = 'CAP unico per questo comune, compilato automaticamente.';
+  } else if (trovato && trovato.capLista.length > 1){
+    if (capNoteEl) capNoteEl.innerHTML = '<span style="color:var(--muted);">Il comune ha più CAP possibili, indica quello giusto in base alla via: ' + trovato.capLista.join(', ') + '</span>';
+  } else if (capNoteEl){
+    capNoteEl.textContent = '';
   }
 }
 
