@@ -16,9 +16,9 @@
   html, body { margin: 0; padding: 0; background: #0a0a0a; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
   #root { min-height: 100vh; }
 
-  .ts-switcher { position: sticky; top: 0; z-index: 40; display: none; gap: 8px; padding: calc(10px + env(safe-area-inset-top)) 14px 10px; background: rgba(10,9,8,0.98); backdrop-filter: blur(6px); border-bottom: 1px solid var(--border); }
+  .ts-switcher { position: sticky; top: 0; z-index: 40; display: none; gap: 4px; padding: calc(8px + env(safe-area-inset-top)) 6px 8px; background: rgba(10,9,8,0.98); backdrop-filter: blur(6px); border-bottom: 1px solid var(--border); }
   .ts-switcher.ts-visible { display: flex; }
-  .ts-switch-btn { flex: 1; max-width: 220px; background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; letter-spacing: .3px; cursor: pointer; text-align: center; }
+  .ts-switch-btn { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); padding: 7px 2px; border-radius: 7px; font-size: 10px; font-weight: 600; letter-spacing: 0; cursor: pointer; text-align: center; line-height: 1.2; }
   .ts-switch-btn.ts-active { border-color: var(--brass); color: var(--brass); background: var(--surface-2); }
   #porte-section { display: block; }
   #questura-section { display: none; min-height: 100vh; background: var(--bg); }
@@ -73,7 +73,7 @@
 </style>
 </head>
 <body>
-<div class="ts-switcher" id="ts-switcher"><button class="ts-switch-btn" id="ts-btn-porte">Gestione porte</button><button class="ts-switch-btn ts-active" id="ts-btn-questura">Questura e ISTAT</button><button class="ts-switch-btn" id="ts-btn-fatture">Fatture</button><button class="ts-switch-btn" id="ts-btn-tassa">Tassa di soggiorno</button><button class="ts-switch-btn" id="ts-btn-impostazioni">🔒 Impostazioni</button></div><div id="porte-section">
+<div class="ts-switcher" id="ts-switcher"><button class="ts-switch-btn" id="ts-btn-porte">Gestione porte</button><button class="ts-switch-btn ts-active" id="ts-btn-questura">Questura e ISTAT</button><button class="ts-switch-btn" id="ts-btn-fatture">Fatture</button><button class="ts-switch-btn" id="ts-btn-tassa">Tassa di soggiorno</button><button class="ts-switch-btn" id="ts-btn-impostazioni" style="font-size:16px;">🔒</button></div><div id="porte-section">
 <div id="root"></div>
 </div>
 <div id="fatture-section" style="display:none;">
@@ -4025,7 +4025,7 @@ document.getElementById('imp-sblocca').onclick = function(){
   if (code.trim() === '050808'){
     adminUnlocked = true;
     var btnTop = document.getElementById('ts-btn-impostazioni');
-    if (btnTop) btnTop.textContent = '⚙️ Impostazioni';
+    if (btnTop) btnTop.textContent = '⚙️';
     renderImpostazioniTab();
   } else {
     alert('Codice errato');
