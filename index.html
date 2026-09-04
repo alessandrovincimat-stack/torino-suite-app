@@ -1306,8 +1306,16 @@ function buildFatturaFormHtml(id, nomeCompleto, descrizioneDefault){
     '<div data-fattura-clientdropdown="'+id+'" style="display:none;position:absolute;z-index:20;left:0;right:0;background:#1c1a14;border:1px solid var(--border);border-radius:8px;max-height:220px;overflow-y:auto;margin-top:2px;"></div>' +
     '</div>' +
     '<div class="as-row"><div class="as-field"><label>Ragione sociale</label><input data-fattura-ragsoc="'+id+'"></div><div class="as-field"><label>Partita IVA</label><input data-fattura-piva="'+id+'"></div></div>' +
+    '<div class="as-field"><label>Codice fiscale azienda (se diverso dalla P.IVA, o in mancanza di P.IVA)</label><input data-fattura-cfazienda="'+id+'" style="text-transform:uppercase;"></div>' +
     '</div>';
   html += '<div class="as-field"><label>Codice destinatario (SDI) — "0000000" se il cliente non ne ha uno proprio</label><input data-fattura-sdi="'+id+'" value="0000000" maxlength="7" style="text-transform:uppercase;"></div>';
+  html += '<p class="as-sub" style="margin:8px 0 -2px;"><strong>Indirizzo del cliente</strong> — obbligatorio per la fattura elettronica (via, CAP, comune, provincia)</p>';
+  html += '<div class="as-field"><label>Via e numero civico</label><input data-fattura-indirizzo="'+id+'"></div>';
+  html += '<div class="as-row">' +
+    '<div class="as-field"><label>CAP</label><input data-fattura-cap="'+id+'" maxlength="5"></div>' +
+    '<div class="as-field"><label>Comune</label><input data-fattura-citta="'+id+'"></div>' +
+    '<div class="as-field"><label>Provincia (sigla)</label><input data-fattura-provincia="'+id+'" maxlength="2" style="text-transform:uppercase;"></div>' +
+    '</div>';
   html += '<div class="as-field"><label>Descrizione</label><input data-fattura-descr="'+id+'" value="'+escapeHtml(descrizioneDefault)+'"></div>';
   html += '<div class="as-sub" data-fattura-prodottonote="'+id+'" style="margin:-4px 0 8px;"></div>';
   html += '<div class="as-field"><label>Prezzo soggiorno (€)</label><input type="number" step="0.01" min="0" data-fattura-prezzo="'+id+'"></div>';
@@ -1573,8 +1581,11 @@ function attachGuestHandlers(root){
     attachClientSearch(input, 'data-fattura-clientdropdown', function(c){
       var ragsocInput = root.querySelector('[data-fattura-ragsoc="'+id+'"]');
       var pivaInput = root.querySelector('[data-fattura-piva="'+id+'"]');
+      var cfAziendaInput = root.querySelector('[data-fattura-cfazienda="'+id+'"]');
       if (ragsocInput) ragsocInput.value = c.name || '';
       if (pivaInput) pivaInput.value = c.vat_number || '';
+      if (cfAziendaInput && c.tax_code) cfAziendaInput.value = c.tax_code;
+      compilaIndirizzoDaCliente(root, id, c);
     });
   });
   root.querySelectorAll('[data-fattura-clientsearch-priv]').forEach(function(input){
@@ -1584,6 +1595,7 @@ function attachGuestHandlers(root){
       var cfInput = root.querySelector('[data-fattura-cf="'+id+'"]');
       if (nomeInput) nomeInput.value = c.name || '';
       if (cfInput && c.tax_code) cfInput.value = c.tax_code;
+      compilaIndirizzoDaCliente(root, id, c);
     });
   });
   root.querySelectorAll('[data-fattura-crea]').forEach(function(btn){
@@ -1617,10 +1629,21 @@ function attachGuestHandlers(root){
       }
       var clientIdInput = root.querySelector('[data-fattura-clientid="'+id+'"]');
       if (clientIdInput && clientIdInput.value) payload.clientId = clientIdInput.value;
+      var indirizzoInput = root.querySelector('[data-fattura-indirizzo="'+id+'"]');
+      var capInput = root.querySelector('[data-fattura-cap="'+id+'"]');
+      var cittaInput = root.querySelector('[data-fattura-citta="'+id+'"]');
+      var provinciaInput = root.querySelector('[data-fattura-provincia="'+id+'"]');
+      if (indirizzoInput && indirizzoInput.value.trim()) payload.indirizzo = indirizzoInput.value.trim();
+      if (capInput && capInput.value.trim()) payload.cap = capInput.value.trim();
+      if (cittaInput && cittaInput.value.trim()) payload.citta = cittaInput.value.trim();
+      if (provinciaInput && provinciaInput.value.trim()) payload.provincia = provinciaInput.value.trim().toUpperCase();
       if (tipo === 'azienda'){
         payload.ragioneSociale = root.querySelector('[data-fattura-ragsoc="'+id+'"]').value.trim();
         payload.partitaIva = root.querySelector('[data-fattura-piva="'+id+'"]').value.trim();
+        var cfAziendaInput = root.querySelector('[data-fattura-cfazienda="'+id+'"]');
+        if (cfAziendaInput && cfAziendaInput.value.trim()) payload.codiceFiscaleAzienda = cfAziendaInput.value.trim().toUpperCase();
         if (!payload.ragioneSociale){ out.innerHTML = '<div class="as-err">Inserisci la ragione sociale.</div>'; return; }
+        if (!payload.partitaIva && !payload.codiceFiscaleAzienda){ out.innerHTML = '<div class="as-err">Per fatturare a un\'azienda serve almeno la Partita IVA o il Codice fiscale.</div>'; return; }
       } else {
         var nomeCompleto = root.querySelector('[data-fattura-nomeprivato="'+id+'"]').value.trim();
         var parti = nomeCompleto.split(/\s+/);
@@ -2293,6 +2316,17 @@ async function precompilaCodiceFiscale(id){
   } else {
     if (noteEl) noteEl.innerHTML = '<span style="color:var(--muted);">Non calcolabile automaticamente (' + esito.motivo + '): inseriscilo a mano.</span>';
   }
+}
+
+function compilaIndirizzoDaCliente(root, id, c){
+  var indirizzoInput = root.querySelector('[data-fattura-indirizzo="'+id+'"]');
+  var capInput = root.querySelector('[data-fattura-cap="'+id+'"]');
+  var cittaInput = root.querySelector('[data-fattura-citta="'+id+'"]');
+  var provinciaInput = root.querySelector('[data-fattura-provincia="'+id+'"]');
+  if (indirizzoInput && c.address_street) indirizzoInput.value = c.address_street;
+  if (capInput && c.address_postal_code) capInput.value = c.address_postal_code;
+  if (cittaInput && c.address_city) cittaInput.value = c.address_city;
+  if (provinciaInput && c.address_province) provinciaInput.value = c.address_province;
 }
 
 function trovaGruppoFatturazione(id){
