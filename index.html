@@ -73,7 +73,7 @@
 </style>
 </head>
 <body>
-<div class="ts-switcher" id="ts-switcher"><button class="ts-switch-btn" id="ts-btn-porte">Gestione porte</button><button class="ts-switch-btn ts-active" id="ts-btn-questura">Questura e ISTAT</button><button class="ts-switch-btn" id="ts-btn-fatture">Fatture</button><button class="ts-switch-btn" id="ts-btn-tassa">Tassa di soggiorno</button></div><div id="porte-section">
+<div class="ts-switcher" id="ts-switcher"><button class="ts-switch-btn" id="ts-btn-porte">Gestione porte</button><button class="ts-switch-btn ts-active" id="ts-btn-questura">Questura e ISTAT</button><button class="ts-switch-btn" id="ts-btn-fatture">Fatture</button><button class="ts-switch-btn" id="ts-btn-tassa">Tassa di soggiorno</button><button class="ts-switch-btn" id="ts-btn-impostazioni">🔒 Impostazioni</button></div><div id="porte-section">
 <div id="root"></div>
 </div>
 <div id="fatture-section" style="display:none;">
@@ -81,6 +81,27 @@
 </div>
 <div id="tassa-section" style="display:none;">
 <div id="tassa-app" style="max-width:960px;margin:0 auto;font-family:'Helvetica Neue',Arial,sans-serif;color:var(--text);background:var(--bg);padding:16px;"></div>
+</div>
+<div id="impostazioni-section" style="display:none;">
+<div id="impostazioni-app" style="max-width:960px;margin:0 auto;font-family:'Helvetica Neue',Arial,sans-serif;color:var(--text);background:var(--bg);padding:16px;">
+<p class="as-title" style="font-size:20px;">Impostazioni</p>
+<div id="imp-locked">
+  <p class="as-sub">Sezione protetta: inserisci il codice amministratore per accedere.</p>
+  <button class="as-btn secondary" id="imp-sblocca">🔒 Sblocca</button>
+</div>
+<div id="imp-unlocked" style="display:none;">
+  <div class="as-tabs" id="imp-subtabs">
+    <div class="as-tab" data-impsubtab="backend">Backend</div>
+    <div class="as-tab" data-impsubtab="tabelle">Tabelle codici</div>
+    <div class="as-tab" data-impsubtab="genera">Genera file</div>
+    <div class="as-tab" data-impsubtab="link">Portali</div>
+  </div>
+  <div id="tab-tabelle" class="as-hidden"></div>
+  <div id="tab-genera" class="as-hidden"></div>
+  <div id="tab-backend" class="as-hidden"></div>
+  <div id="tab-link" class="as-hidden"></div>
+</div>
+</div>
 </div>
 <div id="questura-section">
 <div id="app" style="max-width:960px;margin:0 auto;font-family:'Helvetica Neue',Arial,sans-serif;color:var(--text);background:var(--bg);padding:0;">
@@ -146,22 +167,11 @@
     <div class="as-tab active" data-tab="oggi">Oggi</div>
     <div class="as-tab" data-tab="ospiti">Ospiti</div>
     <div class="as-tab" data-tab="archivio">Archivio documenti</div>
-    <div class="as-tab" id="as-admin-tab" style="opacity:.55;">🔒 Admin</div>
-  </div>
-  <div class="as-tabs" id="as-subtabs-impostazioni" style="display:none;">
-    <div class="as-tab" data-subtab="backend">Backend</div>
-    <div class="as-tab" data-subtab="tabelle">Tabelle codici</div>
-    <div class="as-tab" data-subtab="genera">Genera file</div>
-    <div class="as-tab" data-subtab="link">Portali</div>
   </div>
 
   <div id="tab-oggi"></div>
   <div id="tab-ospiti" class="as-hidden"></div>
-  <div id="tab-tabelle" class="as-hidden"></div>
-  <div id="tab-genera" class="as-hidden"></div>
   <div id="tab-archivio" class="as-hidden"></div>
-  <div id="tab-backend" class="as-hidden"></div>
-  <div id="tab-link" class="as-hidden"></div>
 </div>
 </div>
 </div>
@@ -3961,7 +3971,6 @@ function switchTab(name){
   document.querySelectorAll('.as-tab[data-tab]').forEach(function(t){ t.classList.remove('active'); });
   var btn = document.querySelector('.as-tab[data-tab="'+name+'"]');
   if (btn) btn.classList.add('active');
-  var subtabBar = document.getElementById('as-subtabs-impostazioni');
 
   ['oggi','ospiti','archivio'].forEach(function(n){
     var el = document.getElementById('tab-'+n);
@@ -3970,23 +3979,16 @@ function switchTab(name){
 
   if (name === 'oggi') renderOggi();
   else if (name === 'archivio') renderArchivio();
-
-  if (name === 'impostazioni'){
-    if (subtabBar) subtabBar.style.display = 'flex';
-    switchSubtab(currentSubtab);
-  } else {
-    if (subtabBar) subtabBar.style.display = 'none';
-    ['tabelle','genera','backend','link'].forEach(function(n){
-      var el = document.getElementById('tab-'+n);
-      if (el) el.classList.add('as-hidden');
-    });
-  }
 }
 
-function switchSubtab(name){
+document.querySelectorAll('.as-tab[data-tab]').forEach(function(tab){
+  tab.onclick = function(){ switchTab(tab.getAttribute('data-tab')); };
+});
+
+function switchImpSubtab(name){
   currentSubtab = name;
-  document.querySelectorAll('#as-subtabs-impostazioni [data-subtab]').forEach(function(t){ t.classList.remove('active'); });
-  var sbtn = document.querySelector('#as-subtabs-impostazioni [data-subtab="'+name+'"]');
+  document.querySelectorAll('#imp-subtabs [data-impsubtab]').forEach(function(t){ t.classList.remove('active'); });
+  var sbtn = document.querySelector('#imp-subtabs [data-impsubtab="'+name+'"]');
   if (sbtn) sbtn.classList.add('active');
   if (name === 'tabelle') renderTabelle();
   else if (name === 'genera') renderGenera();
@@ -3998,25 +4000,33 @@ function switchSubtab(name){
   });
 }
 
-document.querySelectorAll('#as-subtabs-impostazioni [data-subtab]').forEach(function(t){
-  t.onclick = function(){ switchSubtab(t.getAttribute('data-subtab')); };
+document.querySelectorAll('#imp-subtabs [data-impsubtab]').forEach(function(t){
+  t.onclick = function(){ switchImpSubtab(t.getAttribute('data-impsubtab')); };
 });
 
-document.querySelectorAll('.as-tab[data-tab]').forEach(function(tab){
-  tab.onclick = function(){ switchTab(tab.getAttribute('data-tab')); };
-});
+function renderImpostazioniTab(){
+  var lockedEl = document.getElementById('imp-locked');
+  var unlockedEl = document.getElementById('imp-unlocked');
+  if (!lockedEl || !unlockedEl) return;
+  if (adminUnlocked){
+    lockedEl.style.display = 'none';
+    unlockedEl.style.display = 'block';
+    switchImpSubtab(currentSubtab);
+  } else {
+    lockedEl.style.display = 'block';
+    unlockedEl.style.display = 'none';
+  }
+}
+window.renderImpostazioniTab = renderImpostazioniTab;
 
-document.getElementById('as-admin-tab').onclick = function(){
-  if (adminUnlocked){ switchTab('impostazioni'); return; }
+document.getElementById('imp-sblocca').onclick = function(){
   var code = prompt('Codice amministratore');
   if (code === null) return;
   if (code.trim() === '050808'){
     adminUnlocked = true;
-    var adminBtn = document.getElementById('as-admin-tab');
-    adminBtn.textContent = '⚙️ Impostazioni';
-    adminBtn.style.opacity = '1';
-    adminBtn.setAttribute('data-tab', 'impostazioni');
-    switchTab('impostazioni');
+    var btnTop = document.getElementById('ts-btn-impostazioni');
+    if (btnTop) btnTop.textContent = '⚙️ Impostazioni';
+    renderImpostazioniTab();
   } else {
     alert('Codice errato');
   }
@@ -4034,16 +4044,19 @@ loadState().then(render);
   var questuraSection = document.getElementById('questura-section');
   var fattureSection = document.getElementById('fatture-section');
   var tassaSection = document.getElementById('tassa-section');
+  var impostazioniSection = document.getElementById('impostazioni-section');
   var btnPorte = document.getElementById('ts-btn-porte');
   var btnQuestura = document.getElementById('ts-btn-questura');
   var btnFatture = document.getElementById('ts-btn-fatture');
   var btnTassa = document.getElementById('ts-btn-tassa');
+  var btnImpostazioni = document.getElementById('ts-btn-impostazioni');
 
   var sezioni = [
     { div: porteSection, btn: btnPorte },
     { div: questuraSection, btn: btnQuestura },
     { div: fattureSection, btn: btnFatture },
-    { div: tassaSection, btn: btnTassa }
+    { div: tassaSection, btn: btnTassa },
+    { div: impostazioniSection, btn: btnImpostazioni }
   ];
 
   function mostra(indice){
@@ -4053,16 +4066,19 @@ loadState().then(render);
     });
     if (indice === 2 && typeof renderFattureTab === 'function') renderFattureTab();
     if (indice === 3 && typeof renderTassaTab === 'function') renderTassaTab();
+    if (indice === 4 && typeof renderImpostazioniTab === 'function') renderImpostazioniTab();
   }
   function showPorte(){ mostra(0); }
   function showQuestura(){ mostra(1); }
   function showFatture(){ mostra(2); }
   function showTassa(){ mostra(3); }
+  function showImpostazioni(){ mostra(4); }
 
   btnPorte.onclick = showPorte;
   btnQuestura.onclick = showQuestura;
   btnFatture.onclick = showFatture;
   btnTassa.onclick = showTassa;
+  btnImpostazioni.onclick = showImpostazioni;
 
   var root = document.getElementById('root');
   var giaSbloccato = false;
