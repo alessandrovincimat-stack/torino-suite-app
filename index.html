@@ -1328,9 +1328,10 @@ function buildFatturaFormHtml(id, nomeCompleto, descrizioneDefault){
     '<div data-fattura-clientdropdown="'+id+'" style="display:none;position:absolute;z-index:20;left:0;right:0;background:#1c1a14;border:1px solid var(--border);border-radius:8px;max-height:220px;overflow-y:auto;margin-top:2px;"></div>' +
     '</div>' +
     '<div class="as-row"><div class="as-field"><label>Ragione sociale</label><input data-fattura-ragsoc="'+id+'"></div><div class="as-field"><label>Partita IVA</label><input data-fattura-piva="'+id+'"></div></div>' +
+    '<button type="button" class="as-btn ghost" data-fattura-cercapiva="'+id+'" style="margin:-4px 0 8px;">Cerca dati da P.IVA</button>' +
+    '<div class="as-sub" data-fattura-pivanote="'+id+'" style="margin:-4px 0 8px;"></div>' +
     '<div class="as-field"><label>Codice fiscale azienda (se diverso dalla P.IVA, o in mancanza di P.IVA)</label><input data-fattura-cfazienda="'+id+'" style="text-transform:uppercase;"></div>' +
     '</div>';
-  html += '<div class="as-field"><label>Codice destinatario (SDI) — "0000000" se il cliente non ne ha uno proprio</label><input data-fattura-sdi="'+id+'" value="0000000" maxlength="7" style="text-transform:uppercase;"></div>';
   html += '<p class="as-sub" style="margin:8px 0 -2px;"><strong>Indirizzo del cliente</strong> — obbligatorio per la fattura elettronica (via, CAP, comune, provincia)</p>';
   html += '<div class="as-field"><label>Via e numero civico</label><input data-fattura-indirizzo="'+id+'"></div>';
   html += '<div class="as-row">' +
@@ -1339,10 +1340,13 @@ function buildFatturaFormHtml(id, nomeCompleto, descrizioneDefault){
     '<div class="as-field"><label>Provincia (sigla)</label><input data-fattura-provincia="'+id+'" maxlength="2" style="text-transform:uppercase;"></div>' +
     '</div>';
   html += '<div class="as-sub" data-fattura-capnote="'+id+'" style="margin:-4px 0 8px;"></div>';
-  html += '<div class="as-row">' +
-    '<div class="as-field"><label>Email (facoltativa)</label><input type="email" data-fattura-email="'+id+'"></div>' +
-    '<div class="as-field"><label>Telefono (facoltativo)</label><input data-fattura-telefono="'+id+'"></div>' +
-    '</div>';
+  html += '<details style="margin:8px 0;"><summary style="cursor:pointer;color:var(--text-muted);font-size:12px;">Altri dati (facoltativi): codice destinatario SDI, email, telefono</summary>' +
+    '<div class="as-field" style="margin-top:8px;"><label>Codice destinatario (SDI) — "0000000" se il cliente non ne ha uno proprio</label><input data-fattura-sdi="'+id+'" value="0000000" maxlength="7" style="text-transform:uppercase;"></div>' +
+    '<div class="as-row">' +
+      '<div class="as-field"><label>Email (facoltativa)</label><input type="email" data-fattura-email="'+id+'"></div>' +
+      '<div class="as-field"><label>Telefono (facoltativo)</label><input data-fattura-telefono="'+id+'"></div>' +
+      '</div>' +
+    '</details>';
   html += '<div class="as-field"><label>Descrizione</label><input data-fattura-descr="'+id+'" value="'+escapeHtml(descrizioneDefault)+'"></div>';
   html += '<div class="as-sub" data-fattura-prodottonote="'+id+'" style="margin:-4px 0 8px;"></div>';
   html += '<div class="as-field"><label>Prezzo soggiorno (€)</label><input type="number" step="0.01" min="0" data-fattura-prezzo="'+id+'"></div>';
@@ -1656,6 +1660,46 @@ function attachGuestHandlers(root){
     input.addEventListener('blur', function(){ setTimeout(function(){ dropdown.style.display = 'none'; }, 150); });
   }
 
+  root.querySelectorAll('[data-fattura-cercapiva]').forEach(function(btn){
+    btn.onclick = async function(){
+      var id = btn.getAttribute('data-fattura-cercapiva');
+      var pivaInput = root.querySelector('[data-fattura-piva="'+id+'"]');
+      var ragsocInput = root.querySelector('[data-fattura-ragsoc="'+id+'"]');
+      var noteEl = root.querySelector('[data-fattura-pivanote="'+id+'"]');
+      var piva = pivaInput ? pivaInput.value.trim() : '';
+      if (!piva){ if (noteEl) noteEl.innerHTML = '<span style="color:var(--muted);">Inserisci prima la Partita IVA.</span>'; return; }
+      if (noteEl) noteEl.innerHTML = '<span style="color:var(--muted);"><span class="as-spin"></span> ricerca in corso…</span>';
+      try {
+        var resp = await fetch(backendUrl('/api/piva-lookup?piva=' + encodeURIComponent(piva)), { headers: backendHeaders() });
+        var data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'ricerca non riuscita');
+        if (!data.valid){
+          if (noteEl) noteEl.innerHTML = '<span style="color:var(--muted);">Partita IVA non trovata o non valida su VIES: inserisci i dati a mano.</span>';
+          return;
+        }
+        var note = [];
+        if (data.nome){
+          if (ragsocInput && !ragsocInput.value.trim()) ragsocInput.value = data.nome;
+          note.push('ragione sociale trovata');
+        }
+        if (data.indirizzo){
+          var indirizzoInput = root.querySelector('[data-fattura-indirizzo="'+id+'"]');
+          var capInput = root.querySelector('[data-fattura-cap="'+id+'"]');
+          var cittaInput = root.querySelector('[data-fattura-citta="'+id+'"]');
+          var provInput = root.querySelector('[data-fattura-provincia="'+id+'"]');
+          if (indirizzoInput && !indirizzoInput.value.trim() && data.indirizzo.via) indirizzoInput.value = data.indirizzo.via;
+          if (capInput && !capInput.value.trim() && data.indirizzo.cap) capInput.value = data.indirizzo.cap;
+          if (cittaInput && !cittaInput.value.trim() && data.indirizzo.comune) cittaInput.value = data.indirizzo.comune;
+          if (provInput && !provInput.value.trim() && data.indirizzo.provincia) provInput.value = data.indirizzo.provincia;
+          if (data.indirizzo.cap && data.indirizzo.comune) note.push('indirizzo compilato');
+          else note.push('indirizzo trovato ma non riconosciuto automaticamente — verifica/completa a mano: ' + escapeHtml(data.indirizzo.raw||''));
+        }
+        if (noteEl) noteEl.innerHTML = note.length ? ('✅ Trovato su VIES: ' + note.join(', ') + '.') : 'Partita IVA valida, ma senza dati aggiuntivi disponibili su VIES.';
+      } catch(e){
+        if (noteEl) noteEl.innerHTML = '<span style="color:var(--muted);">Ricerca non riuscita: '+escapeHtml(e.message)+'</span>';
+      }
+    };
+  });
   root.querySelectorAll('[data-fattura-clientsearch]').forEach(function(input){
     var id = input.getAttribute('data-fattura-clientsearch');
     attachClientSearch(input, 'data-fattura-clientdropdown', function(c){
@@ -1853,6 +1897,79 @@ async function renderOggi(){
       setTimeout(function(){ scrollCardIntoView(id); }, 50);
     };
   });
+
+  if (state.backend.url){
+    var prenotazioniBox = document.createElement('div');
+    prenotazioniBox.className = 'as-card';
+    prenotazioniBox.innerHTML = '<p class="as-title" style="font-size:16px;">Prenotazioni senza scheda</p><p class="as-sub"><span class="as-spin"></span> verifica in corso…</p>';
+    el.appendChild(prenotazioniBox);
+    try {
+      var tra5 = new Date(); tra5.setDate(tra5.getDate() + 5);
+      var respPren = await fetch(backendUrl('/api/smoobu/reservations?from=' + oggiISO + '&to=' + tra5.toISOString().slice(0,10)), { headers: backendHeaders() });
+      var dataPren = await respPren.json();
+      if (!respPren.ok) throw new Error(dataPren.error || 'errore');
+      var prenotazioniSenzaScheda = (dataPren.bookings || []).filter(function(b){
+        if (b.type === 'blocked-booking' || b.type === 'cancellation') return false;
+        var collegata = state.guests.some(function(g){ return g.smoobuBookingId === String(b.id); }) ||
+          state.invii.some(function(iv){ return iv.ospiti && iv.ospiti.some(function(o){ return o.smoobuBookingId === String(b.id); }); });
+        return !collegata;
+      });
+      if (!prenotazioniSenzaScheda.length){
+        prenotazioniBox.innerHTML = '<p class="as-title" style="font-size:16px;">Prenotazioni senza scheda</p><p class="as-ok">Tutte le prenotazioni dei prossimi 5 giorni hanno già una scheda.</p>';
+      } else {
+        prenotazioniBox.innerHTML = '<p class="as-title" style="font-size:16px;">Prenotazioni senza scheda</p>' +
+          '<p style="color:var(--danger);">⚠️ ' + prenotazioniSenzaScheda.length + ' prenotazione/i nei prossimi 5 giorni senza ancora una scheda Questura.</p>' +
+          prenotazioniSenzaScheda.map(function(b){
+            return '<div data-oggi-crea-smoobu="'+encodeURIComponent(JSON.stringify(b))+'" style="padding:10px 0;border-top:1px solid var(--border);cursor:pointer;">' +
+              '<strong>'+(b['guest-name']||'sconosciuto')+'</strong> — ' + toItDate(b.arrival) + ' · ' + (b.apartment?b.apartment.name:'') +
+              '</div>';
+          }).join('');
+        prenotazioniBox.querySelectorAll('[data-oggi-crea-smoobu]').forEach(function(riga){
+          riga.onclick = function(){
+            var b = JSON.parse(decodeURIComponent(riga.getAttribute('data-oggi-crea-smoobu')));
+            var g = creaSchedaDaPrenotazioneSmoobu(b);
+            switchTab('ospiti');
+            setTimeout(function(){ scrollCardIntoView(g.id); }, 100);
+          };
+        });
+      }
+    } catch(ePren){
+      prenotazioniBox.innerHTML = '<p class="as-title" style="font-size:16px;">Prenotazioni senza scheda</p><div class="as-err">Impossibile verificare: '+ePren.message+'</div>';
+    }
+  }
+
+  if (state.backend.url){
+    var fattureBox = document.createElement('div');
+    fattureBox.className = 'as-card';
+    fattureBox.innerHTML = '<p class="as-title" style="font-size:16px;">Fatture da fare</p><p class="as-sub"><span class="as-spin"></span> verifica in corso…</p>';
+    el.appendChild(fattureBox);
+    try {
+      var da7 = new Date(); da7.setDate(da7.getDate() - 7);
+      var respFatt = await fetch(backendUrl('/api/smoobu/reservations?from=' + da7.toISOString().slice(0,10) + '&to=' + oggiISO), { headers: backendHeaders() });
+      var dataFatt = await respFatt.json();
+      if (!respFatt.ok) throw new Error(dataFatt.error || 'errore');
+      var partitiSenzaFattura = (dataFatt.bookings || []).filter(function(b){
+        if (b.type === 'blocked-booking' || b.type === 'cancellation') return false;
+        if (!b.departure || b.departure > oggiISO) return false; // non ancora partiti
+        var entry = state.fatture[String(b.id)];
+        return !entry || entry.stato === 'pendente';
+      });
+      if (!partitiSenzaFattura.length){
+        fattureBox.innerHTML = '<p class="as-title" style="font-size:16px;">Fatture da fare</p><p class="as-ok">Nessun ospite partito negli ultimi 7 giorni è ancora senza fattura.</p>';
+      } else {
+        fattureBox.innerHTML = '<p class="as-title" style="font-size:16px;">Fatture da fare</p>' +
+          '<p style="color:var(--danger);">⚠️ ' + partitiSenzaFattura.length + ' ospite/i partito/i negli ultimi 7 giorni, fattura ancora da fare.</p>' +
+          partitiSenzaFattura.map(function(b){
+            return '<div style="padding:10px 0;border-top:1px solid var(--border);">' +
+              '<strong>'+(b['guest-name']||'sconosciuto')+'</strong> — partito il ' + toItDate(b.departure) + ' · ' + (b.apartment?b.apartment.name:'') +
+              '</div>';
+          }).join('') +
+          '<p class="as-sub" style="margin-top:8px;">Vai sul tab "Fatture" per crearle.</p>';
+      }
+    } catch(eFatt){
+      fattureBox.innerHTML = '<p class="as-title" style="font-size:16px;">Fatture da fare</p><div class="as-err">Impossibile verificare: '+eFatt.message+'</div>';
+    }
+  }
 
   if (state.backend.url){
     var statusBox = document.createElement('div');
