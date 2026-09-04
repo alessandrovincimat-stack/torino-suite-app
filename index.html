@@ -73,11 +73,14 @@
 </style>
 </head>
 <body>
-<div class="ts-switcher" id="ts-switcher"><button class="ts-switch-btn" id="ts-btn-porte">Gestione porte</button><button class="ts-switch-btn ts-active" id="ts-btn-questura">Questura e ISTAT</button><button class="ts-switch-btn" id="ts-btn-fatture">Fatture</button></div><div id="porte-section">
+<div class="ts-switcher" id="ts-switcher"><button class="ts-switch-btn" id="ts-btn-porte">Gestione porte</button><button class="ts-switch-btn ts-active" id="ts-btn-questura">Questura e ISTAT</button><button class="ts-switch-btn" id="ts-btn-fatture">Fatture</button><button class="ts-switch-btn" id="ts-btn-tassa">Tassa di soggiorno</button></div><div id="porte-section">
 <div id="root"></div>
 </div>
 <div id="fatture-section" style="display:none;">
 <div id="fatture-app" style="max-width:960px;margin:0 auto;font-family:'Helvetica Neue',Arial,sans-serif;color:var(--text);background:var(--bg);padding:16px;"></div>
+</div>
+<div id="tassa-section" style="display:none;">
+<div id="tassa-app" style="max-width:960px;margin:0 auto;font-family:'Helvetica Neue',Arial,sans-serif;color:var(--text);background:var(--bg);padding:16px;"></div>
 </div>
 <div id="questura-section">
 <div id="app" style="max-width:960px;margin:0 auto;font-family:'Helvetica Neue',Arial,sans-serif;color:var(--text);background:var(--bg);padding:0;">
@@ -3514,7 +3517,7 @@ function renderBackend(){
       '<div class="as-field"><label>Notti massime tassabili</label><input id="cfg-TASSA_SOGGIORNO_MAX_NOTTI" placeholder="7"></div>' +
       '<div class="as-field"><label>Aliquota IVA tassa di soggiorno (di solito "Escluso")</label><select id="cfg-TASSA_SOGGIORNO_VAT_ID"><option value="">— scegli dopo aver salvato token e ID azienda —</option></select></div>' +
       '<p class="as-sub" style="margin-top:14px;"><strong>Soggiorniamo (Città di Torino)</strong></p>' +
-      '<p class="as-sub">Per la compilazione automatica della dichiarazione trimestrale della tassa di soggiorno.</p>' +
+      '<p class="as-sub">Per la compilazione automatica della dichiarazione trimestrale della tassa di soggiorno (i risultati e l\'invio si trovano nella sezione "Tassa di soggiorno" in alto).</p>' +
       '<div class="as-row">' +
         '<div class="as-field"><label>Codice utente</label><input id="cfg-SOGGIORNIAMO_UTENTE"></div>' +
         '<div class="as-field"><label>Password</label><input id="cfg-SOGGIORNIAMO_PASSWORD" type="password"></div>' +
@@ -3589,139 +3592,6 @@ function renderBackend(){
       }
     };
 
-    var riepilogoBox = document.createElement('div');
-    riepilogoBox.className = 'as-card';
-    riepilogoBox.innerHTML =
-      '<p class="as-title" style="font-size:16px;">Riepilogo trimestrale tassa di soggiorno</p>' +
-      '<p class="as-sub">Numeri pronti da riportare sul portale "Soggiorniamo" (torino.entrateonline.net) — dichiarazione dovuta entro il 15 del mese dopo la fine del trimestre. Ogni soggiorno è conteggiato per intero nel mese di arrivo.</p>' +
-      '<div class="as-row">' +
-        '<div class="as-field"><label>Anno</label><input id="riep-anno" type="number"></div>' +
-        '<div class="as-field"><label>Trimestre</label><select id="riep-trimestre">' +
-          '<option value="1">1° (gen-mar)</option><option value="2">2° (apr-giu)</option><option value="3">3° (lug-set)</option><option value="4">4° (ott-dic)</option>' +
-        '</select></div>' +
-      '</div>' +
-      '<button class="as-btn secondary" id="riep-calcola">Calcola</button>' +
-      '<div id="riep-result" style="margin-top:10px;"></div>';
-    document.getElementById('tab-backend').appendChild(riepilogoBox);
-
-    var oggiRiep = new Date();
-    var trimCorrente = Math.floor(oggiRiep.getMonth()/3) + 1;
-    var trimPrecedente = trimCorrente === 1 ? 4 : trimCorrente - 1;
-    var annoRiep = trimCorrente === 1 ? oggiRiep.getFullYear() - 1 : oggiRiep.getFullYear();
-    document.getElementById('riep-anno').value = annoRiep;
-    document.getElementById('riep-trimestre').value = trimPrecedente;
-
-    document.getElementById('riep-calcola').onclick = async function(){
-      var outR = document.getElementById('riep-result');
-      outR.innerHTML = '<span class="as-warn"><span class="as-spin"></span>calcolo…</span>';
-      var anno = parseInt(document.getElementById('riep-anno').value, 10);
-      var trimestre = parseInt(document.getElementById('riep-trimestre').value, 10);
-      var cfgTassaR = await caricaConfigTassa();
-      if (!cfgTassaR.importo){
-        outR.innerHTML = '<div class="as-err">Configura prima la tariffa della tassa di soggiorno qui sopra e salva.</div>';
-        return;
-      }
-      var righe = await calcolaRiepilogoTassa(anno, trimestre);
-      var nomiMesi = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
-      var totOspiti = 0, totPern = 0, totImporto = 0, totMancanti = 0, totEsenti = 0;
-      var html = '<table style="width:100%;border-collapse:collapse;font-size:14px;">' +
-        '<tr style="text-align:left;color:var(--muted);"><th style="padding:4px 6px 4px 0;">Mese</th><th style="padding:4px 6px;">Ospiti</th><th style="padding:4px 6px;">Pernott.</th><th style="padding:4px 0;">Importo</th></tr>';
-      righe.forEach(function(r){
-        totOspiti += r.ospiti; totPern += r.pernottamenti; totImporto += r.importo; totMancanti += r.mancantiDati; totEsenti += r.esenti;
-        html += '<tr style="border-top:1px solid var(--border);"><td style="padding:6px 6px 6px 0;">'+nomiMesi[r.mese]+'</td><td style="padding:6px;">'+r.ospiti+'</td><td style="padding:6px;">'+r.pernottamenti+'</td><td style="padding:6px 0;">€'+r.importo.toFixed(2).replace('.',',')+'</td></tr>';
-      });
-      html += '<tr style="border-top:2px solid var(--border);font-weight:600;"><td style="padding:6px 6px 6px 0;">Totale</td><td style="padding:6px;">'+totOspiti+'</td><td style="padding:6px;">'+totPern+'</td><td style="padding:6px 0;">€'+totImporto.toFixed(2).replace('.',',')+'</td></tr>';
-      html += '</table>';
-      html += '<p class="as-sub" style="margin-top:8px;">Esenti (minori sotto '+cfgTassaR.eta+' anni) nel periodo: '+totEsenti+'. Notti tassate limitate a '+(cfgTassaR.maxNotti||'—')+' per soggiorno.</p>';
-      if (totMancanti) html += '<div class="as-err" style="margin-top:6px;">⚠️ '+totMancanti+' ospite/i in questo periodo senza data di nascita registrata: sono stati conteggiati come tassabili anche se fossero minori esenti. Controlla manualmente prima di dichiarare.</div>';
-      html += '<p class="as-sub" style="margin-top:8px;">I dati dei soggiorni già archiviati prima dell\'introduzione di questo riepilogo potrebbero non avere la data di nascita salvata: verifica i mesi più vecchi.</p>';
-      outR.innerHTML = html;
-    };
-
-    var sogBox = document.createElement('div');
-    sogBox.className = 'as-card';
-    sogBox.innerHTML =
-      '<p class="as-title" style="font-size:16px;">Dichiarazione automatica Soggiorniamo</p>' +
-      '<p class="as-sub">Compila in automatico la dichiarazione trimestrale sul portale del Comune (login, mese per mese, riga per riga) e si ferma prima dell\'invio: controlli lo screenshot, poi confermi tu.</p>' +
-      '<div class="as-row">' +
-        '<div class="as-field"><label>Anno</label><input id="sog-anno" type="number"></div>' +
-        '<div class="as-field"><label>Trimestre</label><select id="sog-trimestre">' +
-          '<option value="1">1° (gen-mar)</option><option value="2">2° (apr-giu)</option><option value="3">3° (lug-set)</option><option value="4">4° (ott-dic)</option>' +
-        '</select></div>' +
-      '</div>' +
-      '<button class="as-btn secondary" id="sog-prepara">Prepara dichiarazione</button>' +
-      '<div id="sog-result" style="margin-top:10px;"></div>';
-    document.getElementById('tab-backend').appendChild(sogBox);
-
-    document.getElementById('sog-anno').value = document.getElementById('riep-anno').value;
-    document.getElementById('sog-trimestre').value = document.getElementById('riep-trimestre').value;
-
-    var sogSessionId = null;
-
-    document.getElementById('sog-prepara').onclick = async function(){
-      var outS = document.getElementById('sog-result');
-      outS.innerHTML = '<span class="as-warn"><span class="as-spin"></span>login e compilazione in corso sul portale del Comune — può richiedere anche 1-2 minuti…</span>';
-      var anno = parseInt(document.getElementById('sog-anno').value, 10);
-      var trimestre = parseInt(document.getElementById('sog-trimestre').value, 10);
-      try {
-        var resp = await fetch(backendUrl('/api/soggiornamo/prepara'), {
-          method: 'POST',
-          headers: backendHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({ anno: anno, trimestre: trimestre })
-        });
-        var data = await resp.json();
-        if (!resp.ok) throw Object.assign(new Error(data.error || 'errore'), { screenshotBase64: data.screenshotBase64 });
-
-        sogSessionId = data.sessionId;
-        var html = '';
-        if (data.mancantiDati) html += '<div class="as-err">⚠️ '+data.mancantiDati+' ospite/i senza data di nascita nel periodo: verifica che le righe "Minori" siano corrette prima di trasmettere.</div>';
-        if (data.righeFallite && data.righeFallite.length){
-          html += '<div class="as-err" style="margin-top:6px;">⚠️ '+data.righeFallite.length+' riga/e NON inserite correttamente sul portale:<ul style="margin:4px 0 0 18px;">' +
-            data.righeFallite.map(function(f){ return '<li>'+f.riga.appartamentoNome+' — '+f.riga.tipologiaTesto+' ('+f.riga.meseNome+'): '+f.errore+'</li>'; }).join('') +
-            '</ul>Controlla lo screenshot qui sotto prima di decidere se trasmettere comunque o annullare.</div>';
-        }
-        html += '<p class="as-sub" style="margin-top:8px;">Righe inserite correttamente: '+data.righeInserite.length+'</p>';
-        html += '<img src="data:image/png;base64,'+data.screenshotBase64+'" style="max-width:100%;border:1px solid var(--border);border-radius:8px;margin-top:8px;">';
-        html += '<p class="as-sub" style="margin-top:10px;"><strong>Controlla che i numeri sullo screenshot corrispondano a quanto ti aspetti.</strong> Solo quando confermi qui sotto, l\'app clicca "Trasmetti" sul portale.</p>';
-        html += '<button class="as-btn secondary" id="sog-conferma" style="margin-top:6px;">✅ Conferma e trasmetti</button> ';
-        html += '<button class="as-btn ghost" id="sog-annulla" style="margin-top:6px;">Annulla (non trasmettere)</button>';
-        outS.innerHTML = html;
-
-        document.getElementById('sog-conferma').onclick = async function(){
-          outS.innerHTML = '<span class="as-warn"><span class="as-spin"></span>trasmissione in corso…</span>';
-          try {
-            var respC = await fetch(backendUrl('/api/soggiornamo/conferma'), {
-              method: 'POST',
-              headers: backendHeaders({ 'Content-Type': 'application/json' }),
-              body: JSON.stringify({ sessionId: sogSessionId })
-            });
-            var dataC = await respC.json();
-            if (!respC.ok) throw Object.assign(new Error(dataC.error || 'errore'), { screenshotBase64: dataC.screenshotBase64 });
-            outS.innerHTML = '<p class="as-ok">Dichiarazione trasmessa.</p><img src="data:image/png;base64,'+dataC.screenshotBase64+'" style="max-width:100%;border:1px solid var(--border);border-radius:8px;margin-top:8px;">';
-            sogSessionId = null;
-          } catch(eC){
-            var htmlErr = '<div class="as-err">'+eC.message+'</div>';
-            if (eC.screenshotBase64) htmlErr += '<img src="data:image/png;base64,'+eC.screenshotBase64+'" style="max-width:100%;border:1px solid var(--border);border-radius:8px;margin-top:8px;">';
-            outS.innerHTML = htmlErr;
-          }
-        };
-        document.getElementById('sog-annulla').onclick = async function(){
-          try {
-            await fetch(backendUrl('/api/soggiornamo/annulla'), {
-              method: 'POST',
-              headers: backendHeaders({ 'Content-Type': 'application/json' }),
-              body: JSON.stringify({ sessionId: sogSessionId })
-            });
-          } catch(eA){}
-          sogSessionId = null;
-          outS.innerHTML = '<p class="as-sub">Operazione annullata: nulla è stato trasmesso.</p>';
-        };
-      } catch(e){
-        var htmlErr2 = '<div class="as-err">'+e.message+'</div>';
-        if (e.screenshotBase64) htmlErr2 += '<img src="data:image/png;base64,'+e.screenshotBase64+'" style="max-width:100%;border:1px solid var(--border);border-radius:8px;margin-top:8px;">';
-        outS.innerHTML = htmlErr2;
-      }
-    };
   }
 }
 
@@ -3736,6 +3606,153 @@ function scrollCardIntoView(cardId){
 }
 
 var vatTypesCache = null;
+async function renderTassaTab(){
+  var el = document.getElementById('tassa-app');
+  if (!el) return;
+  el.innerHTML = '<p class="as-title" style="font-size:20px;">Tassa di soggiorno</p>' +
+    '<p class="as-sub" style="margin-top:-6px;">Tariffa e credenziali si configurano una volta sola in "Questura e ISTAT" → Impostazioni → Backend. Qui trovi solo il riepilogo e l\'invio della dichiarazione.</p>';
+
+  if (!state.backend.url){
+    el.innerHTML += '<p class="as-sub">Configura prima il backend in "Questura e ISTAT" → Impostazioni → Backend.</p>';
+    return;
+  }
+
+  var riepilogoBox = document.createElement('div');
+  riepilogoBox.className = 'as-card';
+  riepilogoBox.innerHTML =
+    '<p class="as-title" style="font-size:16px;">Riepilogo trimestrale</p>' +
+    '<p class="as-sub">Numeri pronti da riportare sul portale "Soggiorniamo" (torino.entrateonline.net) — dichiarazione dovuta entro il 15 del mese dopo la fine del trimestre. Ogni soggiorno è conteggiato per intero nel mese di arrivo.</p>' +
+    '<div class="as-row">' +
+      '<div class="as-field"><label>Anno</label><input id="riep-anno" type="number"></div>' +
+      '<div class="as-field"><label>Trimestre</label><select id="riep-trimestre">' +
+        '<option value="1">1° (gen-mar)</option><option value="2">2° (apr-giu)</option><option value="3">3° (lug-set)</option><option value="4">4° (ott-dic)</option>' +
+      '</select></div>' +
+    '</div>' +
+    '<button class="as-btn secondary" id="riep-calcola">Calcola</button>' +
+    '<div id="riep-result" style="margin-top:10px;"></div>';
+  el.appendChild(riepilogoBox);
+
+  var oggiRiep = new Date();
+  var trimCorrente = Math.floor(oggiRiep.getMonth()/3) + 1;
+  var trimPrecedente = trimCorrente === 1 ? 4 : trimCorrente - 1;
+  var annoRiep = trimCorrente === 1 ? oggiRiep.getFullYear() - 1 : oggiRiep.getFullYear();
+  document.getElementById('riep-anno').value = annoRiep;
+  document.getElementById('riep-trimestre').value = trimPrecedente;
+
+  document.getElementById('riep-calcola').onclick = async function(){
+    var outR = document.getElementById('riep-result');
+    outR.innerHTML = '<span class="as-warn"><span class="as-spin"></span>calcolo…</span>';
+    var anno = parseInt(document.getElementById('riep-anno').value, 10);
+    var trimestre = parseInt(document.getElementById('riep-trimestre').value, 10);
+    var cfgTassaR = await caricaConfigTassa();
+    if (!cfgTassaR.importo){
+      outR.innerHTML = '<div class="as-err">Configura prima la tariffa della tassa di soggiorno qui sopra e salva.</div>';
+      return;
+    }
+    var righe = await calcolaRiepilogoTassa(anno, trimestre);
+    var nomiMesi = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+    var totOspiti = 0, totPern = 0, totImporto = 0, totMancanti = 0, totEsenti = 0;
+    var html = '<table style="width:100%;border-collapse:collapse;font-size:14px;">' +
+      '<tr style="text-align:left;color:var(--muted);"><th style="padding:4px 6px 4px 0;">Mese</th><th style="padding:4px 6px;">Ospiti</th><th style="padding:4px 6px;">Pernott.</th><th style="padding:4px 0;">Importo</th></tr>';
+    righe.forEach(function(r){
+      totOspiti += r.ospiti; totPern += r.pernottamenti; totImporto += r.importo; totMancanti += r.mancantiDati; totEsenti += r.esenti;
+      html += '<tr style="border-top:1px solid var(--border);"><td style="padding:6px 6px 6px 0;">'+nomiMesi[r.mese]+'</td><td style="padding:6px;">'+r.ospiti+'</td><td style="padding:6px;">'+r.pernottamenti+'</td><td style="padding:6px 0;">€'+r.importo.toFixed(2).replace('.',',')+'</td></tr>';
+    });
+    html += '<tr style="border-top:2px solid var(--border);font-weight:600;"><td style="padding:6px 6px 6px 0;">Totale</td><td style="padding:6px;">'+totOspiti+'</td><td style="padding:6px;">'+totPern+'</td><td style="padding:6px 0;">€'+totImporto.toFixed(2).replace('.',',')+'</td></tr>';
+    html += '</table>';
+    html += '<p class="as-sub" style="margin-top:8px;">Esenti (minori sotto '+cfgTassaR.eta+' anni) nel periodo: '+totEsenti+'. Notti tassate limitate a '+(cfgTassaR.maxNotti||'—')+' per soggiorno.</p>';
+    if (totMancanti) html += '<div class="as-err" style="margin-top:6px;">⚠️ '+totMancanti+' ospite/i in questo periodo senza data di nascita registrata: sono stati conteggiati come tassabili anche se fossero minori esenti. Controlla manualmente prima di dichiarare.</div>';
+    html += '<p class="as-sub" style="margin-top:8px;">I dati dei soggiorni già archiviati prima dell\'introduzione di questo riepilogo potrebbero non avere la data di nascita salvata: verifica i mesi più vecchi.</p>';
+    outR.innerHTML = html;
+  };
+
+  var sogBox = document.createElement('div');
+  sogBox.className = 'as-card';
+  sogBox.innerHTML =
+    '<p class="as-title" style="font-size:16px;">Dichiarazione automatica Soggiorniamo</p>' +
+    '<p class="as-sub">Compila in automatico la dichiarazione trimestrale sul portale del Comune (login, mese per mese, riga per riga) e si ferma prima dell\'invio: controlli lo screenshot, poi confermi tu.</p>' +
+    '<div class="as-row">' +
+      '<div class="as-field"><label>Anno</label><input id="sog-anno" type="number"></div>' +
+      '<div class="as-field"><label>Trimestre</label><select id="sog-trimestre">' +
+        '<option value="1">1° (gen-mar)</option><option value="2">2° (apr-giu)</option><option value="3">3° (lug-set)</option><option value="4">4° (ott-dic)</option>' +
+      '</select></div>' +
+    '</div>' +
+    '<button class="as-btn secondary" id="sog-prepara">Prepara dichiarazione</button>' +
+    '<div id="sog-result" style="margin-top:10px;"></div>';
+  el.appendChild(sogBox);
+
+  document.getElementById('sog-anno').value = document.getElementById('riep-anno').value;
+  document.getElementById('sog-trimestre').value = document.getElementById('riep-trimestre').value;
+
+  var sogSessionId = null;
+
+  document.getElementById('sog-prepara').onclick = async function(){
+    var outS = document.getElementById('sog-result');
+    outS.innerHTML = '<span class="as-warn"><span class="as-spin"></span>login e compilazione in corso sul portale del Comune — può richiedere anche 1-2 minuti…</span>';
+    var anno = parseInt(document.getElementById('sog-anno').value, 10);
+    var trimestre = parseInt(document.getElementById('sog-trimestre').value, 10);
+    try {
+      var resp = await fetch(backendUrl('/api/soggiornamo/prepara'), {
+        method: 'POST',
+        headers: backendHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ anno: anno, trimestre: trimestre })
+      });
+      var data = await resp.json();
+      if (!resp.ok) throw Object.assign(new Error(data.error || 'errore'), { screenshotBase64: data.screenshotBase64 });
+
+      sogSessionId = data.sessionId;
+      var html = '';
+      if (data.mancantiDati) html += '<div class="as-err">⚠️ '+data.mancantiDati+' ospite/i senza data di nascita nel periodo: verifica che le righe "Minori" siano corrette prima di trasmettere.</div>';
+      if (data.righeFallite && data.righeFallite.length){
+        html += '<div class="as-err" style="margin-top:6px;">⚠️ '+data.righeFallite.length+' riga/e NON inserite correttamente sul portale:<ul style="margin:4px 0 0 18px;">' +
+          data.righeFallite.map(function(f){ return '<li>'+f.riga.appartamentoNome+' — '+f.riga.tipologiaTesto+' ('+f.riga.meseNome+'): '+f.errore+'</li>'; }).join('') +
+          '</ul>Controlla lo screenshot qui sotto prima di decidere se trasmettere comunque o annullare.</div>';
+      }
+      html += '<p class="as-sub" style="margin-top:8px;">Righe inserite correttamente: '+data.righeInserite.length+'</p>';
+      html += '<img src="data:image/png;base64,'+data.screenshotBase64+'" style="max-width:100%;border:1px solid var(--border);border-radius:8px;margin-top:8px;">';
+      html += '<p class="as-sub" style="margin-top:10px;"><strong>Controlla che i numeri sullo screenshot corrispondano a quanto ti aspetti.</strong> Solo quando confermi qui sotto, l\'app clicca "Trasmetti" sul portale.</p>';
+      html += '<button class="as-btn secondary" id="sog-conferma" style="margin-top:6px;">✅ Conferma e trasmetti</button> ';
+      html += '<button class="as-btn ghost" id="sog-annulla" style="margin-top:6px;">Annulla (non trasmettere)</button>';
+      outS.innerHTML = html;
+
+      document.getElementById('sog-conferma').onclick = async function(){
+        outS.innerHTML = '<span class="as-warn"><span class="as-spin"></span>trasmissione in corso…</span>';
+        try {
+          var respC = await fetch(backendUrl('/api/soggiornamo/conferma'), {
+            method: 'POST',
+            headers: backendHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ sessionId: sogSessionId })
+          });
+          var dataC = await respC.json();
+          if (!respC.ok) throw Object.assign(new Error(dataC.error || 'errore'), { screenshotBase64: dataC.screenshotBase64 });
+          outS.innerHTML = '<p class="as-ok">Dichiarazione trasmessa.</p><img src="data:image/png;base64,'+dataC.screenshotBase64+'" style="max-width:100%;border:1px solid var(--border);border-radius:8px;margin-top:8px;">';
+          sogSessionId = null;
+        } catch(eC){
+          var htmlErr = '<div class="as-err">'+eC.message+'</div>';
+          if (eC.screenshotBase64) htmlErr += '<img src="data:image/png;base64,'+eC.screenshotBase64+'" style="max-width:100%;border:1px solid var(--border);border-radius:8px;margin-top:8px;">';
+          outS.innerHTML = htmlErr;
+        }
+      };
+      document.getElementById('sog-annulla').onclick = async function(){
+        try {
+          await fetch(backendUrl('/api/soggiornamo/annulla'), {
+            method: 'POST',
+            headers: backendHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ sessionId: sogSessionId })
+          });
+        } catch(eA){}
+        sogSessionId = null;
+        outS.innerHTML = '<p class="as-sub">Operazione annullata: nulla è stato trasmesso.</p>';
+      };
+    } catch(e){
+      var htmlErr2 = '<div class="as-err">'+e.message+'</div>';
+      if (e.screenshotBase64) htmlErr2 += '<img src="data:image/png;base64,'+e.screenshotBase64+'" style="max-width:100%;border:1px solid var(--border);border-radius:8px;margin-top:8px;">';
+      outS.innerHTML = htmlErr2;
+    }
+  };
+}
+window.renderTassaTab = renderTassaTab;
+
 async function caricaAliquoteIva(selectId, selezionata){
   var sel = document.getElementById(selectId);
   if (!sel) return;
@@ -4016,14 +4033,17 @@ loadState().then(render);
   var porteSection = document.getElementById('porte-section');
   var questuraSection = document.getElementById('questura-section');
   var fattureSection = document.getElementById('fatture-section');
+  var tassaSection = document.getElementById('tassa-section');
   var btnPorte = document.getElementById('ts-btn-porte');
   var btnQuestura = document.getElementById('ts-btn-questura');
   var btnFatture = document.getElementById('ts-btn-fatture');
+  var btnTassa = document.getElementById('ts-btn-tassa');
 
   var sezioni = [
     { div: porteSection, btn: btnPorte },
     { div: questuraSection, btn: btnQuestura },
-    { div: fattureSection, btn: btnFatture }
+    { div: fattureSection, btn: btnFatture },
+    { div: tassaSection, btn: btnTassa }
   ];
 
   function mostra(indice){
@@ -4032,14 +4052,17 @@ loadState().then(render);
       s.btn.classList.toggle('ts-active', i === indice);
     });
     if (indice === 2 && typeof renderFattureTab === 'function') renderFattureTab();
+    if (indice === 3 && typeof renderTassaTab === 'function') renderTassaTab();
   }
   function showPorte(){ mostra(0); }
   function showQuestura(){ mostra(1); }
   function showFatture(){ mostra(2); }
+  function showTassa(){ mostra(3); }
 
   btnPorte.onclick = showPorte;
   btnQuestura.onclick = showQuestura;
   btnFatture.onclick = showFatture;
+  btnTassa.onclick = showTassa;
 
   var root = document.getElementById('root');
   var giaSbloccato = false;
