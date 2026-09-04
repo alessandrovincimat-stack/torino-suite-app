@@ -3672,12 +3672,24 @@ function collegaAzioniFatture(container){
   });
 }
 
+function contaStatiFatture(prenotazioni){
+  var conteggio = { pendente: 0, emessa: 0, inviata: 0 };
+  prenotazioni.forEach(function(b){
+    var entry = state.fatture[String(b.id)];
+    var stato = entry ? entry.stato : 'pendente';
+    if (conteggio[stato] == null) conteggio[stato] = 0;
+    conteggio[stato]++;
+  });
+  return conteggio;
+}
+
 async function renderFattureTab(){
   var el = document.getElementById('fatture-app');
   if (!el) return;
   var nomeMese = new Date(fattureMeseCorrente.anno, fattureMeseCorrente.mese, 1).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
   el.innerHTML = '<p class="as-title" style="font-size:20px;">Fatture</p>' +
     '<p class="as-sub" style="margin-top:-6px;">🔴 da fare · 🟡 emessa, non ancora inviata · 🟢 inviata allo SDI</p>' +
+    '<p class="as-sub" id="fatt-contatori" style="margin-top:2px;font-weight:600;"></p>' +
     '<div class="as-row" style="margin:12px 0;"><button class="as-btn ghost" id="fatt-mese-prec">‹</button>' +
     '<span style="padding:8px 4px;font-weight:600;text-transform:capitalize;">'+nomeMese+'</span>' +
     '<button class="as-btn ghost" id="fatt-mese-succ">›</button></div>' +
@@ -3707,6 +3719,9 @@ async function renderFattureTab(){
     if (!resp.ok) throw new Error(data.error || 'errore nel caricamento');
     var prenotazioni = (data.bookings || []).filter(function(b){ return b.type !== 'blocked-booking' && b.type !== 'cancellation'; });
     prenotazioni.sort(function(x, y){ return String(x.arrival).localeCompare(String(y.arrival)); });
+    var conteggio = contaStatiFatture(prenotazioni);
+    var contatoriEl = document.getElementById('fatt-contatori');
+    if (contatoriEl) contatoriEl.textContent = conteggio.pendente + ' da fare · ' + conteggio.emessa + ' emesse · ' + conteggio.inviata + ' inviate';
     lista.innerHTML = renderListaFatture(prenotazioni);
     collegaAzioniFatture(lista);
   } catch(e){
