@@ -1227,7 +1227,7 @@ function newGuest(){
     cittadinanzaNome: 'ITALIA',
     residenzaEstero: false, comuneResidenzaNome: '', statoResidenzaNome: 'ITALIA', indirizzoResidenza: '',
     tipoTurismo: 'Non specificato', mezzoTrasporto: 'Non specificato',
-    tipoDocumentoNome: '', numeroDocumento: '',
+    tipoDocumentoNome: '', numeroDocumento: '', dataScadenzaDocumento: '',
     rilascioEstero: false, luogoRilascioNome: '',
     ocrPending: false, smoobuBookingId: ''
   };
@@ -1280,6 +1280,7 @@ async function ocrDocument(files, guest){
     guest.cittadinanzaNome = (parsed.cittadinanza || 'ITALIA').toUpperCase();
     guest.tipoDocumentoNome = (parsed.tipo_documento || '').toUpperCase();
     guest.numeroDocumento = (parsed.numero_documento || '').toUpperCase();
+    guest.dataScadenzaDocumento = parsed.data_scadenza || '';
     guest.rilascioEstero = !!parsed.rilascio_estero;
     guest.luogoRilascioNome = (parsed.luogo_rilascio || '').toUpperCase();
     if (parsed.indirizzo_residenza) guest.indirizzoResidenza = parsed.indirizzo_residenza;
@@ -1417,6 +1418,9 @@ function buildGuestCardHtml(g){
     html += '<div class="as-row">';
     html += '<div class="as-field"><label>Tipo documento</label><input list="dl-doc" data-f="tipoDocumentoNome" data-id="'+g.id+'" value="'+g.tipoDocumentoNome+'"></div>';
     html += '<div class="as-field"><label>Numero documento</label><input data-f="numeroDocumento" data-id="'+g.id+'" value="'+g.numeroDocumento+'"></div>';
+    html += '<div class="as-field"><label>Data di scadenza documento</label><input type="date" data-f="dataScadenzaDocumento" data-id="'+g.id+'" value="'+(g.dataScadenzaDocumento||'')+'"></div>';
+    var avvisoScadenza = verificaScadenzaDocumento(g);
+    if (avvisoScadenza) html += '<div class="as-err">⚠️ '+escapeHtml(avvisoScadenza)+'</div>';
     html += '<div class="as-field"><label>Rilascio all\'estero?</label><select data-f="rilascioEstero" data-id="'+g.id+'"><option value="false" '+(!g.rilascioEstero?'selected':'')+'>No, in Italia</option><option value="true" '+(g.rilascioEstero?'selected':'')+'>Sì</option></select></div>';
     html += '<div class="as-field"><label>Luogo rilascio</label><input list="'+(g.rilascioEstero?'dl-stati':'dl-comuni')+'" data-f="luogoRilascioNome" data-id="'+g.id+'" value="'+g.luogoRilascioNome+'"></div>';
     html += '</div>';
@@ -1911,6 +1915,15 @@ var smoobuDetailsAperti = {};
 var smoobuCache = null;
 var SMOOBU_CACHE_MS = 90000;
 
+function verificaScadenzaDocumento(g){
+  if (!g.dataScadenzaDocumento) return null;
+  var riferimento = g.dataArrivo || todayISO();
+  if (g.dataScadenzaDocumento < riferimento){
+    return 'Il documento risulta scaduto il ' + toItDate(g.dataScadenzaDocumento) + ': serve un documento valido. Carica una nuova foto oppure verifica/correggi i dati a mano.';
+  }
+  return null;
+}
+
 function cercaOspitiArchivio(query){
   var q = normalizzaNome(query);
   if (!q) return [];
@@ -1943,6 +1956,7 @@ function applicaDatiArchivioOspite(id, o){
   if (o.cittadinanzaNome) g.cittadinanzaNome = o.cittadinanzaNome;
   if (o.tipoDocumentoNome) g.tipoDocumentoNome = o.tipoDocumentoNome;
   if (o.numeroDocumento) g.numeroDocumento = o.numeroDocumento;
+  if (o.dataScadenzaDocumento) g.dataScadenzaDocumento = o.dataScadenzaDocumento;
   g.rilascioEstero = !!o.rilascioEstero;
   if (o.luogoRilascioNome) g.luogoRilascioNome = o.luogoRilascioNome;
   g.residenzaEstero = !!o.residenzaEstero;
@@ -3010,7 +3024,7 @@ async function archiveInvio(ordered, idAppartamento, nRighe){
     idAppartamento: idAppartamento || '',
     appartamentoNome: appNome,
     nRighe: nRighe,
-    ospiti: ordered.map(function(g){ return { id: g.id, cognome: g.cognome, nome: g.nome, ruolo: g.ruolo, dataArrivo: g.dataArrivo, permanenza: g.permanenza, dataNascita: g.dataNascita || '', sesso: g.sesso || '', nascitaEstero: !!g.nascitaEstero, comuneNascitaNome: g.comuneNascitaNome || '', statoNascitaNome: g.statoNascitaNome || '', residenzaEstero: !!g.residenzaEstero, comuneResidenzaNome: g.comuneResidenzaNome || '', statoResidenzaNome: g.statoResidenzaNome || '', indirizzoResidenza: g.indirizzoResidenza || '', cittadinanzaNome: g.cittadinanzaNome || '', tipoDocumentoNome: g.tipoDocumentoNome || '', numeroDocumento: g.numeroDocumento || '', rilascioEstero: !!g.rilascioEstero, luogoRilascioNome: g.luogoRilascioNome || '', smoobuBookingId: g.smoobuBookingId || '' }; }),
+    ospiti: ordered.map(function(g){ return { id: g.id, cognome: g.cognome, nome: g.nome, ruolo: g.ruolo, dataArrivo: g.dataArrivo, permanenza: g.permanenza, dataNascita: g.dataNascita || '', sesso: g.sesso || '', nascitaEstero: !!g.nascitaEstero, comuneNascitaNome: g.comuneNascitaNome || '', statoNascitaNome: g.statoNascitaNome || '', residenzaEstero: !!g.residenzaEstero, comuneResidenzaNome: g.comuneResidenzaNome || '', statoResidenzaNome: g.statoResidenzaNome || '', indirizzoResidenza: g.indirizzoResidenza || '', cittadinanzaNome: g.cittadinanzaNome || '', tipoDocumentoNome: g.tipoDocumentoNome || '', numeroDocumento: g.numeroDocumento || '', rilascioEstero: !!g.rilascioEstero, luogoRilascioNome: g.luogoRilascioNome || '', dataScadenzaDocumento: g.dataScadenzaDocumento || '', smoobuBookingId: g.smoobuBookingId || '' }; }),
     partenzaSegnalata: false
   };
   state.invii.push(entry);
