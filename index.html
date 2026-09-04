@@ -3853,6 +3853,13 @@ async function verificaStatoSdi(bookingId){
     var resp = await fetch(backendUrl('/api/fattura/' + encodeURIComponent(entry.ficDocumentId) + '/status'), { headers: backendHeaders() });
     var data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'errore verifica stato');
+    if (data.notFound){
+      delete state.fatture[bookingId];
+      await saveFatture();
+      renderFattureTab();
+      alert('Questa fattura non esiste più su Fatture in Cloud (probabilmente cancellata): la prenotazione è tornata "da fare".');
+      return;
+    }
     entry.eiStatus = data.eiStatus;
     entry.ultimoControllo = new Date().toISOString();
     if (STATI_SDI_INVIATI.indexOf(data.eiStatus) !== -1 || STATI_SDI_PROBLEMA.indexOf(data.eiStatus) !== -1){
