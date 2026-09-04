@@ -73,8 +73,11 @@
 </style>
 </head>
 <body>
-<div class="ts-switcher" id="ts-switcher"><button class="ts-switch-btn" id="ts-btn-porte">Gestione porte</button><button class="ts-switch-btn ts-active" id="ts-btn-questura">Questura e ISTAT</button></div><div id="porte-section">
+<div class="ts-switcher" id="ts-switcher"><button class="ts-switch-btn" id="ts-btn-porte">Gestione porte</button><button class="ts-switch-btn ts-active" id="ts-btn-questura">Questura e ISTAT</button><button class="ts-switch-btn" id="ts-btn-fatture">Fatture</button></div><div id="porte-section">
 <div id="root"></div>
+</div>
+<div id="fatture-section" style="display:none;">
+<div id="fatture-app" style="max-width:960px;margin:0 auto;font-family:'Helvetica Neue',Arial,sans-serif;color:var(--text);background:var(--bg);padding:16px;"></div>
 </div>
 <div id="questura-section">
 <div id="app" style="max-width:960px;margin:0 auto;font-family:'Helvetica Neue',Arial,sans-serif;color:var(--text);background:var(--bg);padding:0;">
@@ -945,7 +948,7 @@ lucide-react/dist/esm/lucide-react.js:
 
 (function(){
 
-var state = { guests: [], tables: { comuni: [], stati: [], documenti: [], appartamenti: [] }, backend: { url: '', secret: '' }, archivio: [], invii: [], istatUltimaData: '' };
+var state = { guests: [], tables: { comuni: [], stati: [], documenti: [], appartamenti: [] }, backend: { url: '', secret: '' }, archivio: [], invii: [], istatUltimaData: '', fatture: {} };
 
 function uid(){ return 'g' + Math.random().toString(36).slice(2,9); }
 
@@ -1025,6 +1028,10 @@ async function loadState(){
     var iu = await remoteStorage.get('as-istat-ultima-data');
     if (iu && iu.value) state.istatUltimaData = iu.value;
   } catch(e){}
+  try {
+    var ft = await remoteStorage.get('as-fatture');
+    if (ft && ft.value) state.fatture = JSON.parse(ft.value);
+  } catch(e){}
 }
 async function segnaIstatInviato(dataISO){
   if (!state.istatUltimaData || dataISO > state.istatUltimaData){
@@ -1055,6 +1062,9 @@ async function saveBackend(){
 }
 async function saveArchivio(){
   try { await remoteStorage.set('as-archivio', JSON.stringify(state.archivio)); } catch(e){}
+}
+async function saveFatture(){
+  try { await remoteStorage.set('as-fatture', JSON.stringify(state.fatture)); } catch(e){}
 }
 
 function compressImage(file, maxWidth, quality){
@@ -1698,6 +1708,20 @@ function attachGuestHandlers(root){
         if (!resp.ok) throw new Error(data.error || 'errore creazione fattura');
         var doc = data.documento || {};
         out.innerHTML = '<p class="as-ok">Fattura creata su Fatture in Cloud'+(doc.number?(' (n. '+doc.number+')'):'')+'. Aprila da lì per rivederla e inviarla.</p>';
+        try {
+          var datiGruppoFatt = trovaGruppoFatturazione(id);
+          if (datiGruppoFatt && datiGruppoFatt.smoobuBookingId){
+            state.fatture[datiGruppoFatt.smoobuBookingId] = {
+              stato: 'emessa',
+              ficDocumentId: doc.id || null,
+              ficDocumentNumber: doc.number || '',
+              dataFatturazione: new Date().toISOString(),
+              eiStatus: null,
+              ultimoControllo: null
+            };
+            await saveFatture();
+          }
+        } catch(eTraccia){}
       } catch(e){
         out.innerHTML = '<div class="as-err">'+e.message+'</div>';
       }
@@ -3532,6 +3556,152 @@ function render(){
 
 var adminUnlocked = false;
 
+/* ---------- Tab Fatture (terza sezione di primo livello) ---------- */
+var fattureMeseCorrente = { anno: 2026, mese: 7 }; // agosto 2026 (mese indicizzato da 0) — primo mese da tracciare
+var STATI_SDI_INVIATI = ['sent','pending','processing','accepted','no_response','manual_accepted'];
+var STATI_SDI_PROBLEMA = ['error','discarded','not_delivered','rejected','manual_rejected'];
+
+function primoGiornoMese(anno, mese){
+  return anno + '-' + String(mese + 1).padStart(2, '0') + '-01';
+}
+function ultimoGiornoMese(anno, mese){
+  var d = new Date(anno, mese + 1, 0);
+  return d.toISOString().slice(0, 10);
+}
+
+function trovaCollegamentoOspite(bookingId){
+  var live = state.guests.find(function(g){
+    return g.smoobuBookingId === String(bookingId) && (g.ruolo === 'singolo' || g.ruolo === 'capofamiglia' || g.ruolo === 'capogruppo');
+  });
+  if (live) return { id: live.id, dove: 'ospiti' };
+  var invio = state.invii.find(function(iv){ return iv.ospiti && iv.ospiti[0] && iv.ospiti[0].smoobuBookingId === String(bookingId); });
+  if (invio) return { id: invio.ospiti[0].id, dove: 'archivio' };
+  return null;
+}
+
+function vaiECreaFattura(bookingId){
+  var collegamento = trovaCollegamentoOspite(bookingId);
+  if (!collegamento){
+    alert('Nessuna scheda Questura trovata per questa prenotazione. Vai su "Questura e ISTAT" → Ospiti, aggiungi l\'ospite con la foto del documento: poi la fattura potrà essere creata da lì.');
+    return;
+  }
+  var btnQuestura = document.getElementById('ts-btn-questura');
+  if (btnQuestura) btnQuestura.click();
+  switchTab(collegamento.dove);
+  setTimeout(function(){
+    scrollCardIntoView(collegamento.id);
+    setTimeout(function(){
+      var toggleBtn = document.querySelector('[data-fattura-toggle="'+collegamento.id+'"]');
+      if (toggleBtn) toggleBtn.click();
+    }, 350);
+  }, 100);
+}
+
+async function verificaStatoSdi(bookingId){
+  var entry = state.fatture[bookingId];
+  if (!entry || !entry.ficDocumentId) return;
+  var btn = document.querySelector('[data-fatt-verifica="'+bookingId+'"]');
+  if (btn) btn.textContent = 'verifica in corso…';
+  try {
+    var resp = await fetch(backendUrl('/api/fattura/' + encodeURIComponent(entry.ficDocumentId) + '/status'), { headers: backendHeaders() });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'errore verifica stato');
+    entry.eiStatus = data.eiStatus;
+    entry.ultimoControllo = new Date().toISOString();
+    if (STATI_SDI_INVIATI.indexOf(data.eiStatus) !== -1 || STATI_SDI_PROBLEMA.indexOf(data.eiStatus) !== -1){
+      entry.stato = 'inviata';
+    }
+    await saveFatture();
+    renderFattureTab();
+  } catch(e){
+    alert('Verifica non riuscita: ' + e.message);
+    if (btn) btn.textContent = 'Verifica invio SDI';
+  }
+}
+
+function puntinoStatoFattura(stato, eiStatus){
+  var colore = '#e5484d'; // rosso: pendente
+  if (stato === 'emessa') colore = '#f5a623'; // giallo
+  if (stato === 'inviata') colore = (eiStatus && STATI_SDI_PROBLEMA.indexOf(eiStatus) !== -1) ? '#e5484d' : '#3dd68c'; // verde, o rosso se problema SDI
+  return '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+colore+';margin-right:8px;vertical-align:1px;"></span>';
+}
+
+function renderListaFatture(prenotazioni){
+  if (!prenotazioni.length) return '<p class="as-sub">Nessuna prenotazione in questo mese.</p>';
+  return prenotazioni.map(function(b){
+    var entry = state.fatture[String(b.id)];
+    var stato = entry ? entry.stato : 'pendente';
+    var nomeApp = b.apartment ? b.apartment.name : '';
+    var nomeOspite = b['guest-name'] || 'sconosciuto';
+    var html = '<div class="as-card" style="padding:12px;">';
+    html += '<div>' + puntinoStatoFattura(stato, entry && entry.eiStatus) + '<strong>' + nomeOspite + '</strong></div>';
+    html += '<div class="as-sub" style="margin:2px 0 8px;">' + toItDate(b.arrival) + ' → ' + toItDate(b.departure) + ' · ' + nomeApp + '</div>';
+    if (stato === 'pendente'){
+      html += '<button class="as-btn secondary" data-fatt-crea="'+b.id+'">Crea fattura</button>';
+    } else if (stato === 'emessa'){
+      html += '<p class="as-sub" style="margin:0 0 6px;">Fattura' + (entry.ficDocumentNumber ? (' n. ' + entry.ficDocumentNumber) : '') + ' creata' + (entry.dataFatturazione ? (' il ' + toItDate(entry.dataFatturazione.slice(0,10))) : '') + '.</p>';
+      if (entry.ficDocumentId) html += '<button class="as-btn ghost" data-fatt-verifica="'+b.id+'">Verifica invio SDI</button>';
+    } else if (stato === 'inviata'){
+      var problema = entry.eiStatus && STATI_SDI_PROBLEMA.indexOf(entry.eiStatus) !== -1;
+      html += '<p class="as-sub" style="margin:0 0 6px;">Fattura' + (entry.ficDocumentNumber ? (' n. ' + entry.ficDocumentNumber) : '') + (problema ? ' — ⚠️ problema nell\'invio SDI ('+entry.eiStatus+')' : ' — inviata allo SDI') + '.</p>';
+      if (entry.ficDocumentId) html += '<button class="as-btn ghost" data-fatt-verifica="'+b.id+'">Ricontrolla</button>';
+    }
+    html += '</div>';
+    return html;
+  }).join('');
+}
+
+function collegaAzioniFatture(container){
+  container.querySelectorAll('[data-fatt-crea]').forEach(function(btn){
+    btn.onclick = function(){ vaiECreaFattura(btn.getAttribute('data-fatt-crea')); };
+  });
+  container.querySelectorAll('[data-fatt-verifica]').forEach(function(btn){
+    btn.onclick = function(){ verificaStatoSdi(btn.getAttribute('data-fatt-verifica')); };
+  });
+}
+
+async function renderFattureTab(){
+  var el = document.getElementById('fatture-app');
+  if (!el) return;
+  var nomeMese = new Date(fattureMeseCorrente.anno, fattureMeseCorrente.mese, 1).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+  el.innerHTML = '<p class="as-title" style="font-size:20px;">Fatture</p>' +
+    '<p class="as-sub" style="margin-top:-6px;">🔴 da fare · 🟡 emessa, non ancora inviata · 🟢 inviata allo SDI</p>' +
+    '<div class="as-row" style="margin:12px 0;"><button class="as-btn ghost" id="fatt-mese-prec">‹</button>' +
+    '<span style="padding:8px 4px;font-weight:600;text-transform:capitalize;">'+nomeMese+'</span>' +
+    '<button class="as-btn ghost" id="fatt-mese-succ">›</button></div>' +
+    '<div id="fatt-lista"><p class="as-sub"><span class="as-spin"></span> caricamento prenotazioni…</p></div>';
+
+  document.getElementById('fatt-mese-prec').onclick = function(){
+    fattureMeseCorrente.mese--;
+    if (fattureMeseCorrente.mese < 0){ fattureMeseCorrente.mese = 11; fattureMeseCorrente.anno--; }
+    renderFattureTab();
+  };
+  document.getElementById('fatt-mese-succ').onclick = function(){
+    fattureMeseCorrente.mese++;
+    if (fattureMeseCorrente.mese > 11){ fattureMeseCorrente.mese = 0; fattureMeseCorrente.anno++; }
+    renderFattureTab();
+  };
+
+  var lista = document.getElementById('fatt-lista');
+  if (!state.backend.url){
+    lista.innerHTML = '<p class="as-sub">Configura prima il backend in "Questura e ISTAT" → Impostazioni → Backend.</p>';
+    return;
+  }
+  try {
+    var da = primoGiornoMese(fattureMeseCorrente.anno, fattureMeseCorrente.mese);
+    var aData = ultimoGiornoMese(fattureMeseCorrente.anno, fattureMeseCorrente.mese);
+    var resp = await fetch(backendUrl('/api/smoobu/reservations?from=' + da + '&to=' + aData), { headers: backendHeaders() });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'errore nel caricamento');
+    var prenotazioni = (data.bookings || []).filter(function(b){ return b.type !== 'blocked-booking' && b.type !== 'cancellation'; });
+    prenotazioni.sort(function(x, y){ return String(x.arrival).localeCompare(String(y.arrival)); });
+    lista.innerHTML = renderListaFatture(prenotazioni);
+    collegaAzioniFatture(lista);
+  } catch(e){
+    lista.innerHTML = '<div class="as-err">Impossibile caricare le prenotazioni: ' + e.message + '</div>';
+  }
+}
+
 var currentSubtab = 'backend';
 
 function switchTab(name){
@@ -3609,23 +3779,31 @@ loadState().then(render);
   var switcher = document.getElementById('ts-switcher');
   var porteSection = document.getElementById('porte-section');
   var questuraSection = document.getElementById('questura-section');
+  var fattureSection = document.getElementById('fatture-section');
   var btnPorte = document.getElementById('ts-btn-porte');
   var btnQuestura = document.getElementById('ts-btn-questura');
+  var btnFatture = document.getElementById('ts-btn-fatture');
 
-  function showPorte(){
-    porteSection.style.display = 'block';
-    questuraSection.style.display = 'none';
-    btnPorte.classList.add('ts-active');
-    btnQuestura.classList.remove('ts-active');
+  var sezioni = [
+    { div: porteSection, btn: btnPorte },
+    { div: questuraSection, btn: btnQuestura },
+    { div: fattureSection, btn: btnFatture }
+  ];
+
+  function mostra(indice){
+    sezioni.forEach(function(s, i){
+      s.div.style.display = (i === indice) ? 'block' : 'none';
+      s.btn.classList.toggle('ts-active', i === indice);
+    });
+    if (indice === 2 && typeof renderFattureTab === 'function') renderFattureTab();
   }
-  function showQuestura(){
-    porteSection.style.display = 'none';
-    questuraSection.style.display = 'block';
-    btnQuestura.classList.add('ts-active');
-    btnPorte.classList.remove('ts-active');
-  }
+  function showPorte(){ mostra(0); }
+  function showQuestura(){ mostra(1); }
+  function showFatture(){ mostra(2); }
+
   btnPorte.onclick = showPorte;
   btnQuestura.onclick = showQuestura;
+  btnFatture.onclick = showFatture;
 
   var root = document.getElementById('root');
   var giaSbloccato = false;
