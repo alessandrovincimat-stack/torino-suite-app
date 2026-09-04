@@ -1367,6 +1367,10 @@ function buildGuestCardHtml(g){
           '</div>';
 
   if (!g.ocrPending){
+    html += '<div class="as-field" style="position:relative;margin-bottom:10px;"><label>Ospite già registrato? Cerca per cognome</label>' +
+      '<input type="text" data-cerca-archivio="'+g.id+'" placeholder="Scrivi almeno 2 lettere del cognome…" autocomplete="off">' +
+      '<div data-cerca-archivio-dropdown="'+g.id+'" style="display:none;position:absolute;z-index:20;left:0;right:0;background:#1c1a14;border:1px solid var(--border);border-radius:8px;max-height:220px;overflow-y:auto;margin-top:2px;"></div>' +
+      '</div>';
     html += '<label for="doc-input-'+g.id+'" class="as-photobox" style="margin-bottom:12px;font-size:13px;padding:12px;display:block;">📷 Carica/sostituisci foto documento (anche fronte e retro insieme)</label>' +
             '<input type="file" accept="image/*,application/pdf" multiple id="doc-input-'+g.id+'" data-doc-input="'+g.id+'" style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;">';
   }
@@ -1467,6 +1471,38 @@ function attachGuestHandlers(root){
       state.guests = state.guests.filter(function(g){ return g.id !== id; });
       saveGuests(); render();
     };
+  });
+  root.querySelectorAll('[data-cerca-archivio]').forEach(function(input){
+    var id = input.getAttribute('data-cerca-archivio');
+    var dropdown = root.querySelector('[data-cerca-archivio-dropdown="'+id+'"]');
+    if (!dropdown) return;
+    var timer = null;
+    input.oninput = function(){
+      clearTimeout(timer);
+      var val = input.value.trim();
+      if (val.length < 2){ dropdown.style.display = 'none'; dropdown.innerHTML = ''; return; }
+      timer = setTimeout(function(){
+        var risultati = cercaOspitiArchivio(val);
+        if (!risultati.length){ dropdown.style.display = 'none'; dropdown.innerHTML = ''; return; }
+        dropdown.innerHTML = risultati.map(function(o, idx){
+          var sotto = (o.dataNascita ? toItDate(o.dataNascita) : '');
+          return '<div data-arch-opt="'+idx+'" style="padding:10px;cursor:pointer;border-bottom:1px solid var(--border);">' +
+            '<strong>'+escapeHtml((o.cognome+' '+o.nome).trim())+'</strong>' +
+            (sotto ? '<div class="as-sub" style="margin:2px 0 0;">nato/a il '+escapeHtml(sotto)+'</div>' : '') +
+            '</div>';
+        }).join('');
+        dropdown.style.display = 'block';
+        dropdown.querySelectorAll('[data-arch-opt]').forEach(function(opt){
+          opt.onclick = function(){
+            var o = risultati[Number(opt.getAttribute('data-arch-opt'))];
+            applicaDatiArchivioOspite(id, o);
+            dropdown.style.display = 'none';
+            input.value = '';
+          };
+        });
+      }, 250);
+    };
+    input.onblur = function(){ setTimeout(function(){ dropdown.style.display = 'none'; }, 200); };
   });
   root.querySelectorAll('[data-f]').forEach(function(inp){
     inp.onchange = function(){
@@ -1874,6 +1910,47 @@ var smoobuDetailsAperti = {};
 
 var smoobuCache = null;
 var SMOOBU_CACHE_MS = 90000;
+
+function cercaOspitiArchivio(query){
+  var q = normalizzaNome(query);
+  if (!q) return [];
+  var visti = {};
+  state.invii.forEach(function(iv){
+    (iv.ospiti || []).forEach(function(o){
+      if (!o.cognome) return;
+      if (normalizzaNome(o.cognome).indexOf(q) !== 0) return;
+      var chiave = normalizzaNome(o.cognome) + '|' + normalizzaNome(o.nome) + '|' + (o.dataNascita || '');
+      if (!visti[chiave] || (iv.dataInvio || '') > (visti[chiave].dataInvio || '')){
+        visti[chiave] = { ospite: o, dataInvio: iv.dataInvio };
+      }
+    });
+  });
+  var trovati = Object.keys(visti).map(function(k){ return visti[k]; });
+  trovati.sort(function(a, b){ return String(b.dataInvio||'').localeCompare(String(a.dataInvio||'')); });
+  return trovati.slice(0, 8).map(function(x){ return x.ospite; });
+}
+
+function applicaDatiArchivioOspite(id, o){
+  var g = state.guests.find(function(x){ return x.id === id; });
+  if (!g || !o) return;
+  g.cognome = o.cognome || '';
+  g.nome = o.nome || '';
+  if (o.sesso) g.sesso = o.sesso;
+  if (o.dataNascita) g.dataNascita = o.dataNascita;
+  g.nascitaEstero = !!o.nascitaEstero;
+  if (o.comuneNascitaNome) g.comuneNascitaNome = o.comuneNascitaNome;
+  if (o.statoNascitaNome) g.statoNascitaNome = o.statoNascitaNome;
+  if (o.cittadinanzaNome) g.cittadinanzaNome = o.cittadinanzaNome;
+  if (o.tipoDocumentoNome) g.tipoDocumentoNome = o.tipoDocumentoNome;
+  if (o.numeroDocumento) g.numeroDocumento = o.numeroDocumento;
+  g.rilascioEstero = !!o.rilascioEstero;
+  if (o.luogoRilascioNome) g.luogoRilascioNome = o.luogoRilascioNome;
+  g.residenzaEstero = !!o.residenzaEstero;
+  if (o.comuneResidenzaNome) g.comuneResidenzaNome = o.comuneResidenzaNome;
+  if (o.statoResidenzaNome) g.statoResidenzaNome = o.statoResidenzaNome;
+  if (o.indirizzoResidenza) g.indirizzoResidenza = o.indirizzoResidenza;
+  saveGuests(); render();
+}
 
 function creaSchedaDaPrenotazioneSmoobu(b, capoId){
   var g = newGuest();
@@ -2933,7 +3010,7 @@ async function archiveInvio(ordered, idAppartamento, nRighe){
     idAppartamento: idAppartamento || '',
     appartamentoNome: appNome,
     nRighe: nRighe,
-    ospiti: ordered.map(function(g){ return { id: g.id, cognome: g.cognome, nome: g.nome, ruolo: g.ruolo, dataArrivo: g.dataArrivo, permanenza: g.permanenza, dataNascita: g.dataNascita || '', sesso: g.sesso || '', nascitaEstero: !!g.nascitaEstero, comuneNascitaNome: g.comuneNascitaNome || '', statoNascitaNome: g.statoNascitaNome || '', residenzaEstero: !!g.residenzaEstero, comuneResidenzaNome: g.comuneResidenzaNome || '', statoResidenzaNome: g.statoResidenzaNome || '', indirizzoResidenza: g.indirizzoResidenza || '', smoobuBookingId: g.smoobuBookingId || '' }; }),
+    ospiti: ordered.map(function(g){ return { id: g.id, cognome: g.cognome, nome: g.nome, ruolo: g.ruolo, dataArrivo: g.dataArrivo, permanenza: g.permanenza, dataNascita: g.dataNascita || '', sesso: g.sesso || '', nascitaEstero: !!g.nascitaEstero, comuneNascitaNome: g.comuneNascitaNome || '', statoNascitaNome: g.statoNascitaNome || '', residenzaEstero: !!g.residenzaEstero, comuneResidenzaNome: g.comuneResidenzaNome || '', statoResidenzaNome: g.statoResidenzaNome || '', indirizzoResidenza: g.indirizzoResidenza || '', cittadinanzaNome: g.cittadinanzaNome || '', tipoDocumentoNome: g.tipoDocumentoNome || '', numeroDocumento: g.numeroDocumento || '', rilascioEstero: !!g.rilascioEstero, luogoRilascioNome: g.luogoRilascioNome || '', smoobuBookingId: g.smoobuBookingId || '' }; }),
     partenzaSegnalata: false
   };
   state.invii.push(entry);
