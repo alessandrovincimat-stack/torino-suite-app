@@ -1848,10 +1848,49 @@ async function renderOggi(){
   var domaniD = new Date(); domaniD.setDate(domaniD.getDate() + 1);
   var domaniISO = domaniD.toISOString().slice(0, 10);
 
+  var prenotazioniArrivo = [];
+  var prenotazioniPartenza = [];
+  var smoobuOk = false;
+  if (state.backend.url){
+    try {
+      var respArr = await fetch(backendUrl('/api/smoobu/reservations?arrivalFrom=' + oggiISO + '&arrivalTo=' + domaniISO), { headers: backendHeaders() });
+      var respDep = await fetch(backendUrl('/api/smoobu/reservations?departureFrom=' + oggiISO + '&departureTo=' + domaniISO), { headers: backendHeaders() });
+      var dataArr = await respArr.json();
+      var dataDep = await respDep.json();
+      if (respArr.ok && respDep.ok){
+        prenotazioniArrivo = (dataArr.bookings || []).filter(function(b){ return b.type !== 'blocked-booking' && b.type !== 'cancellation'; });
+        prenotazioniPartenza = (dataDep.bookings || []).filter(function(b){ return b.type !== 'blocked-booking' && b.type !== 'cancellation'; });
+        smoobuOk = true;
+      }
+    } catch(eSmoobu){}
+  }
+
+  var idPrenotazioniViste = {};
+  prenotazioniArrivo.concat(prenotazioniPartenza).forEach(function(b){ idPrenotazioniViste[String(b.id)] = true; });
+
+  function schedaPerBooking(bookingId){
+    return state.guests.find(function(g){
+      return g.smoobuBookingId === String(bookingId) && (g.ruolo === 'singolo' || g.ruolo === 'capofamiglia' || g.ruolo === 'capogruppo');
+    }) || null;
+  }
+
+  function rigaDaBooking(b){
+    var scheda = schedaPerBooking(b.id);
+    var nome = escapeHtml(b['guest-name'] || 'sconosciuto');
+    var app = b.apartment ? escapeHtml(b.apartment.name) : '';
+    if (scheda){
+      return '<div data-oggi-vai="' + scheda.id + '" style="padding:10px 0;border-top:1px solid var(--border);cursor:pointer;">' +
+        '<strong>' + nome + '</strong>' + (app ? ' — ' + app : '') + '</div>';
+    }
+    return '<div data-oggi-crea-smoobu="' + encodeURIComponent(JSON.stringify(b)) + '" style="padding:10px 0;border-top:1px solid var(--border);cursor:pointer;">' +
+      '<strong>' + nome + '</strong>' + (app ? ' — ' + app : '') + ' <span style="color:var(--muted);font-size:12px;">— nessuna scheda ancora, tocca per crearla</span></div>';
+  }
+
   var gruppi = [];
   state.guests.forEach(function(g){
     var isDependent = g.ruolo === 'familiare' || g.ruolo === 'membro';
     if (isDependent) return;
+    if (smoobuOk && g.smoobuBookingId && idPrenotazioniViste[g.smoobuBookingId]) return; // già rappresentato dal dato Smoobu qui sopra
     var notti = parseInt(g.permanenza, 10) || 0;
     var partenza = null;
     if (g.dataArrivo){
@@ -1870,10 +1909,10 @@ async function renderOggi(){
     });
   });
 
-  var arriviOggi = gruppi.filter(function(x){ return x.dataArrivo === oggiISO; });
-  var arriviDomani = gruppi.filter(function(x){ return x.dataArrivo === domaniISO; });
-  var partenzeOggi = gruppi.filter(function(x){ return x.dataPartenza === oggiISO; });
-  var partenzeDomani = gruppi.filter(function(x){ return x.dataPartenza === domaniISO; });
+  var arriviOggiManuali = gruppi.filter(function(x){ return x.dataArrivo === oggiISO; });
+  var arriviDomaniManuali = gruppi.filter(function(x){ return x.dataArrivo === domaniISO; });
+  var partenzeOggiManuali = gruppi.filter(function(x){ return x.dataPartenza === oggiISO; });
+  var partenzeDomaniManuali = gruppi.filter(function(x){ return x.dataPartenza === domaniISO; });
   var schedeUrgenti = gruppi.filter(function(x){ return x.dataArrivo && x.dataArrivo <= oggiISO; });
 
   var scadenza = calcolaProssimaScadenzaSoggiornamo();
@@ -1888,11 +1927,23 @@ async function renderOggi(){
     }).join('');
   }
 
+  function sezioneCompleta(prenotazioniSmoobuFiltrate, listaManuale, vuoto){
+    var righeSmoobu = prenotazioniSmoobuFiltrate.map(rigaDaBooking).join('');
+    var righeManuali = listaManuale.length ? elenco(listaManuale, '') : '';
+    var righe = righeSmoobu + righeManuali;
+    return righe || '<p class="as-sub">' + vuoto + '</p>';
+  }
+
+  var arriviOggiSmoobu = prenotazioniArrivo.filter(function(b){ return b.arrival === oggiISO; });
+  var arriviDomaniSmoobu = prenotazioniArrivo.filter(function(b){ return b.arrival === domaniISO; });
+  var partenzeOggiSmoobu = prenotazioniPartenza.filter(function(b){ return b.departure === oggiISO; });
+  var partenzeDomaniSmoobu = prenotazioniPartenza.filter(function(b){ return b.departure === domaniISO; });
+
   var html = '';
-  html += '<div class="as-card"><p class="as-title" style="font-size:16px;">Arrivi oggi</p>' + elenco(arriviOggi, 'Nessun arrivo previsto oggi.') + '</div>';
-  html += '<div class="as-card"><p class="as-title" style="font-size:16px;">Arrivi domani</p>' + elenco(arriviDomani, 'Nessun arrivo previsto domani.') + '</div>';
-  html += '<div class="as-card"><p class="as-title" style="font-size:16px;">Partenze oggi</p>' + elenco(partenzeOggi, 'Nessuna partenza prevista oggi.') + '</div>';
-  html += '<div class="as-card"><p class="as-title" style="font-size:16px;">Partenze domani</p>' + elenco(partenzeDomani, 'Nessuna partenza prevista domani.') + '</div>';
+  html += '<div class="as-card"><p class="as-title" style="font-size:16px;">Arrivi oggi</p>' + sezioneCompleta(arriviOggiSmoobu, arriviOggiManuali, 'Nessun arrivo previsto oggi.') + '</div>';
+  html += '<div class="as-card"><p class="as-title" style="font-size:16px;">Arrivi domani</p>' + sezioneCompleta(arriviDomaniSmoobu, arriviDomaniManuali, 'Nessun arrivo previsto domani.') + '</div>';
+  html += '<div class="as-card"><p class="as-title" style="font-size:16px;">Partenze oggi</p>' + sezioneCompleta(partenzeOggiSmoobu, partenzeOggiManuali, 'Nessuna partenza prevista oggi.') + '</div>';
+  html += '<div class="as-card"><p class="as-title" style="font-size:16px;">Partenze domani</p>' + sezioneCompleta(partenzeDomaniSmoobu, partenzeDomaniManuali, 'Nessuna partenza prevista domani.') + '</div>';
   html += '<div class="as-card"><p class="as-title" style="font-size:16px;">Schede Questura da inviare</p>';
   html += schedeUrgenti.length
     ? '<p style="color:var(--danger);">⚠️ ' + schedeUrgenti.length + ' scheda/e con arrivo già avvenuto non ancora inviata/e.</p>' + elenco(schedeUrgenti, '')
@@ -1908,6 +1959,14 @@ async function renderOggi(){
       var id = riga.getAttribute('data-oggi-vai');
       switchTab('ospiti');
       setTimeout(function(){ scrollCardIntoView(id); }, 50);
+    };
+  });
+  el.querySelectorAll('[data-oggi-crea-smoobu]').forEach(function(riga){
+    riga.onclick = function(){
+      var b = JSON.parse(decodeURIComponent(riga.getAttribute('data-oggi-crea-smoobu')));
+      var g = creaSchedaDaPrenotazioneSmoobu(b);
+      switchTab('ospiti');
+      setTimeout(function(){ scrollCardIntoView(g.id); }, 100);
     };
   });
 
