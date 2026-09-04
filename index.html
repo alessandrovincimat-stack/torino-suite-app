@@ -1298,6 +1298,7 @@ function buildFatturaFormHtml(id, nomeCompleto, descrizioneDefault){
     '</div>' +
     '<div class="as-field"><label>Nome e cognome</label><input data-fattura-nomeprivato="'+id+'" value="'+escapeHtml(nomeCompleto)+'"></div>' +
     '<div class="as-field"><label>Codice fiscale</label><input data-fattura-cf="'+id+'" style="text-transform:uppercase;"></div>' +
+    '<div class="as-sub" data-fattura-cfnote="'+id+'" style="margin:-4px 0 8px;"></div>' +
     '</div>';
   html += '<div data-fattura-azienda="'+id+'" style="display:none;">' +
     '<div class="as-field" style="position:relative;"><label>Cliente esistente (opzionale — scrivi per cercare)</label>' +
@@ -1501,7 +1502,7 @@ function attachGuestHandlers(root){
       if (!form) return;
       var apro = form.style.display === 'none';
       form.style.display = apro ? 'block' : 'none';
-      if (apro){ await calcolaTassaSoggiorno(id); await precompilaPrezzoDaSmoobu(id); precompilaArticoliFattura(id); }
+      if (apro){ await calcolaTassaSoggiorno(id); await precompilaPrezzoDaSmoobu(id); precompilaArticoliFattura(id); precompilaCodiceFiscale(id); }
     };
   });
   root.querySelectorAll('[data-fattura-tipo]').forEach(function(sel){
@@ -2176,6 +2177,124 @@ function calcolaEta(dataNascita, dataRif){
   return eta;
 }
 
+var MESI_CF = ['A','B','C','D','E','H','L','M','P','R','S','T'];
+
+function estraiConsonanti(s){
+  return (String(s||'').toUpperCase().match(/[BCDFGHJKLMNPQRSTVWXYZ]/g) || []).join('');
+}
+function estraiVocali(s){
+  return (String(s||'').toUpperCase().match(/[AEIOU]/g) || []).join('');
+}
+function codiceCognomeCF(cognome){
+  var c = estraiConsonanti(cognome);
+  var v = estraiVocali(cognome);
+  return (c + v + 'XXX').slice(0, 3);
+}
+function codiceNomeCF(nome){
+  var c = estraiConsonanti(nome);
+  var v = estraiVocali(nome);
+  if (c.length >= 4) return c[0] + c[2] + c[3];
+  return (c + v + 'XXX').slice(0, 3);
+}
+function codiceDataCF(dataNascitaISO, sesso){
+  var d = new Date(dataNascitaISO);
+  if (isNaN(d)) return null;
+  var anno = String(d.getFullYear()).slice(-2);
+  var mese = MESI_CF[d.getMonth()];
+  var giorno = d.getDate() + (sesso === 'F' ? 40 : 0);
+  var giornoStr = (giorno < 10 ? '0' : '') + giorno;
+  return anno + mese + giornoStr;
+}
+var TABELLA_CF_DISPARI = {
+  '0':1,'1':0,'2':5,'3':7,'4':9,'5':13,'6':15,'7':17,'8':19,'9':21,
+  'A':1,'B':0,'C':5,'D':7,'E':9,'F':13,'G':15,'H':17,'I':19,'J':21,'K':2,'L':4,'M':18,
+  'N':20,'O':11,'P':3,'Q':6,'R':8,'S':12,'T':14,'U':16,'V':10,'W':22,'X':25,'Y':24,'Z':23
+};
+var TABELLA_CF_PARI = {
+  '0':0,'1':1,'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,
+  'A':0,'B':1,'C':2,'D':3,'E':4,'F':5,'G':6,'H':7,'I':8,'J':9,'K':10,'L':11,'M':12,
+  'N':13,'O':14,'P':15,'Q':16,'R':17,'S':18,'T':19,'U':20,'V':21,'W':22,'X':23,'Y':24,'Z':25
+};
+var LETTERE_CF = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+function carattereControlloCF(base15){
+  var somma = 0;
+  for (var i = 0; i < 15; i++){
+    var ch = base15[i];
+    somma += (i % 2 === 0) ? TABELLA_CF_DISPARI[ch] : TABELLA_CF_PARI[ch];
+  }
+  return LETTERE_CF[somma % 26];
+}
+
+var belfioreComuniCache = null;
+var belfioreStatiCache = null;
+async function caricaBelfiore(){
+  if (belfioreComuniCache && belfioreStatiCache) return { comuni: belfioreComuniCache, stati: belfioreStatiCache };
+  try {
+    var rComuni = await fetch('belfiore-comuni.csv');
+    belfioreComuniCache = parseCsv(await rComuni.text(), 'belfiore');
+    var rStati = await fetch('belfiore-stati.csv');
+    belfioreStatiCache = parseCsv(await rStati.text(), 'belfiore');
+  } catch(e){
+    belfioreComuniCache = belfioreComuniCache || [];
+    belfioreStatiCache = belfioreStatiCache || [];
+  }
+  return { comuni: belfioreComuniCache, stati: belfioreStatiCache };
+}
+
+function trovaOspiteCompletoPerCF(id){
+  var g = state.guests.find(function(x){ return x.id === id; });
+  if (g) return g;
+  var entry = state.invii.find(function(iv){ return iv.ospiti && iv.ospiti[0] && iv.ospiti[0].id === id; });
+  return entry ? entry.ospiti[0] : null;
+}
+
+function trovaBelfiore(lista, nome){
+  if (!nome) return null;
+  var n = normalizzaNome(nome);
+  var esatto = lista.find(function(x){ return normalizzaNome(x.nome) === n; });
+  if (esatto) return esatto;
+  var senzaApostrofo = n.replace(/'/g, '');
+  return lista.find(function(x){ return normalizzaNome(x.nome).replace(/'/g, '') === senzaApostrofo; }) || null;
+}
+
+async function calcolaCodiceFiscaleOspite(id){
+  var g = trovaOspiteCompletoPerCF(id);
+  if (!g) return { ok: false, motivo: 'ospite non trovato' };
+  if (!g.cognome || !g.nome) return { ok: false, motivo: 'nome o cognome mancante' };
+  if (!g.dataNascita) return { ok: false, motivo: 'data di nascita mancante' };
+  if (!g.sesso) return { ok: false, motivo: 'sesso non specificato' };
+  var nomeLuogo = g.nascitaEstero ? g.statoNascitaNome : g.comuneNascitaNome;
+  if (!nomeLuogo) return { ok: false, motivo: 'comune/stato di nascita mancante' };
+  var belfiore = await caricaBelfiore();
+  var lista = g.nascitaEstero ? belfiore.stati : belfiore.comuni;
+  if (!lista.length) return { ok: false, motivo: 'tabella codici Belfiore non disponibile' };
+  var match = trovaBelfiore(lista, nomeLuogo);
+  if (!match) return { ok: false, motivo: 'codice Belfiore non trovato per "' + nomeLuogo + '"' };
+  var dataCod = codiceDataCF(g.dataNascita, g.sesso);
+  if (!dataCod) return { ok: false, motivo: 'data di nascita non valida' };
+  var base15 = codiceCognomeCF(g.cognome) + codiceNomeCF(g.nome) + dataCod + match.codice.toUpperCase();
+  return { ok: true, codiceFiscale: base15 + carattereControlloCF(base15) };
+}
+
+async function precompilaCodiceFiscale(id){
+  var root = document;
+  var cfInput = root.querySelector('[data-fattura-cf="'+id+'"]');
+  var noteEl = root.querySelector('[data-fattura-cfnote="'+id+'"]');
+  if (!cfInput) return;
+  if (cfInput.value.trim()){
+    if (noteEl) noteEl.textContent = '';
+    return;
+  }
+  if (noteEl) noteEl.innerHTML = '<span style="color:var(--muted);">calcolo dai dati anagrafici…</span>';
+  var esito = await calcolaCodiceFiscaleOspite(id);
+  if (esito.ok){
+    cfInput.value = esito.codiceFiscale;
+    if (noteEl) noteEl.textContent = 'Calcolato dai dati anagrafici — verifica prima di usarlo (in rari casi di omocodia il codice reale potrebbe differire).';
+  } else {
+    if (noteEl) noteEl.innerHTML = '<span style="color:var(--muted);">Non calcolabile automaticamente (' + esito.motivo + '): inseriscilo a mano.</span>';
+  }
+}
+
 function trovaGruppoFatturazione(id){
   var head = state.guests.find(function(g){ return g.id === id; });
   if (head){
@@ -2625,7 +2744,7 @@ async function archiveInvio(ordered, idAppartamento, nRighe){
     idAppartamento: idAppartamento || '',
     appartamentoNome: appNome,
     nRighe: nRighe,
-    ospiti: ordered.map(function(g){ return { id: g.id, cognome: g.cognome, nome: g.nome, ruolo: g.ruolo, dataArrivo: g.dataArrivo, permanenza: g.permanenza, dataNascita: g.dataNascita || '', smoobuBookingId: g.smoobuBookingId || '' }; }),
+    ospiti: ordered.map(function(g){ return { id: g.id, cognome: g.cognome, nome: g.nome, ruolo: g.ruolo, dataArrivo: g.dataArrivo, permanenza: g.permanenza, dataNascita: g.dataNascita || '', sesso: g.sesso || '', nascitaEstero: !!g.nascitaEstero, comuneNascitaNome: g.comuneNascitaNome || '', statoNascitaNome: g.statoNascitaNome || '', smoobuBookingId: g.smoobuBookingId || '' }; }),
     partenzaSegnalata: false
   };
   state.invii.push(entry);
