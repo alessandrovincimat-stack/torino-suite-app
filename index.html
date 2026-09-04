@@ -1233,25 +1233,30 @@ function fileToBase64(file){
   });
 }
 
-async function ocrDocument(file, guest){
+async function ocrDocument(files, guest){
   guest.ocrPending = true; render();
   try {
     if (!state.backend.url) throw new Error("Configura prima l'indirizzo del backend nella scheda \"Backend\" (serve per leggere i documenti)");
-    var isPdf = (file.type === 'application/pdf');
-    var b64, mediaType;
-    if (isPdf) {
-      b64 = await fileToBase64(file);
-      mediaType = 'application/pdf';
-      if (b64.length > 7 * 1024 * 1024) throw new Error('PDF troppo grande (oltre 7 MB): prova con un file più leggero o una foto della pagina.');
-    } else {
-      b64 = await compressImage(file, 1600, 0.85);
-      if (b64.length > 3 * 1024 * 1024) b64 = await compressImage(file, 1100, 0.72);
-      mediaType = 'image/jpeg';
+    var immagini = [];
+    for (var i = 0; i < files.length; i++){
+      var file = files[i];
+      var isPdf = (file.type === 'application/pdf');
+      var b64, mediaType;
+      if (isPdf) {
+        b64 = await fileToBase64(file);
+        mediaType = 'application/pdf';
+        if (b64.length > 7 * 1024 * 1024) throw new Error('PDF troppo grande (oltre 7 MB): prova con un file più leggero o una foto della pagina.');
+      } else {
+        b64 = await compressImage(file, 1600, 0.85);
+        if (b64.length > 3 * 1024 * 1024) b64 = await compressImage(file, 1100, 0.72);
+        mediaType = 'image/jpeg';
+      }
+      immagini.push({ data: b64, mediaType: mediaType });
     }
     var resp = await fetch(backendUrl('/api/ocr'), {
       method: "POST",
       headers: backendHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ imageBase64: b64, mediaType: mediaType })
+      body: JSON.stringify({ images: immagini })
     });
     var parsed = await resp.json();
     if (!resp.ok) throw new Error(parsed.error || 'estrazione fallita sul backend');
@@ -1352,8 +1357,8 @@ function buildGuestCardHtml(g){
           '</div>';
 
   if (!g.ocrPending){
-    html += '<label for="doc-input-'+g.id+'" class="as-photobox" style="margin-bottom:12px;font-size:13px;padding:12px;display:block;">📷 Carica/sostituisci foto documento</label>' +
-            '<input type="file" accept="image/*,application/pdf" id="doc-input-'+g.id+'" data-doc-input="'+g.id+'" style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;">';
+    html += '<label for="doc-input-'+g.id+'" class="as-photobox" style="margin-bottom:12px;font-size:13px;padding:12px;display:block;">📷 Carica/sostituisci foto documento (anche fronte e retro insieme)</label>' +
+            '<input type="file" accept="image/*,application/pdf" multiple id="doc-input-'+g.id+'" data-doc-input="'+g.id+'" style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;">';
   }
 
   html += '<div class="as-row">';
@@ -1491,9 +1496,16 @@ function attachGuestHandlers(root){
     input.onchange = function(e){
       var id = input.getAttribute('data-doc-input');
       var g = state.guests.find(function(x){ return x.id === id; });
-      var file = e.target.files[0];
-      if (!g || !file) return;
-      ocrDocument(file, g).then(function(){ archiveDocument(file, g); });
+      var files = Array.from(e.target.files || []);
+      if (!g || !files.length) return;
+      if (files.length > 4){
+        alert('Puoi caricare al massimo 4 immagini/file insieme (es. fronte e retro). Seleziona meno file.');
+        e.target.value = '';
+        return;
+      }
+      ocrDocument(files, g).then(function(){
+        files.forEach(function(file){ archiveDocument(file, g); });
+      });
       e.target.value = '';
     };
   });
