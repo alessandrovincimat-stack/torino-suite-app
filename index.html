@@ -1283,6 +1283,42 @@ function getCapiOptions(){
   return state.guests.filter(function(g){ return g.ruolo==='capofamiglia'||g.ruolo==='capogruppo'; });
 }
 
+function buildFatturaFormHtml(id, nomeCompleto, descrizioneDefault){
+  var html = '';
+  html += '<button class="as-btn ghost" data-fattura-toggle="'+id+'" style="margin-top:8px;">🧾 Crea fattura</button>';
+  html += '<div class="as-fattura-form" data-fattura-form="'+id+'" style="display:none;margin-top:10px;">';
+  html += '<div class="as-field"><label>Intestazione</label><select data-fattura-tipo="'+id+'"><option value="privato">Privato (persona fisica)</option><option value="azienda">Azienda</option></select></div>';
+  html += '<input type="hidden" data-fattura-clientid="'+id+'" value="">';
+  html += '<input type="hidden" data-fattura-prodottoid="'+id+'" value="">';
+  html += '<input type="hidden" data-fattura-tassaprodottoid="'+id+'" value="">';
+  html += '<div data-fattura-privato="'+id+'">' +
+    '<div class="as-field" style="position:relative;"><label>Cliente esistente (opzionale — scrivi per cercare)</label>' +
+    '<input type="text" data-fattura-clientsearch-priv="'+id+'" placeholder="Scrivi almeno 2 lettere…" autocomplete="off">' +
+    '<div data-fattura-clientdropdown-priv="'+id+'" style="display:none;position:absolute;z-index:20;left:0;right:0;background:#1c1a14;border:1px solid var(--border);border-radius:8px;max-height:220px;overflow-y:auto;margin-top:2px;"></div>' +
+    '</div>' +
+    '<div class="as-field"><label>Nome e cognome</label><input data-fattura-nomeprivato="'+id+'" value="'+escapeHtml(nomeCompleto)+'"></div>' +
+    '</div>';
+  html += '<div data-fattura-azienda="'+id+'" style="display:none;">' +
+    '<div class="as-field" style="position:relative;"><label>Cliente esistente (opzionale — scrivi per cercare)</label>' +
+    '<input type="text" data-fattura-clientsearch="'+id+'" placeholder="Scrivi almeno 2 lettere…" autocomplete="off">' +
+    '<div data-fattura-clientdropdown="'+id+'" style="display:none;position:absolute;z-index:20;left:0;right:0;background:#1c1a14;border:1px solid var(--border);border-radius:8px;max-height:220px;overflow-y:auto;margin-top:2px;"></div>' +
+    '</div>' +
+    '<div class="as-row"><div class="as-field"><label>Ragione sociale</label><input data-fattura-ragsoc="'+id+'"></div><div class="as-field"><label>Partita IVA</label><input data-fattura-piva="'+id+'"></div></div>' +
+    '</div>';
+  html += '<div class="as-field"><label>Descrizione</label><input data-fattura-descr="'+id+'" value="'+escapeHtml(descrizioneDefault)+'"></div>';
+  html += '<div class="as-sub" data-fattura-prodottonote="'+id+'" style="margin:-4px 0 8px;"></div>';
+  html += '<div class="as-field"><label>Prezzo soggiorno (€)</label><input type="number" step="0.01" min="0" data-fattura-prezzo="'+id+'"></div>';
+  html += '<div class="as-sub" data-fattura-prezzonote="'+id+'" style="margin:-4px 0 8px;"></div>';
+  html += '<div class="as-field"><label>Tassa di soggiorno (€) — calcolata, modificabile</label><input type="number" step="0.01" min="0" data-fattura-tassa="'+id+'" value="0"></div>';
+  html += '<div class="as-sub" data-fattura-tassanote="'+id+'" style="margin:-4px 0 8px;"></div>';
+  html += '<div class="as-err" data-fattura-tassaalert="'+id+'" style="display:none;margin:-4px 0 8px;"></div>';
+  html += '<label data-fattura-tassaokwrap="'+id+'" style="display:none;margin:-4px 0 10px;font-size:13px;color:var(--text);gap:6px;align-items:center;"><input type="checkbox" data-fattura-tassaok="'+id+'" style="margin-right:6px;"> Ho verificato e confermo l\'importo della tassa di soggiorno da fatturare.</label>';
+  html += '<button class="as-btn secondary" data-fattura-crea="'+id+'">Crea fattura</button>';
+  html += '<div class="as-fattura-result" data-fattura-result="'+id+'" style="margin-top:8px;"></div>';
+  html += '</div>';
+  return html;
+}
+
 function buildGuestCardHtml(g){
   var isDependent = g.ruolo === 'familiare' || g.ruolo === 'membro';
   var capiOptions = getCapiOptions();
@@ -1379,37 +1415,7 @@ function buildGuestCardHtml(g){
     }
     var descrizioneDefault = 'Soggiorno' + (appNomeFatt? ' presso ' + appNomeFatt : '') + (arrFatt? ' dal ' + toItDate(arrFatt) : '') + (depFatt? ' al ' + toItDate(depFatt) : '');
 
-    html += '<button class="as-btn ghost" data-fattura-toggle="'+g.id+'" style="margin-top:8px;">🧾 Crea fattura</button>';
-    html += '<div class="as-fattura-form" data-fattura-form="'+g.id+'" style="display:none;margin-top:10px;">';
-    html += '<div class="as-field"><label>Intestazione</label><select data-fattura-tipo="'+g.id+'"><option value="privato">Privato (persona fisica)</option><option value="azienda">Azienda</option></select></div>';
-    html += '<input type="hidden" data-fattura-clientid="'+g.id+'" value="">';
-    html += '<input type="hidden" data-fattura-prodottoid="'+g.id+'" value="">';
-    html += '<input type="hidden" data-fattura-tassaprodottoid="'+g.id+'" value="">';
-    html += '<div data-fattura-privato="'+g.id+'">' +
-      '<div class="as-field" style="position:relative;"><label>Cliente esistente (opzionale — scrivi per cercare)</label>' +
-      '<input type="text" data-fattura-clientsearch-priv="'+g.id+'" placeholder="Scrivi almeno 2 lettere…" autocomplete="off">' +
-      '<div data-fattura-clientdropdown-priv="'+g.id+'" style="display:none;position:absolute;z-index:20;left:0;right:0;background:#1c1a14;border:1px solid var(--border);border-radius:8px;max-height:220px;overflow-y:auto;margin-top:2px;"></div>' +
-      '</div>' +
-      '<div class="as-field"><label>Nome e cognome</label><input data-fattura-nomeprivato="'+g.id+'" value="'+(g.cognome+' '+g.nome).trim()+'"></div>' +
-      '</div>';
-    html += '<div data-fattura-azienda="'+g.id+'" style="display:none;">' +
-      '<div class="as-field" style="position:relative;"><label>Cliente esistente (opzionale — scrivi per cercare)</label>' +
-      '<input type="text" data-fattura-clientsearch="'+g.id+'" placeholder="Scrivi almeno 2 lettere…" autocomplete="off">' +
-      '<div data-fattura-clientdropdown="'+g.id+'" style="display:none;position:absolute;z-index:20;left:0;right:0;background:#1c1a14;border:1px solid var(--border);border-radius:8px;max-height:220px;overflow-y:auto;margin-top:2px;"></div>' +
-      '</div>' +
-      '<div class="as-row"><div class="as-field"><label>Ragione sociale</label><input data-fattura-ragsoc="'+g.id+'"></div><div class="as-field"><label>Partita IVA</label><input data-fattura-piva="'+g.id+'"></div></div>' +
-      '</div>';
-    html += '<div class="as-field"><label>Descrizione</label><input data-fattura-descr="'+g.id+'" value="'+descrizioneDefault+'"></div>';
-    html += '<div class="as-sub" data-fattura-prodottonote="'+g.id+'" style="margin:-4px 0 8px;"></div>';
-    html += '<div class="as-field"><label>Prezzo soggiorno (€)</label><input type="number" step="0.01" min="0" data-fattura-prezzo="'+g.id+'"></div>';
-    html += '<div class="as-sub" data-fattura-prezzonote="'+g.id+'" style="margin:-4px 0 8px;"></div>';
-    html += '<div class="as-field"><label>Tassa di soggiorno (€) — calcolata, modificabile</label><input type="number" step="0.01" min="0" data-fattura-tassa="'+g.id+'" value="0"></div>';
-    html += '<div class="as-sub" data-fattura-tassanote="'+g.id+'" style="margin:-4px 0 8px;"></div>';
-    html += '<div class="as-err" data-fattura-tassaalert="'+g.id+'" style="display:none;margin:-4px 0 8px;"></div>';
-    html += '<label data-fattura-tassaokwrap="'+g.id+'" style="display:none;margin:-4px 0 10px;font-size:13px;color:var(--text);gap:6px;align-items:center;"><input type="checkbox" data-fattura-tassaok="'+g.id+'" style="margin-right:6px;"> Ho verificato e confermo l\'importo della tassa di soggiorno da fatturare.</label>';
-    html += '<button class="as-btn secondary" data-fattura-crea="'+g.id+'">Crea fattura</button>';
-    html += '<div class="as-fattura-result" data-fattura-result="'+g.id+'" style="margin-top:8px;"></div>';
-    html += '</div>';
+    html += buildFatturaFormHtml(g.id, (g.cognome+' '+g.nome).trim(), descrizioneDefault);
   }
 
   html += '</div>';
@@ -1648,7 +1654,7 @@ function calcolaProssimaScadenzaSoggiornamo(){
   return { label: prossima.label, giorni: giorni };
 }
 
-function renderOggi(){
+async function renderOggi(){
   var el = document.getElementById('tab-oggi');
   if (!el) return;
   var oggiISO = todayISO();
@@ -1717,6 +1723,29 @@ function renderOggi(){
       setTimeout(function(){ scrollCardIntoView(id); }, 50);
     };
   });
+
+  if (state.backend.url){
+    var statusBox = document.createElement('div');
+    statusBox.className = 'as-card';
+    statusBox.innerHTML = '<p class="as-title" style="font-size:16px;">Stato integrazioni</p><p class="as-sub"><span class="as-spin"></span> verifica in corso…</p>';
+    el.appendChild(statusBox);
+    try {
+      var respStato = await fetch(backendUrl('/api/settings'), { headers: backendHeaders() });
+      var dataStato = await respStato.json();
+      if (!respStato.ok) throw new Error(dataStato.error || 'errore');
+      var righeStato = [
+        { nome: 'Smoobu', ok: !!(dataStato.SMOOBU_API_KEY && dataStato.SMOOBU_API_SECRET) },
+        { nome: 'Fatture in Cloud', ok: !!(dataStato.FIC_ACCESS_TOKEN && dataStato.FIC_COMPANY_ID) },
+        { nome: 'ISTAT (Piemonte Dati Turismo)', ok: !!(dataStato.ISTAT_UTENTE && dataStato.ISTAT_PASSWORD) },
+        { nome: 'Soggiornamo', ok: !!(dataStato.SOGGIORNIAMO_UTENTE && dataStato.SOGGIORNIAMO_PASSWORD) }
+      ];
+      statusBox.innerHTML = '<p class="as-title" style="font-size:16px;">Stato integrazioni</p>' +
+        righeStato.map(function(r){ return '<div style="padding:4px 0;">' + (r.ok ? '✅' : '⚠️') + ' ' + r.nome + (r.ok ? '' : ' — credenziali mancanti') + '</div>'; }).join('') +
+        '<p class="as-sub" style="margin-top:6px;">Verifica solo che i dati siano stati inseriti, non che siano ancora validi presso il servizio.</p>';
+    } catch(eStato){
+      statusBox.innerHTML = '<p class="as-title" style="font-size:16px;">Stato integrazioni</p><div class="as-err">Impossibile verificare: '+eStato.message+'</div>';
+    }
+  }
 }
 
 function renderOspiti(){
@@ -2139,6 +2168,32 @@ function calcolaEta(dataNascita, dataRif){
   return eta;
 }
 
+function trovaGruppoFatturazione(id){
+  var head = state.guests.find(function(g){ return g.id === id; });
+  if (head){
+    var app = state.tables.appartamenti.find(function(a){ return a.id === head.idAppartamento; });
+    return {
+      dataArrivo: head.dataArrivo,
+      permanenza: head.permanenza,
+      appartamentoNome: app ? app.nome : '',
+      smoobuBookingId: head.smoobuBookingId || '',
+      membri: orderedGuestsFor(id)
+    };
+  }
+  var entry = state.invii.find(function(iv){ return iv.ospiti && iv.ospiti[0] && iv.ospiti[0].id === id; });
+  if (entry){
+    var h = entry.ospiti[0];
+    return {
+      dataArrivo: h.dataArrivo,
+      permanenza: h.permanenza,
+      appartamentoNome: entry.appartamentoNome || '',
+      smoobuBookingId: h.smoobuBookingId || '',
+      membri: entry.ospiti
+    };
+  }
+  return null;
+}
+
 async function calcolaTassaSoggiorno(headId){
   var root = document;
   var tassaInput = root.querySelector('[data-fattura-tassa="'+headId+'"]');
@@ -2149,8 +2204,8 @@ async function calcolaTassaSoggiorno(headId){
   if (alertEl){ alertEl.style.display = 'none'; alertEl.textContent = ''; }
   if (okWrap) okWrap.style.display = 'none';
   if (okCheck) okCheck.checked = false;
-  var head = state.guests.find(function(g){ return g.id === headId; });
-  if (!tassaInput || !head) return;
+  var datiGruppo = trovaGruppoFatturazione(headId);
+  if (!tassaInput || !datiGruppo) return;
   var cfgTassa = await caricaConfigTassa();
   if (!cfgTassa.importo){
     if (noteEl) noteEl.innerHTML = '<span style="color:var(--muted);">Nessuna tariffa configurata (Admin → Backend → Tassa di soggiorno).</span>';
@@ -2159,13 +2214,13 @@ async function calcolaTassaSoggiorno(headId){
     tassaInput.dataset.dettaglio = '';
     return;
   }
-  var gruppo = orderedGuestsFor(headId);
-  var notti = parseInt(head.permanenza, 10) || 0;
+  var gruppo = datiGruppo.membri;
+  var notti = parseInt(datiGruppo.permanenza, 10) || 0;
   var nottiTassate = cfgTassa.maxNotti ? Math.min(notti, cfgTassa.maxNotti) : notti;
   var tassabili = 0, esenti = 0, mancantiDati = 0;
   gruppo.forEach(function(g){
     if (!g.dataNascita) mancantiDati++;
-    var eta = calcolaEta(g.dataNascita, head.dataArrivo);
+    var eta = calcolaEta(g.dataNascita, datiGruppo.dataArrivo);
     if (eta != null && eta < cfgTassa.eta) esenti++;
     else tassabili++;
   });
@@ -2255,10 +2310,9 @@ async function precompilaArticoliFattura(headId){
   var prodottoIdInput = root.querySelector('[data-fattura-prodottoid="'+headId+'"]');
   var tassaProdottoIdInput = root.querySelector('[data-fattura-tassaprodottoid="'+headId+'"]');
   var noteEl = root.querySelector('[data-fattura-prodottonote="'+headId+'"]');
-  var head = state.guests.find(function(g){ return g.id === headId; });
-  if (!prodottoIdInput || !head) return;
-  var appartamento = state.tables.appartamenti.find(function(a){ return a.id === head.idAppartamento; });
-  var nomeAppartamento = appartamento ? appartamento.nome : '';
+  var datiGruppo = trovaGruppoFatturazione(headId);
+  if (!prodottoIdInput || !datiGruppo) return;
+  var nomeAppartamento = datiGruppo.appartamentoNome || '';
   var prodotti = await caricaProdottiFic();
   if (!prodotti.length){
     if (noteEl) noteEl.innerHTML = '<span style="color:var(--muted);">Catalogo articoli non disponibile: verrà creata una voce libera.</span>';
@@ -2290,16 +2344,16 @@ async function precompilaPrezzoDaSmoobu(headId){
   var tassaNoteEl = root.querySelector('[data-fattura-tassanote="'+headId+'"]');
   var alertEl = root.querySelector('[data-fattura-tassaalert="'+headId+'"]');
   var okWrap = root.querySelector('[data-fattura-tassaokwrap="'+headId+'"]');
-  var head = state.guests.find(function(g){ return g.id === headId; });
-  if (!prezzoInput || !head) return;
-  if (!head.smoobuBookingId){
+  var datiGruppo = trovaGruppoFatturazione(headId);
+  if (!prezzoInput || !datiGruppo) return;
+  if (!datiGruppo.smoobuBookingId){
     if (noteEl) noteEl.textContent = '';
     return;
   }
   if (noteEl) noteEl.innerHTML = '<span style="color:var(--muted);">recupero importo da Smoobu…</span>';
   var parolaTassa = /tassa di soggiorno|city ?tax|tourist ?tax|kurtaxe/i;
   try {
-    var resp = await fetch(backendUrl('/api/smoobu/reservations/' + encodeURIComponent(head.smoobuBookingId) + '/price-elements'), { headers: backendHeaders() });
+    var resp = await fetch(backendUrl('/api/smoobu/reservations/' + encodeURIComponent(datiGruppo.smoobuBookingId) + '/price-elements'), { headers: backendHeaders() });
     var data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'errore');
     var elementi = data.priceElements || data.price_elements || [];
@@ -2337,7 +2391,7 @@ async function precompilaPrezzoDaSmoobu(headId){
     }
   } catch(e){
     try {
-      var resp2 = await fetch(backendUrl('/api/smoobu/reservations/' + encodeURIComponent(head.smoobuBookingId)), { headers: backendHeaders() });
+      var resp2 = await fetch(backendUrl('/api/smoobu/reservations/' + encodeURIComponent(datiGruppo.smoobuBookingId)), { headers: backendHeaders() });
       var data2 = await resp2.json();
       if (!resp2.ok) throw new Error(data2.error || 'errore');
       var prezzo = data2.price != null ? Number(data2.price) : null;
@@ -2679,6 +2733,10 @@ function renderArchivio(){
   var el = document.getElementById('tab-archivio');
   var html = '';
 
+  if (state.invii.length || state.archivio.length){
+    html += '<div class="as-field"><input id="as-archivio-search" placeholder="Cerca per nome o cognome…"></div>';
+  }
+
   if (state.backend.url && state.istatUltimaData){
     var mancanti = giorniIstatMancanti();
     if (mancanti.length){
@@ -2701,15 +2759,25 @@ function renderArchivio(){
       var dataLocale = g.toLocaleDateString('it-IT') + ' ' + g.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
       var dataISO = iv.dataInvio.slice(0,10);
       var nomi = iv.ospiti.map(function(o){ return (o.cognome+' '+o.nome).trim(); }).join(', ');
-      html += '<div style="border-bottom:1px solid var(--border);padding:8px 0;">' +
+      html += '<div data-search="'+escapeHtml(normalizzaNome(nomi))+'" style="border-bottom:1px solid var(--border);padding:8px 0;">' +
         '<div>' + dataLocale + ' — ' + (iv.appartamentoNome||'nessun appartamento') + ' (' + iv.nRighe + ' schedine)</div>' +
         '<div class="as-sub" style="margin:0;">' + nomi + '</div>' +
         (dateUniche.indexOf(dataISO)===-1 ? '<button class="as-btn ghost" data-ricevuta="'+dataISO+'" style="margin-top:6px;">Scarica ricevuta del '+g.toLocaleDateString('it-IT')+'</button>' : '') +
         (iv.partenzaSegnalata
           ? '<span class="as-ok" style="margin-left:8px;">Partenza segnalata (ISTAT)</span>'
           : '<button class="as-btn secondary" data-partenza="'+iv.id+'" style="margin-top:6px;margin-left:8px;">Segnala partenza (ISTAT)</button>') +
-        '<div id="as-partenza-result-'+iv.id+'" style="margin-top:6px;"></div>' +
-        '</div>';
+        '<div id="as-partenza-result-'+iv.id+'" style="margin-top:6px;"></div>';
+      var headInvio = iv.ospiti[0];
+      if (headInvio){
+        var arrFatt = headInvio.dataArrivo, depFatt = '';
+        if (headInvio.dataArrivo && headInvio.permanenza){
+          var dObj2 = new Date(headInvio.dataArrivo); dObj2.setDate(dObj2.getDate() + parseInt(headInvio.permanenza,10));
+          depFatt = dObj2.toISOString().slice(0,10);
+        }
+        var descrDefaultInvio = 'Soggiorno' + (iv.appartamentoNome ? ' presso ' + iv.appartamentoNome : '') + (arrFatt ? ' dal ' + toItDate(arrFatt) : '') + (depFatt ? ' al ' + toItDate(depFatt) : '');
+        html += buildFatturaFormHtml(headInvio.id, (headInvio.cognome+' '+headInvio.nome).trim(), descrDefaultInvio);
+      }
+      html += '</div>';
       if (dateUniche.indexOf(dataISO)===-1) dateUniche.push(dataISO);
     });
     html += '</div>';
@@ -2726,6 +2794,8 @@ function renderArchivio(){
     });
     var gapBtn1 = document.getElementById('as-gap-btn');
     if (gapBtn1) gapBtn1.onclick = function(){ inviaGiorniMancantiIstat(giorniIstatMancanti(), gapBtn1); };
+    attachGuestHandlers(el);
+    collegaRicercaArchivio();
     return;
   }
   var groups = {};
@@ -2741,6 +2811,7 @@ function renderArchivio(){
     var items = groups[k];
     var head = items[0];
     var periodo = toItDate(head.dataArrivo) + (head.permanenza ? ' · ' + head.permanenza + ' notti' : '');
+    html += '<div data-search="'+escapeHtml(normalizzaNome((head.cognomeCapogruppo+' '+head.nomeCapogruppo)))+'">';
     html += '<div class="as-group-head">' + (head.cognomeCapogruppo+' '+head.nomeCapogruppo).trim() + '</div>';
     html += '<div class="as-group-period">' + periodo + '</div>';
     html += '<div class="as-doc-grid">';
@@ -2753,6 +2824,7 @@ function renderArchivio(){
               '<button class="as-remove" data-remove-doc="'+e.id+'" style="margin-top:4px;">rimuovi</button>' +
               '</div>';
     });
+    html += '</div>';
     html += '</div>';
   });
   html += '</div>';
@@ -2807,6 +2879,20 @@ function renderArchivio(){
       saveArchivio(); render();
     };
   });
+  attachGuestHandlers(el);
+  collegaRicercaArchivio();
+}
+
+function collegaRicercaArchivio(){
+  var input = document.getElementById('as-archivio-search');
+  if (!input) return;
+  input.oninput = function(){
+    var termine = normalizzaNome(input.value);
+    document.querySelectorAll('#tab-archivio [data-search]').forEach(function(elx){
+      var match = !termine || elx.getAttribute('data-search').indexOf(termine) !== -1;
+      elx.style.display = match ? '' : 'none';
+    });
+  };
 }
 
 /* ---------- Backend tab ---------- */
@@ -2839,6 +2925,39 @@ function renderBackend(){
       out.innerHTML = '<div class="as-err">'+e.message+'</div>';
     }
   };
+
+  if (state.backend.url){
+    var backupBox = document.createElement('div');
+    backupBox.className = 'as-card';
+    backupBox.innerHTML =
+      '<p class="as-title" style="font-size:16px;">Backup dei dati</p>' +
+      '<p class="as-sub">Scarica una copia completa di tutto quello che è salvato sul server (ospiti, archivio, tabelle, credenziali delle integrazioni). Il file contiene dati sensibili: conservalo con cura.</p>' +
+      '<button class="as-btn secondary" id="as-backup-btn">Esporta backup completo</button>' +
+      '<div id="as-backup-result" style="margin-top:8px;"></div>';
+    el.appendChild(backupBox);
+
+    document.getElementById('as-backup-btn').onclick = async function(){
+      var out = document.getElementById('as-backup-result');
+      out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>preparazione backup…</span>';
+      try {
+        var resp = await fetch(backendUrl('/api/backup'), { headers: backendHeaders() });
+        var data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'errore');
+        var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'torino-suite-backup-' + todayISO() + '.json';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        out.innerHTML = '<p class="as-ok">Backup scaricato.</p>';
+      } catch(e){
+        out.innerHTML = '<div class="as-err">'+e.message+'</div>';
+      }
+    };
+  }
 
   if (state.backend.url){
     var settingsBox = document.createElement('div');
