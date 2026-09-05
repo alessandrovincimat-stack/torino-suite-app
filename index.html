@@ -1318,6 +1318,61 @@ function getCapiOptions(){
   return state.guests.filter(function(g){ return g.ruolo==='capofamiglia'||g.ruolo==='capogruppo'; });
 }
 
+function buildFatturaFormHtml(id, nomeCompleto, descrizioneDefault){
+  var html = '';
+  html += '<div class="as-fattura-form" data-fattura-form="'+id+'">';
+  html += '<div class="as-field"><label>Intestazione</label><select data-fattura-tipo="'+id+'"><option value="privato">Privato (persona fisica)</option><option value="azienda">Azienda</option></select></div>';
+  html += '<input type="hidden" data-fattura-clientid="'+id+'" value="">';
+  html += '<input type="hidden" data-fattura-prodottoid="'+id+'" value="">';
+  html += '<input type="hidden" data-fattura-tassaprodottoid="'+id+'" value="">';
+  html += '<div data-fattura-privato="'+id+'">' +
+    '<div class="as-field" style="position:relative;"><label>Cliente esistente (opzionale — scrivi per cercare)</label>' +
+    '<input type="text" data-fattura-clientsearch-priv="'+id+'" placeholder="Scrivi almeno 2 lettere…" autocomplete="off">' +
+    '<div data-fattura-clientdropdown-priv="'+id+'" style="display:none;position:absolute;z-index:20;left:0;right:0;background:#1c1a14;border:1px solid var(--border);border-radius:8px;max-height:220px;overflow-y:auto;margin-top:2px;"></div>' +
+    '</div>' +
+    '<div class="as-field"><label>Nome e cognome</label><input data-fattura-nomeprivato="'+id+'" value="'+escapeHtml(nomeCompleto)+'"></div>' +
+    '<div class="as-field"><label>Codice fiscale</label><input data-fattura-cf="'+id+'" style="text-transform:uppercase;"></div>' +
+    '<div class="as-sub" data-fattura-cfnote="'+id+'" style="margin:-4px 0 8px;"></div>' +
+    '</div>';
+  html += '<div data-fattura-azienda="'+id+'" style="display:none;">' +
+    '<div class="as-field" style="position:relative;"><label>Cliente esistente (opzionale — scrivi per cercare)</label>' +
+    '<input type="text" data-fattura-clientsearch="'+id+'" placeholder="Scrivi almeno 2 lettere…" autocomplete="off">' +
+    '<div data-fattura-clientdropdown="'+id+'" style="display:none;position:absolute;z-index:20;left:0;right:0;background:#1c1a14;border:1px solid var(--border);border-radius:8px;max-height:220px;overflow-y:auto;margin-top:2px;"></div>' +
+    '</div>' +
+    '<div class="as-row"><div class="as-field"><label>Ragione sociale</label><input data-fattura-ragsoc="'+id+'"></div><div class="as-field"><label>Partita IVA</label><input data-fattura-piva="'+id+'"></div></div>' +
+    '<button type="button" class="as-btn ghost" data-fattura-cercapiva="'+id+'" style="margin:-4px 0 8px;">Cerca dati da P.IVA</button>' +
+    '<div class="as-sub" data-fattura-pivanote="'+id+'" style="margin:-4px 0 8px;"></div>' +
+    '<div class="as-field"><label>Codice fiscale azienda (se diverso dalla P.IVA, o in mancanza di P.IVA)</label><input data-fattura-cfazienda="'+id+'" style="text-transform:uppercase;"></div>' +
+    '</div>';
+  html += '<p class="as-sub" style="margin:8px 0 -2px;"><strong>Indirizzo del cliente</strong> — obbligatorio per la fattura elettronica (via, CAP, comune, provincia)</p>';
+  html += '<div class="as-field"><label>Via e numero civico</label><input data-fattura-indirizzo="'+id+'"></div>';
+  html += '<div class="as-row">' +
+    '<div class="as-field"><label>CAP</label><input data-fattura-cap="'+id+'" maxlength="5"></div>' +
+    '<div class="as-field"><label>Comune</label><input data-fattura-citta="'+id+'"></div>' +
+    '<div class="as-field"><label>Provincia (sigla)</label><input data-fattura-provincia="'+id+'" maxlength="2" style="text-transform:uppercase;"></div>' +
+    '</div>';
+  html += '<div class="as-sub" data-fattura-capnote="'+id+'" style="margin:-4px 0 8px;"></div>';
+  html += '<details style="margin:8px 0;"><summary style="cursor:pointer;color:var(--text-muted);font-size:12px;">Altri dati (facoltativi): codice destinatario SDI, email, telefono</summary>' +
+    '<div class="as-field" style="margin-top:8px;"><label>Codice destinatario (SDI) — "0000000" se il cliente non ne ha uno proprio</label><input data-fattura-sdi="'+id+'" value="0000000" maxlength="7" style="text-transform:uppercase;"></div>' +
+    '<div class="as-row">' +
+      '<div class="as-field"><label>Email (facoltativa)</label><input type="email" data-fattura-email="'+id+'"></div>' +
+      '<div class="as-field"><label>Telefono (facoltativo)</label><input data-fattura-telefono="'+id+'"></div>' +
+      '</div>' +
+    '</details>';
+  html += '<div class="as-field"><label>Descrizione</label><input data-fattura-descr="'+id+'" value="'+escapeHtml(descrizioneDefault)+'"></div>';
+  html += '<div class="as-sub" data-fattura-prodottonote="'+id+'" style="margin:-4px 0 8px;"></div>';
+  html += '<div class="as-field"><label>Prezzo soggiorno (€)</label><input type="number" step="0.01" min="0" data-fattura-prezzo="'+id+'"></div>';
+  html += '<div class="as-sub" data-fattura-prezzonote="'+id+'" style="margin:-4px 0 8px;"></div>';
+  html += '<div class="as-field"><label>Tassa di soggiorno (€) — calcolata, modificabile</label><input type="number" step="0.01" min="0" data-fattura-tassa="'+id+'" value="0"></div>';
+  html += '<div class="as-sub" data-fattura-tassanote="'+id+'" style="margin:-4px 0 8px;"></div>';
+  html += '<div class="as-err" data-fattura-tassaalert="'+id+'" style="display:none;margin:-4px 0 8px;"></div>';
+  html += '<label data-fattura-tassaokwrap="'+id+'" style="display:none;margin:-4px 0 10px;font-size:13px;color:var(--text);gap:6px;align-items:center;"><input type="checkbox" data-fattura-tassaok="'+id+'" style="margin-right:6px;"> Ho verificato e confermo l\'importo della tassa di soggiorno da fatturare.</label>';
+  html += '<button class="as-btn secondary" data-fattura-crea="'+id+'">Crea fattura</button>';
+  html += '<div class="as-fattura-result" data-fattura-result="'+id+'" style="margin-top:8px;"></div>';
+  html += '</div>';
+  return html;
+}
+
 function buildGuestCardHtml(g, extraPrimaDiGenera){
   var isDependent = g.ruolo === 'familiare' || g.ruolo === 'membro';
   var capiOptions = getCapiOptions();
@@ -4025,7 +4080,7 @@ function trovaCollegamentoOspite(bookingId){
   return null;
 }
 
-function vaiECreaFattura(b){
+function vaiECreaFattura(b, btn){
   var bookingId = String(b.id);
   var collegamento = trovaCollegamentoOspite(bookingId);
   var appenaCreata = false;
@@ -4034,19 +4089,14 @@ function vaiECreaFattura(b){
     collegamento = { id: g.id, dove: 'ospiti' };
     appenaCreata = true;
   }
-  var btnQuestura = document.getElementById('ts-btn-questura');
-  if (btnQuestura) btnQuestura.click();
-  switchTab(collegamento.dove);
-  setTimeout(function(){
-    scrollCardIntoView(collegamento.id);
-    setTimeout(function(){
-      var toggleBtn = document.querySelector('[data-fattura-toggle="'+collegamento.id+'"]');
-      if (toggleBtn) toggleBtn.click();
-      if (appenaCreata){
-        alert('Non c\'era una scheda per questa prenotazione: te ne ho creata una con nome, alloggio e date già compilati. Il modulo fattura qui sotto è pronto — se ti serve anche inviare la Questura per questo soggiorno, completa gli altri dati e usa "Genera e invia questa scheda".');
-      }
-    }, 350);
-  }, 100);
+  var wrap = document.querySelector('[data-fatt-form-wrap="'+b.id+'"]');
+  if (!wrap) return;
+  var nomeOspite = b['guest-name'] || '';
+  var descrDefault = 'Soggiorno' + (b.apartment && b.apartment.name ? ' presso ' + b.apartment.name : '') + (b.arrival ? ' dal ' + toItDate(b.arrival) : '') + (b.departure ? ' al ' + toItDate(b.departure) : '');
+  var nota = appenaCreata ? '<p class="as-sub" style="margin:0 0 8px;">Non c\'era una scheda per questa prenotazione: ne è stata creata una con nome, alloggio e date già compilati (visibile in Ospiti). Se ti serve anche inviare la Questura, completala da lì.</p>' : '';
+  wrap.innerHTML = nota + buildFatturaFormHtml(collegamento.id, nomeOspite, descrDefault);
+  attachGuestHandlers(wrap);
+  if (btn) btn.style.display = 'none';
 }
 
 async function verificaStatoSdi(bookingId){
@@ -4108,6 +4158,7 @@ function renderListaFatture(prenotazioni){
     html += '<div class="as-sub" style="margin:2px 0 8px;">' + toItDate(b.arrival) + ' → ' + toItDate(b.departure) + ' · ' + nomeApp + '</div>';
     if (stato === 'pendente'){
       html += '<button class="as-btn secondary" data-fatt-crea="'+b.id+'" data-fatt-booking="'+encodeURIComponent(JSON.stringify(b))+'">Crea fattura</button>';
+      html += '<div data-fatt-form-wrap="'+b.id+'" style="margin-top:8px;"></div>';
     } else if (stato === 'emessa'){
       html += '<p class="as-sub" style="margin:0 0 6px;">Fattura' + (entry.ficDocumentNumber ? (' n. ' + entry.ficDocumentNumber) : '') + ' creata' + (entry.dataFatturazione ? (' il ' + toItDate(entry.dataFatturazione.slice(0,10))) : '') + '.</p>';
       if (entry.ficDocumentId) html += '<button class="as-btn ghost" data-fatt-verifica="'+b.id+'">Verifica invio SDI</button>';
@@ -4123,7 +4174,7 @@ function renderListaFatture(prenotazioni){
 
 function collegaAzioniFatture(container){
   container.querySelectorAll('[data-fatt-crea]').forEach(function(btn){
-    btn.onclick = function(){ vaiECreaFattura(JSON.parse(decodeURIComponent(btn.getAttribute('data-fatt-booking')))); };
+    btn.onclick = function(){ vaiECreaFattura(JSON.parse(decodeURIComponent(btn.getAttribute('data-fatt-booking'))), btn); };
   });
   container.querySelectorAll('[data-fatt-verifica]').forEach(function(btn){
     btn.onclick = function(){ verificaStatoSdi(btn.getAttribute('data-fatt-verifica')); };
