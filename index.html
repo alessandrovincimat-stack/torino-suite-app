@@ -1808,13 +1808,23 @@ function attachGuestHandlers(root){
         try {
           var datiGruppoFatt = trovaGruppoFatturazione(id);
           if (datiGruppoFatt && datiGruppoFatt.smoobuBookingId){
+            var depFatt2 = null;
+            if (datiGruppoFatt.dataArrivo && datiGruppoFatt.permanenza){
+              var dObjFatt = new Date(datiGruppoFatt.dataArrivo);
+              dObjFatt.setDate(dObjFatt.getDate() + parseInt(datiGruppoFatt.permanenza, 10));
+              depFatt2 = dObjFatt.toISOString().slice(0, 10);
+            }
             state.fatture[datiGruppoFatt.smoobuBookingId] = {
               stato: 'emessa',
               ficDocumentId: doc.id || null,
               ficDocumentNumber: doc.number || '',
               dataFatturazione: new Date().toISOString(),
               eiStatus: null,
-              ultimoControllo: null
+              ultimoControllo: null,
+              nomeOspite: (tipo === 'azienda' ? payload.ragioneSociale : nomeCompleto) || '',
+              dataArrivo: datiGruppoFatt.dataArrivo || '',
+              dataPartenza: depFatt2 || '',
+              appartamentoNome: datiGruppoFatt.appartamentoNome || ''
             };
             await saveFatture();
           }
@@ -3464,14 +3474,46 @@ function renderLink(){
 /* ---------- Archivio documenti tab ---------- */
 function groupKey(e){ return (e.cognomeCapogruppo+'|'+e.nomeCapogruppo+'|'+e.dataArrivo).toLowerCase(); }
 
+var archivioSubtabAttivo = 'documenti';
+
 function renderArchivio(){
   var el = document.getElementById('tab-archivio');
   var html = '';
 
-  if (state.invii.length || state.archivio.length){
+  if (state.invii.length || state.archivio.length || Object.keys(state.fatture).length){
     html += '<div class="as-field"><input id="as-archivio-search" placeholder="Cerca per nome o cognome…"></div>';
   }
 
+  html += '<div class="as-tabs" id="arch-subtabs">' +
+    '<div class="as-tab" data-archsubtab="documenti">Documenti</div>' +
+    '<div class="as-tab" data-archsubtab="istat-dafare">Schede da fare</div>' +
+    '<div class="as-tab" data-archsubtab="istat-ok">Questura OK</div>' +
+    '<div class="as-tab" data-archsubtab="fatture-emesse">Fatture emesse</div>' +
+    '</div><div id="arch-content"></div>';
+
+  el.innerHTML = html;
+
+  el.querySelectorAll('#arch-subtabs [data-archsubtab]').forEach(function(t){
+    var nome = t.getAttribute('data-archsubtab');
+    t.classList.toggle('active', nome === archivioSubtabAttivo);
+    t.onclick = function(){ archivioSubtabAttivo = nome; renderArchivio(); };
+  });
+
+  var contentEl = document.getElementById('arch-content');
+  if (archivioSubtabAttivo === 'istat-dafare') renderArchivioIstatDaFare(contentEl);
+  else if (archivioSubtabAttivo === 'istat-ok') renderArchivioIstatOk(contentEl);
+  else if (archivioSubtabAttivo === 'fatture-emesse') renderArchivioFattureEmesse(contentEl);
+  else renderArchivioDocumenti(contentEl);
+
+  collegaRicercaArchivio();
+}
+
+function invioCompletato(iv){
+  return !!(iv.arrivoSegnalato && iv.partenzaSegnalata);
+}
+
+function renderArchivioIstatDaFare(el){
+  var html = '';
   if (state.backend.url && state.istatUltimaData){
     var mancanti = giorniIstatMancanti();
     if (mancanti.length){
@@ -3484,12 +3526,13 @@ function renderArchivio(){
     }
   }
 
-  if (state.invii.length){
+  var invDaFare = state.invii.filter(function(iv){ return !invioCompletato(iv); }).sort(function(a,b){ return b.dataInvio.localeCompare(a.dataInvio); });
+  if (!invDaFare.length){
+    html += '<div class="as-card"><p class="as-sub">Nessuna scheda in attesa: tutti gli invii hanno arrivo e partenza segnalati.</p></div>';
+  } else {
     html += '<div class="as-card">';
-    html += '<p class="as-title" style="font-size:16px;">Invii alla Questura</p>';
-    var invOrdinati = state.invii.slice().sort(function(a,b){ return b.dataInvio.localeCompare(a.dataInvio); });
     var dateUniche = [];
-    invOrdinati.forEach(function(iv){
+    invDaFare.forEach(function(iv){
       var g = new Date(iv.dataInvio);
       var dataLocale = g.toLocaleDateString('it-IT') + ' ' + g.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
       var dataISO = iv.dataInvio.slice(0,10);
@@ -3522,22 +3565,77 @@ function renderArchivio(){
     html += '</div>';
   }
 
+  el.innerHTML = html;
+  el.querySelectorAll('[data-ricevuta]').forEach(function(btn){
+    btn.onclick = function(){ scaricaRicevuta(btn.getAttribute('data-ricevuta'), btn); };
+  });
+  el.querySelectorAll('[data-arrivo]').forEach(function(btn){
+    btn.onclick = function(){ segnalaArrivo(btn.getAttribute('data-arrivo'), btn); };
+  });
+  el.querySelectorAll('[data-partenza]').forEach(function(btn){
+    btn.onclick = function(){ segnalaPartenza(btn.getAttribute('data-partenza'), btn); };
+  });
+  var gapBtn = document.getElementById('as-gap-btn');
+  if (gapBtn) gapBtn.onclick = function(){ inviaGiorniMancantiIstat(giorniIstatMancanti(), gapBtn); };
+  attachGuestHandlers(el);
+}
+
+function renderArchivioIstatOk(el){
+  var invOk = state.invii.filter(invioCompletato).sort(function(a,b){ return b.dataInvio.localeCompare(a.dataInvio); });
+  var html = '';
+  if (!invOk.length){
+    html = '<div class="as-card"><p class="as-sub">Nessuna scheda completata ancora.</p></div>';
+  } else {
+    html = '<div class="as-card">';
+    var dateUniche = [];
+    invOk.forEach(function(iv){
+      var g = new Date(iv.dataInvio);
+      var dataISO = iv.dataInvio.slice(0,10);
+      var nomi = iv.ospiti.map(function(o){ return (o.cognome+' '+o.nome).trim(); }).join(', ');
+      html += '<div data-search="'+escapeHtml(normalizzaNome(nomi))+'" style="border-bottom:1px solid var(--border);padding:8px 0;">' +
+        '<div>' + g.toLocaleDateString('it-IT') + ' — ' + (iv.appartamentoNome||'nessun appartamento') + ' (' + iv.nRighe + ' schedine)</div>' +
+        '<div class="as-sub" style="margin:0;">' + nomi + '</div>' +
+        (dateUniche.indexOf(dataISO)===-1 ? '<button class="as-btn ghost" data-ricevuta="'+dataISO+'" style="margin-top:6px;">Scarica ricevuta del '+g.toLocaleDateString('it-IT')+'</button>' : '') +
+        '<span class="as-ok" style="margin-left:8px;">✅ Questura e ISTAT completi</span>' +
+        '</div>';
+      if (dateUniche.indexOf(dataISO)===-1) dateUniche.push(dataISO);
+    });
+    html += '</div>';
+  }
+  el.innerHTML = html;
+  el.querySelectorAll('[data-ricevuta]').forEach(function(btn){
+    btn.onclick = function(){ scaricaRicevuta(btn.getAttribute('data-ricevuta'), btn); };
+  });
+}
+
+function renderArchivioFattureEmesse(el){
+  var voci = Object.keys(state.fatture)
+    .map(function(id){ return { id: id, entry: state.fatture[id] }; })
+    .filter(function(x){ return fatturaCompletataSenzaProblemi(x.entry); })
+    .sort(function(a,b){ return (b.entry.dataFatturazione||'').localeCompare(a.entry.dataFatturazione||''); });
+
+  if (!voci.length){
+    el.innerHTML = '<div class="as-card"><p class="as-sub">Nessuna fattura inviata allo SDI ancora. Le fatture emesse ma non ancora confermate restano nella scheda "Fatture".</p></div>';
+    return;
+  }
+  var html = '<div class="as-card">';
+  voci.forEach(function(v){
+    var e = v.entry;
+    html += '<div data-search="'+escapeHtml(normalizzaNome(e.nomeOspite||''))+'" style="border-bottom:1px solid var(--border);padding:8px 0;">' +
+      '<div><strong>' + escapeHtml(e.nomeOspite || 'sconosciuto') + '</strong>' + (e.appartamentoNome ? ' — ' + escapeHtml(e.appartamentoNome) : '') + '</div>' +
+      '<div class="as-sub" style="margin:2px 0;">' + (e.dataArrivo ? toItDate(e.dataArrivo) : '') + (e.dataPartenza ? ' → ' + toItDate(e.dataPartenza) : '') + '</div>' +
+      '<div class="as-sub" style="margin:0;">Fattura' + (e.ficDocumentNumber ? ' n. ' + escapeHtml(e.ficDocumentNumber) : '') + (e.dataFatturazione ? ' del ' + toItDate(e.dataFatturazione.slice(0,10)) : '') + ' — inviata allo SDI</div>' +
+      '</div>';
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function renderArchivioDocumenti(el){
+  var html = '';
   if (!state.archivio.length){
-    html += '<div class="as-card"><p class="as-sub">Nessun documento archiviato. Le foto caricate nella scheda "Ospiti" vengono salvate qui automaticamente, con cognome/nome del capogruppo e periodo di soggiorno.</p></div>';
+    html = '<div class="as-card"><p class="as-sub">Nessun documento archiviato. Le foto caricate nella scheda "Ospiti" vengono salvate qui automaticamente, con cognome/nome del capogruppo e periodo di soggiorno.</p></div>';
     el.innerHTML = html;
-    el.querySelectorAll('[data-ricevuta]').forEach(function(btn){
-      btn.onclick = function(){ scaricaRicevuta(btn.getAttribute('data-ricevuta'), btn); };
-    });
-    el.querySelectorAll('[data-arrivo]').forEach(function(btn){
-      btn.onclick = function(){ segnalaArrivo(btn.getAttribute('data-arrivo'), btn); };
-    });
-    el.querySelectorAll('[data-partenza]').forEach(function(btn){
-      btn.onclick = function(){ segnalaPartenza(btn.getAttribute('data-partenza'), btn); };
-    });
-    var gapBtn1 = document.getElementById('as-gap-btn');
-    if (gapBtn1) gapBtn1.onclick = function(){ inviaGiorniMancantiIstat(giorniIstatMancanti(), gapBtn1); };
-    attachGuestHandlers(el);
-    collegaRicercaArchivio();
     return;
   }
   var groups = {};
@@ -3571,17 +3669,6 @@ function renderArchivio(){
   });
   html += '</div>';
   el.innerHTML = html;
-  el.querySelectorAll('[data-ricevuta]').forEach(function(btn){
-    btn.onclick = function(){ scaricaRicevuta(btn.getAttribute('data-ricevuta'), btn); };
-  });
-  el.querySelectorAll('[data-arrivo]').forEach(function(btn){
-    btn.onclick = function(){ segnalaArrivo(btn.getAttribute('data-arrivo'), btn); };
-  });
-  el.querySelectorAll('[data-partenza]').forEach(function(btn){
-    btn.onclick = function(){ segnalaPartenza(btn.getAttribute('data-partenza'), btn); };
-  });
-  var gapBtn2 = document.getElementById('as-gap-btn');
-  if (gapBtn2) gapBtn2.onclick = function(){ inviaGiorniMancantiIstat(giorniIstatMancanti(), gapBtn2); };
 
   el.querySelectorAll('img[data-photo]').forEach(function(img){
     var key = img.getAttribute('data-photo');
@@ -3625,7 +3712,6 @@ function renderArchivio(){
     };
   });
   attachGuestHandlers(el);
-  collegaRicercaArchivio();
 }
 
 function collegaRicercaArchivio(){
@@ -4087,9 +4173,20 @@ function puntinoStatoFattura(stato, eiStatus){
   return '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+colore+';margin-right:8px;vertical-align:1px;"></span>';
 }
 
+function fatturaCompletataSenzaProblemi(entry){
+  if (!entry || entry.stato !== 'inviata') return false;
+  if (entry.eiStatus && STATI_SDI_PROBLEMA.indexOf(entry.eiStatus) !== -1) return false;
+  return true;
+}
+
 function renderListaFatture(prenotazioni){
-  if (!prenotazioni.length) return '<p class="as-sub">Nessuna prenotazione in questo mese.</p>';
-  return prenotazioni.map(function(b){
+  var daMostrare = prenotazioni.filter(function(b){ return !fatturaCompletataSenzaProblemi(state.fatture[String(b.id)]); });
+  if (!daMostrare.length){
+    return prenotazioni.length
+      ? '<p class="as-sub">Nessuna fattura da fare in questo mese — quelle già inviate sono in Archivio → Fatture emesse.</p>'
+      : '<p class="as-sub">Nessuna prenotazione in questo mese.</p>';
+  }
+  return daMostrare.map(function(b){
     var entry = state.fatture[String(b.id)];
     var stato = entry ? entry.stato : 'pendente';
     var nomeApp = b.apartment ? b.apartment.name : '';
