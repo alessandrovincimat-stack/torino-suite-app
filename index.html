@@ -1763,6 +1763,8 @@ function attachGuestHandlers(root){
         payload.tassaSoggiorno = tassa;
         payload.tassaSoggiornoDescrizione = 'Tassa di soggiorno';
         payload.tassaSoggiornoDettaglio = tassaInput.dataset.dettaglio || '';
+        if (tassaInput.dataset.quantita) payload.tassaSoggiornoQty = tassaInput.dataset.quantita;
+        if (tassaInput.dataset.prezzoUnitario) payload.tassaSoggiornoPrezzoUnitario = tassaInput.dataset.prezzoUnitario;
         if (cfgTassa.vatId) payload.tassaSoggiornoVatId = cfgTassa.vatId;
         var tassaProdottoIdInput = root.querySelector('[data-fattura-tassaprodottoid="'+id+'"]');
         if (tassaProdottoIdInput && tassaProdottoIdInput.value) payload.tassaSoggiornoProductId = tassaProdottoIdInput.value;
@@ -2929,6 +2931,8 @@ async function calcolaTassaSoggiorno(headId){
   tassaInput.value = totale.toFixed(2);
   tassaInput.dataset.nostroCalcolo = totale.toFixed(2);
   tassaInput.dataset.mancantiDati = String(mancantiDati);
+  tassaInput.dataset.quantita = String(nottiTassate * tassabili);
+  tassaInput.dataset.prezzoUnitario = cfgTassa.importo.toFixed(2);
   tassaInput.dataset.dettaglio = nottiTassate + ' pernottament' + (nottiTassate===1?'o':'i') + ' tassat' + (nottiTassate===1?'o':'i') +
     ' — ' + tassabili + ' adult' + (tassabili===1?'o':'i') +
     (esenti ? ', ' + esenti + ' minor' + (esenti===1?'e':'i') + ' esent' + (esenti===1?'e':'i') + ' (sotto ' + cfgTassa.eta + ' anni)' : '');
