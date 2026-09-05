@@ -3569,6 +3569,7 @@ function renderArchivio(){
     '<div class="as-tab" data-archsubtab="documenti">Documenti</div>' +
     '<div class="as-tab" data-archsubtab="istat-ok">ISTAT e Questura OK</div>' +
     '<div class="as-tab" data-archsubtab="fatture-emesse">Fatture emesse</div>' +
+    '<div class="as-tab" data-archsubtab="recupero">Recupero schede</div>' +
     '</div><div id="arch-content"></div>';
 
   el.innerHTML = html;
@@ -3585,6 +3586,7 @@ function renderArchivio(){
   var contentEl = document.getElementById('arch-content');
   if (archivioSubtabAttivo === 'istat-ok') renderArchivioIstatOk(contentEl);
   else if (archivioSubtabAttivo === 'fatture-emesse') renderArchivioFattureEmesse(contentEl);
+  else if (archivioSubtabAttivo === 'recupero') renderArchivioRecuperoSchede(contentEl);
   else renderArchivioDocumenti(contentEl);
 
   collegaRicercaArchivio();
@@ -4106,6 +4108,7 @@ var adminUnlocked = false;
 
 /* ---------- Tab Fatture (terza sezione di primo livello) ---------- */
 var fattureMeseCorrente = { anno: 2026, mese: 7 }; // agosto 2026 (mese indicizzato da 0) — primo mese da tracciare
+var recuperoMeseCorrente = { anno: 2026, mese: 7 }; // stesso punto di partenza, agosto 2026
 var STATI_SDI_INVIATI = ['sent','pending','processing','accepted','no_response','manual_accepted'];
 var STATI_SDI_PROBLEMA = ['error','discarded','not_delivered','rejected','manual_rejected'];
 
@@ -4115,6 +4118,133 @@ function primoGiornoMese(anno, mese){
 function ultimoGiornoMese(anno, mese){
   var d = new Date(anno, mese + 1, 0);
   return d.toISOString().slice(0, 10);
+}
+
+function schedaFuoriTempoMassimo(b, oggiISO){
+  var arr = new Date(b.arrival + 'T00:00:00');
+  var dep = new Date(b.departure + 'T00:00:00');
+  if (isNaN(arr.getTime())) return false;
+  var notti = Math.round((dep - arr) / 86400000);
+  var oreLimite = notti < 1 ? 6 : 24; // 24h dall'arrivo, o 6h per soggiorni sotto le 24h
+  var scadenza = new Date(arr.getTime());
+  scadenza.setHours(scadenza.getHours() + oreLimite);
+  var oggi = new Date(oggiISO + 'T00:00:00');
+  return oggi > scadenza;
+}
+
+async function recuperaSchedaSingola(b, btn){
+  var out = btn.nextElementSibling;
+  if (out) out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>archiviazione…</span>';
+  try {
+    var collegamento = trovaCollegamentoOspite(String(b.id));
+    if (!collegamento){
+      var g = creaSchedaDaPrenotazioneSmoobu(b);
+      var membri = orderedGuestsFor(g.id);
+      await archiveInvio(membri, g.idAppartamento, membri.length, true, true);
+    }
+    if (out) out.innerHTML = '<p class="as-ok">Archiviata come inviata da altri canali.</p>';
+    btn.style.display = 'none';
+  } catch(e){
+    if (out) out.innerHTML = '<div class="as-err">'+e.message+'</div>';
+  }
+}
+
+async function recuperaTutteMese(prenotazioni, oggiISO, btn){
+  var daFare = prenotazioni.filter(function(b){ return !trovaCollegamentoOspite(String(b.id)) && schedaFuoriTempoMassimo(b, oggiISO); });
+  var out = document.getElementById('recupero-bulk-result');
+  if (!daFare.length){
+    if (out) out.textContent = 'Nessuna scheda da recuperare in questo mese.';
+    return;
+  }
+  btn.disabled = true;
+  for (var i = 0; i < daFare.length; i++){
+    if (out) out.textContent = 'Recupero ' + (i+1) + ' di ' + daFare.length + '…';
+    try {
+      var g = creaSchedaDaPrenotazioneSmoobu(daFare[i]);
+      var membri = orderedGuestsFor(g.id);
+      await archiveInvio(membri, g.idAppartamento, membri.length, true, true);
+    } catch(e){}
+  }
+  btn.disabled = false;
+  if (out) out.textContent = daFare.length + ' scheda/e recuperate e archiviate.';
+  renderArchivio();
+}
+
+function renderListaRecupero(prenotazioni, oggiISO){
+  if (!prenotazioni.length) return '<p class="as-sub">Nessuna prenotazione in questo mese.</p>';
+  return prenotazioni.map(function(b){
+    var collegamento = trovaCollegamentoOspite(String(b.id));
+    var nomeOspite = b['guest-name'] || 'sconosciuto';
+    var nomeApp = b.apartment ? b.apartment.name : '';
+    var html = '<div class="as-card" style="padding:12px;">';
+    html += '<div>' + (collegamento ? '🟢 ' : '🔴 ') + '<strong>' + escapeHtml(nomeOspite) + '</strong></div>';
+    html += '<div class="as-sub" style="margin:2px 0 8px;">' + toItDate(b.arrival) + ' → ' + toItDate(b.departure) + ' · ' + escapeHtml(nomeApp) + '</div>';
+    if (collegamento){
+      html += '<p class="as-sub" style="margin:0;">Scheda già presente (' + (collegamento.dove === 'archivio' ? 'in Archivio' : 'in Ospiti') + ').</p>';
+    } else if (schedaFuoriTempoMassimo(b, oggiISO)){
+      html += '<button class="as-btn secondary" data-recupero-crea="'+b.id+'" data-recupero-booking="'+encodeURIComponent(JSON.stringify(b))+'">📦 Segna come già inviata (altri canali) e archivia</button>';
+      html += '<div style="margin-top:6px;"></div>';
+    } else {
+      html += '<p class="as-sub" style="margin:0;">Ancora nei termini per l\'invio Questura: usa "Crea scheda" da Ospiti.</p>';
+    }
+    html += '</div>';
+    return html;
+  }).join('');
+}
+
+function collegaAzioniRecupero(container){
+  container.querySelectorAll('[data-recupero-crea]').forEach(function(btn){
+    btn.onclick = function(){ recuperaSchedaSingola(JSON.parse(decodeURIComponent(btn.getAttribute('data-recupero-booking'))), btn); };
+  });
+}
+
+async function renderArchivioRecuperoSchede(el){
+  var nomeMese = new Date(recuperoMeseCorrente.anno, recuperoMeseCorrente.mese, 1).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+  el.innerHTML = '<p class="as-sub" style="margin-top:-6px;">🟢 scheda già presente · 🔴 mancante, oltre i termini per l\'invio Questura (24h dall\'arrivo, 6h se il soggiorno dura meno di 24h)</p>' +
+    '<p class="as-sub" id="recupero-contatori" style="margin-top:2px;font-weight:600;"></p>' +
+    '<div class="as-row" style="margin:12px 0;"><button class="as-btn ghost" id="recupero-mese-prec">‹</button>' +
+    '<span style="padding:8px 4px;font-weight:600;text-transform:capitalize;">'+nomeMese+'</span>' +
+    '<button class="as-btn ghost" id="recupero-mese-succ">›</button></div>' +
+    '<button class="as-btn secondary" id="recupero-bulk-btn" style="margin-bottom:8px;">Recupera tutte le mancanti di questo mese</button>' +
+    '<div id="recupero-bulk-result" class="as-sub" style="margin-bottom:8px;"></div>' +
+    '<div id="recupero-lista"><p class="as-sub"><span class="as-spin"></span> caricamento prenotazioni…</p></div>';
+
+  document.getElementById('recupero-mese-prec').onclick = function(){
+    recuperoMeseCorrente.mese--;
+    if (recuperoMeseCorrente.mese < 0){ recuperoMeseCorrente.mese = 11; recuperoMeseCorrente.anno--; }
+    renderArchivio();
+  };
+  document.getElementById('recupero-mese-succ').onclick = function(){
+    recuperoMeseCorrente.mese++;
+    if (recuperoMeseCorrente.mese > 11){ recuperoMeseCorrente.mese = 0; recuperoMeseCorrente.anno++; }
+    renderArchivio();
+  };
+
+  var lista = document.getElementById('recupero-lista');
+  if (!state.backend.url){
+    lista.innerHTML = '<p class="as-sub">Configura prima il backend in Impostazioni → Backend.</p>';
+    return;
+  }
+  try {
+    var da = primoGiornoMese(recuperoMeseCorrente.anno, recuperoMeseCorrente.mese);
+    var aData = ultimoGiornoMese(recuperoMeseCorrente.anno, recuperoMeseCorrente.mese);
+    var resp = await fetch(backendUrl('/api/smoobu/reservations?from=' + da + '&to=' + aData), { headers: backendHeaders() });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'errore nel caricamento');
+    var prenotazioni = (data.bookings || []).filter(function(b){ return b.type !== 'blocked-booking' && b.type !== 'cancellation'; });
+    prenotazioni.sort(function(x, y){ return String(x.arrival).localeCompare(String(y.arrival)); });
+    var oggiISO = todayISO();
+    var esistenti = prenotazioni.filter(function(b){ return !!trovaCollegamentoOspite(String(b.id)); }).length;
+    var daRecuperare = prenotazioni.filter(function(b){ return !trovaCollegamentoOspite(String(b.id)) && schedaFuoriTempoMassimo(b, oggiISO); }).length;
+    var contatoriEl = document.getElementById('recupero-contatori');
+    if (contatoriEl) contatoriEl.textContent = prenotazioni.length + ' schede totali questo mese — ' + esistenti + ' già presenti · ' + daRecuperare + ' da recuperare';
+    lista.innerHTML = renderListaRecupero(prenotazioni, oggiISO);
+    collegaAzioniRecupero(lista);
+    var bulkBtn = document.getElementById('recupero-bulk-btn');
+    if (bulkBtn) bulkBtn.onclick = function(){ recuperaTutteMese(prenotazioni, oggiISO, bulkBtn); };
+  } catch(e){
+    lista.innerHTML = '<div class="as-err">Impossibile caricare le prenotazioni: ' + e.message + '</div>';
+  }
 }
 
 function trovaCollegamentoOspite(bookingId){
