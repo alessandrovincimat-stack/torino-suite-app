@@ -4018,7 +4018,7 @@ async function renderTassaTab(){
         body: JSON.stringify({ anno: anno, trimestre: trimestre })
       });
       var data = await resp.json();
-      if (!resp.ok) throw Object.assign(new Error(data.error || 'errore'), { screenshotBase64: data.screenshotBase64 });
+      if (!resp.ok) throw Object.assign(new Error(data.error || 'errore'), { screenshotBase64: data.screenshotBase64, diagnosticaUrl: data.diagnosticaUrl, diagnosticaTesto: data.diagnosticaTesto });
 
       sogSessionId = data.sessionId;
       var html = '';
@@ -4067,6 +4067,12 @@ async function renderTassaTab(){
     } catch(e){
       var htmlErr2 = '<div class="as-err">'+e.message+'</div>';
       if (e.screenshotBase64) htmlErr2 += '<img src="data:image/png;base64,'+e.screenshotBase64+'" style="max-width:100%;border:1px solid var(--border);border-radius:8px;margin-top:8px;">';
+      if (e.diagnosticaUrl || e.diagnosticaTesto){
+        htmlErr2 += '<details style="margin-top:8px;" open><summary style="cursor:pointer;color:var(--text-muted);font-size:12px;">Diagnostica tecnica (copia e invia se il problema persiste)</summary>' +
+          '<div class="as-sub" style="margin-top:6px;user-select:text;">URL: '+escapeHtml(e.diagnosticaUrl||'')+'</div>' +
+          '<textarea readonly rows="6" style="width:100%;margin-top:6px;font-size:11px;" onclick="this.select()">'+escapeHtml(e.diagnosticaTesto||'')+'</textarea>' +
+          '</details>';
+      }
       outS.innerHTML = htmlErr2;
     }
   };
