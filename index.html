@@ -1318,7 +1318,7 @@ function getCapiOptions(){
   return state.guests.filter(function(g){ return g.ruolo==='capofamiglia'||g.ruolo==='capogruppo'; });
 }
 
-function buildGuestCardHtml(g){
+function buildGuestCardHtml(g, extraPrimaDiGenera){
   var isDependent = g.ruolo === 'familiare' || g.ruolo === 'membro';
   var capiOptions = getCapiOptions();
   var html = '';
@@ -1411,6 +1411,7 @@ function buildGuestCardHtml(g){
   else html += '<div class="as-ok">Dati completi</div>';
 
   if (!isDependent){
+    if (extraPrimaDiGenera) html += extraPrimaDiGenera;
     html += '<button class="as-btn secondary" data-gen-invia="'+g.id+'" style="margin-top:10px;">📄 Genera e invia questa scheda</button>';
     html += '<div class="as-gen-wrap" data-gen-wrap="'+g.id+'" style="margin-top:10px;"></div>';
     html += '<button class="as-btn ghost" data-arch-manuale="'+g.id+'" style="margin-top:6px;" title="Usa questo solo se Questura e ISTAT sono gia\' stati inviati tramite altri canali (es. direttamente sul portale ufficiale)">📦 Segna come già inviata (altri canali) e archivia</button>';
@@ -2171,13 +2172,14 @@ function renderSmoobuBox(box, bookings){
       } else if (r.collegate.length){
         var capo = r.collegate.find(function(g){ return g.ruolo==='capofamiglia'||g.ruolo==='capogruppo'; });
         var aperto = smoobuDetailsAperti[b.id] ? ' open' : '';
+        var pulsanteAltroOspite = capo
+          ? '<button class="as-btn ghost" data-crea-smoobu="'+encodeURIComponent(JSON.stringify(b))+'" data-capo-id="'+capo.id+'" style="margin-bottom:10px;">+ altro ospite in questa prenotazione</button>'
+          : '';
         stato = '<details style="margin-top:6px;" data-smoobu-details="'+b.id+'"'+aperto+'><summary style="cursor:pointer;color:var(--brass);font-size:13px;font-weight:600;">▸ ' +
           r.collegate.length + ' scheda/e: ' + r.collegate.map(function(g){ return (g.cognome+' '+g.nome).trim() || '(dati da inserire)'; }).join(', ') +
           '</summary><div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);">' +
-          (capo
-            ? '<button class="as-btn ghost" data-crea-smoobu="'+encodeURIComponent(JSON.stringify(b))+'" data-capo-id="'+capo.id+'">+ altro ospite in questa prenotazione</button>'
-            : '<p class="as-sub">Per aggiungere altri ospiti a questa prenotazione, cambia prima il Ruolo in "Capofamiglia" o "Capogruppo".</p>') +
-          r.collegate.map(buildGuestCardHtml).join('') +
+          (capo ? '' : '<p class="as-sub">Per aggiungere altri ospiti a questa prenotazione, cambia prima il Ruolo in "Capofamiglia" o "Capogruppo".</p>') +
+          r.collegate.map(function(g){ return buildGuestCardHtml(g, (capo && g.id === capo.id) ? pulsanteAltroOspite : ''); }).join('') +
           '</div></details>';
       } else {
         stato = '<button class="as-btn secondary" style="margin-top:6px;" data-crea-smoobu="'+encodeURIComponent(JSON.stringify(b))+'">Crea scheda</button>';
