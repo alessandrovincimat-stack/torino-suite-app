@@ -2425,7 +2425,7 @@ function doImport(target){
       var ic = parseInt(document.getElementById('col-codice').value, 10);
       var inm = parseInt(document.getElementById('col-nome').value, 10);
       var ip = kind==='luoghi' ? parseInt(document.getElementById('col-prov').value, 10) : -1;
-      var rows = lines.map(function(l){
+      var rows = lines.slice(1).map(function(l){
         var sep = l.indexOf(';') !== -1 ? ';' : ',';
         return l.split(sep).map(function(p){return p.trim();});
       }).filter(function(r){ return r[ic] && r[inm]; });
@@ -2448,12 +2448,14 @@ function doImport(target){
         var inm = parseInt(document.getElementById('col-nome').value, 10);
         var ip = parseInt(document.getElementById('col-prov').value, 10);
         var comuni = [], stati = [];
-        lines.forEach(function(l){
+        lines.slice(1).forEach(function(l){
           var sep = l.indexOf(';') !== -1 ? ';' : ',';
           var r = l.split(sep).map(function(p){return p.trim();});
           if (!r[ic] || !r[inm]) return;
           var prov = ip>=0 ? (r[ip]||'') : '';
-          if (prov && prov.length <= 3){
+          if (prov && prov.toUpperCase() === 'ES'){
+            stati.push({ codice:r[ic], nome:r[inm] });
+          } else if (prov && prov.length <= 3){
             comuni.push({ codice:r[ic], nome:r[inm], provincia: prov });
           } else {
             stati.push({ codice:r[ic], nome:r[inm] });
