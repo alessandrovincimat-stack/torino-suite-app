@@ -4018,7 +4018,7 @@ async function renderTassaTab(){
         body: JSON.stringify({ anno: anno, trimestre: trimestre })
       });
       var data = await resp.json();
-      if (!resp.ok) throw Object.assign(new Error(data.error || 'errore'), { screenshotBase64: data.screenshotBase64, diagnosticaUrl: data.diagnosticaUrl, diagnosticaTesto: data.diagnosticaTesto });
+      if (!resp.ok) throw Object.assign(new Error(data.error || 'errore'), { screenshotBase64: data.screenshotBase64, diagnosticaUrl: data.diagnosticaUrl, diagnosticaTesto: data.diagnosticaTesto, diagnosticaClick: data.diagnosticaClick, diagnosticaPresenza: data.diagnosticaPresenza });
 
       sogSessionId = data.sessionId;
       var html = '';
@@ -4070,6 +4070,8 @@ async function renderTassaTab(){
       if (e.diagnosticaUrl || e.diagnosticaTesto){
         htmlErr2 += '<details style="margin-top:8px;" open><summary style="cursor:pointer;color:var(--text-muted);font-size:12px;">Diagnostica tecnica (copia e invia se il problema persiste)</summary>' +
           '<div class="as-sub" style="margin-top:6px;user-select:text;">URL: '+escapeHtml(e.diagnosticaUrl||'')+'</div>' +
+          (e.diagnosticaClick ? '<div class="as-sub" style="margin-top:6px;user-select:text;">Elemento cliccato per "Accedi all\'area personale" (match '+escapeHtml(e.diagnosticaClick.tipoMatch||'')+'): &lt;'+escapeHtml(e.diagnosticaClick.tag||'')+'&gt; classi="'+escapeHtml(e.diagnosticaClick.classi||'')+'" href="'+escapeHtml(e.diagnosticaClick.href||'')+'" haOnclick='+e.diagnosticaClick.haOnclick+'<br>HTML: '+escapeHtml(e.diagnosticaClick.outerHtmlBreve||'')+'</div>' : '') +
+          (e.diagnosticaPresenza ? '<div class="as-sub" style="margin-top:6px;user-select:text;">Elementi trovati nella pagina (anche se non visibili) per: '+Object.keys(e.diagnosticaPresenza).map(function(k){ return k+'='+e.diagnosticaPresenza[k]; }).join(', ')+'</div>' : '') +
           '<textarea readonly rows="6" style="width:100%;margin-top:6px;font-size:11px;" onclick="this.select()">'+escapeHtml(e.diagnosticaTesto||'')+'</textarea>' +
           '</details>';
       }
