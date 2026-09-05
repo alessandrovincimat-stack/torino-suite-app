@@ -1469,6 +1469,7 @@ function buildGuestCardHtml(g){
   if (!isDependent){
     html += '<button class="as-btn secondary" data-gen-invia="'+g.id+'" style="margin-top:10px;">📄 Genera e invia questa scheda</button>';
     html += '<div class="as-gen-wrap" data-gen-wrap="'+g.id+'" style="margin-top:10px;"></div>';
+    html += '<button class="as-btn ghost" data-arch-manuale="'+g.id+'" style="margin-top:6px;" title="Usa questo solo se Questura e ISTAT sono gia\' stati inviati tramite altri canali (es. direttamente sul portale ufficiale)">📦 Segna come già inviata (altri canali) e archivia</button>';
 
     var appNomeFatt = (state.tables.appartamenti.find(function(a){ return a.id===g.idAppartamento; })||{}).nome || '';
     var arrFatt = g.dataArrivo, depFatt = '';
@@ -1592,6 +1593,18 @@ function attachGuestHandlers(root){
         return;
       }
       generaEInviaPanel(groupOrdered, wrapEl);
+    };
+  });
+  root.querySelectorAll('[data-arch-manuale]').forEach(function(btn){
+    btn.onclick = async function(){
+      var headId = btn.getAttribute('data-arch-manuale');
+      var groupOrdered = orderedGuestsFor(headId);
+      var head = groupOrdered[0];
+      if (!head || !head.cognome){ alert('Compila almeno il cognome prima di archiviare.'); return; }
+      var ok = confirm('Questo sposta la scheda di ' + head.cognome + ' ' + head.nome + ' in Archivio segnandola come già completata (Questura e ISTAT), SENZA inviare nulla da qui. Usalo solo se hai già trasmesso tutto tramite altri canali (es. direttamente sul portale ufficiale). Continuare?');
+      if (!ok) return;
+      await archiveInvio(groupOrdered, head.idAppartamento, groupOrdered.length, true, true);
+      render();
     };
   });
   root.querySelectorAll('[data-fattura-toggle]').forEach(function(btn){
@@ -3486,8 +3499,8 @@ function renderArchivio(){
 
   html += '<div class="as-tabs" id="arch-subtabs">' +
     '<div class="as-tab" data-archsubtab="documenti">Documenti</div>' +
-    '<div class="as-tab" data-archsubtab="istat-dafare">Schede da fare</div>' +
-    '<div class="as-tab" data-archsubtab="istat-ok">Questura OK</div>' +
+    '<div class="as-tab" data-archsubtab="istat-dafare">ISTAT da fare</div>' +
+    '<div class="as-tab" data-archsubtab="istat-ok">ISTAT OK</div>' +
     '<div class="as-tab" data-archsubtab="fatture-emesse">Fatture emesse</div>' +
     '</div><div id="arch-content"></div>';
 
@@ -3584,7 +3597,7 @@ function renderArchivioIstatOk(el){
   var invOk = state.invii.filter(invioCompletato).sort(function(a,b){ return b.dataInvio.localeCompare(a.dataInvio); });
   var html = '';
   if (!invOk.length){
-    html = '<div class="as-card"><p class="as-sub">Nessuna scheda completata ancora.</p></div>';
+    html = '<div class="as-card"><p class="as-sub">Nessuna scheda con ISTAT completo ancora.</p></div>';
   } else {
     html = '<div class="as-card">';
     var dateUniche = [];
@@ -3596,7 +3609,7 @@ function renderArchivioIstatOk(el){
         '<div>' + g.toLocaleDateString('it-IT') + ' — ' + (iv.appartamentoNome||'nessun appartamento') + ' (' + iv.nRighe + ' schedine)</div>' +
         '<div class="as-sub" style="margin:0;">' + nomi + '</div>' +
         (dateUniche.indexOf(dataISO)===-1 ? '<button class="as-btn ghost" data-ricevuta="'+dataISO+'" style="margin-top:6px;">Scarica ricevuta del '+g.toLocaleDateString('it-IT')+'</button>' : '') +
-        '<span class="as-ok" style="margin-left:8px;">✅ Questura e ISTAT completi</span>' +
+        '<span class="as-ok" style="margin-left:8px;">✅ ISTAT completo (arrivo + partenza)</span>' +
         '</div>';
       if (dateUniche.indexOf(dataISO)===-1) dateUniche.push(dataISO);
     });
