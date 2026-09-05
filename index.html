@@ -1318,62 +1318,6 @@ function getCapiOptions(){
   return state.guests.filter(function(g){ return g.ruolo==='capofamiglia'||g.ruolo==='capogruppo'; });
 }
 
-function buildFatturaFormHtml(id, nomeCompleto, descrizioneDefault){
-  var html = '';
-  html += '<button class="as-btn ghost" data-fattura-toggle="'+id+'" style="margin-top:8px;">🧾 Crea fattura</button>';
-  html += '<div class="as-fattura-form" data-fattura-form="'+id+'" style="display:none;margin-top:10px;">';
-  html += '<div class="as-field"><label>Intestazione</label><select data-fattura-tipo="'+id+'"><option value="privato">Privato (persona fisica)</option><option value="azienda">Azienda</option></select></div>';
-  html += '<input type="hidden" data-fattura-clientid="'+id+'" value="">';
-  html += '<input type="hidden" data-fattura-prodottoid="'+id+'" value="">';
-  html += '<input type="hidden" data-fattura-tassaprodottoid="'+id+'" value="">';
-  html += '<div data-fattura-privato="'+id+'">' +
-    '<div class="as-field" style="position:relative;"><label>Cliente esistente (opzionale — scrivi per cercare)</label>' +
-    '<input type="text" data-fattura-clientsearch-priv="'+id+'" placeholder="Scrivi almeno 2 lettere…" autocomplete="off">' +
-    '<div data-fattura-clientdropdown-priv="'+id+'" style="display:none;position:absolute;z-index:20;left:0;right:0;background:#1c1a14;border:1px solid var(--border);border-radius:8px;max-height:220px;overflow-y:auto;margin-top:2px;"></div>' +
-    '</div>' +
-    '<div class="as-field"><label>Nome e cognome</label><input data-fattura-nomeprivato="'+id+'" value="'+escapeHtml(nomeCompleto)+'"></div>' +
-    '<div class="as-field"><label>Codice fiscale</label><input data-fattura-cf="'+id+'" style="text-transform:uppercase;"></div>' +
-    '<div class="as-sub" data-fattura-cfnote="'+id+'" style="margin:-4px 0 8px;"></div>' +
-    '</div>';
-  html += '<div data-fattura-azienda="'+id+'" style="display:none;">' +
-    '<div class="as-field" style="position:relative;"><label>Cliente esistente (opzionale — scrivi per cercare)</label>' +
-    '<input type="text" data-fattura-clientsearch="'+id+'" placeholder="Scrivi almeno 2 lettere…" autocomplete="off">' +
-    '<div data-fattura-clientdropdown="'+id+'" style="display:none;position:absolute;z-index:20;left:0;right:0;background:#1c1a14;border:1px solid var(--border);border-radius:8px;max-height:220px;overflow-y:auto;margin-top:2px;"></div>' +
-    '</div>' +
-    '<div class="as-row"><div class="as-field"><label>Ragione sociale</label><input data-fattura-ragsoc="'+id+'"></div><div class="as-field"><label>Partita IVA</label><input data-fattura-piva="'+id+'"></div></div>' +
-    '<button type="button" class="as-btn ghost" data-fattura-cercapiva="'+id+'" style="margin:-4px 0 8px;">Cerca dati da P.IVA</button>' +
-    '<div class="as-sub" data-fattura-pivanote="'+id+'" style="margin:-4px 0 8px;"></div>' +
-    '<div class="as-field"><label>Codice fiscale azienda (se diverso dalla P.IVA, o in mancanza di P.IVA)</label><input data-fattura-cfazienda="'+id+'" style="text-transform:uppercase;"></div>' +
-    '</div>';
-  html += '<p class="as-sub" style="margin:8px 0 -2px;"><strong>Indirizzo del cliente</strong> — obbligatorio per la fattura elettronica (via, CAP, comune, provincia)</p>';
-  html += '<div class="as-field"><label>Via e numero civico</label><input data-fattura-indirizzo="'+id+'"></div>';
-  html += '<div class="as-row">' +
-    '<div class="as-field"><label>CAP</label><input data-fattura-cap="'+id+'" maxlength="5"></div>' +
-    '<div class="as-field"><label>Comune</label><input data-fattura-citta="'+id+'"></div>' +
-    '<div class="as-field"><label>Provincia (sigla)</label><input data-fattura-provincia="'+id+'" maxlength="2" style="text-transform:uppercase;"></div>' +
-    '</div>';
-  html += '<div class="as-sub" data-fattura-capnote="'+id+'" style="margin:-4px 0 8px;"></div>';
-  html += '<details style="margin:8px 0;"><summary style="cursor:pointer;color:var(--text-muted);font-size:12px;">Altri dati (facoltativi): codice destinatario SDI, email, telefono</summary>' +
-    '<div class="as-field" style="margin-top:8px;"><label>Codice destinatario (SDI) — "0000000" se il cliente non ne ha uno proprio</label><input data-fattura-sdi="'+id+'" value="0000000" maxlength="7" style="text-transform:uppercase;"></div>' +
-    '<div class="as-row">' +
-      '<div class="as-field"><label>Email (facoltativa)</label><input type="email" data-fattura-email="'+id+'"></div>' +
-      '<div class="as-field"><label>Telefono (facoltativo)</label><input data-fattura-telefono="'+id+'"></div>' +
-      '</div>' +
-    '</details>';
-  html += '<div class="as-field"><label>Descrizione</label><input data-fattura-descr="'+id+'" value="'+escapeHtml(descrizioneDefault)+'"></div>';
-  html += '<div class="as-sub" data-fattura-prodottonote="'+id+'" style="margin:-4px 0 8px;"></div>';
-  html += '<div class="as-field"><label>Prezzo soggiorno (€)</label><input type="number" step="0.01" min="0" data-fattura-prezzo="'+id+'"></div>';
-  html += '<div class="as-sub" data-fattura-prezzonote="'+id+'" style="margin:-4px 0 8px;"></div>';
-  html += '<div class="as-field"><label>Tassa di soggiorno (€) — calcolata, modificabile</label><input type="number" step="0.01" min="0" data-fattura-tassa="'+id+'" value="0"></div>';
-  html += '<div class="as-sub" data-fattura-tassanote="'+id+'" style="margin:-4px 0 8px;"></div>';
-  html += '<div class="as-err" data-fattura-tassaalert="'+id+'" style="display:none;margin:-4px 0 8px;"></div>';
-  html += '<label data-fattura-tassaokwrap="'+id+'" style="display:none;margin:-4px 0 10px;font-size:13px;color:var(--text);gap:6px;align-items:center;"><input type="checkbox" data-fattura-tassaok="'+id+'" style="margin-right:6px;"> Ho verificato e confermo l\'importo della tassa di soggiorno da fatturare.</label>';
-  html += '<button class="as-btn secondary" data-fattura-crea="'+id+'">Crea fattura</button>';
-  html += '<div class="as-fattura-result" data-fattura-result="'+id+'" style="margin-top:8px;"></div>';
-  html += '</div>';
-  return html;
-}
-
 function buildGuestCardHtml(g){
   var isDependent = g.ruolo === 'familiare' || g.ruolo === 'membro';
   var capiOptions = getCapiOptions();
@@ -1470,16 +1414,6 @@ function buildGuestCardHtml(g){
     html += '<button class="as-btn secondary" data-gen-invia="'+g.id+'" style="margin-top:10px;">📄 Genera e invia questa scheda</button>';
     html += '<div class="as-gen-wrap" data-gen-wrap="'+g.id+'" style="margin-top:10px;"></div>';
     html += '<button class="as-btn ghost" data-arch-manuale="'+g.id+'" style="margin-top:6px;" title="Usa questo solo se Questura e ISTAT sono gia\' stati inviati tramite altri canali (es. direttamente sul portale ufficiale)">📦 Segna come già inviata (altri canali) e archivia</button>';
-
-    var appNomeFatt = (state.tables.appartamenti.find(function(a){ return a.id===g.idAppartamento; })||{}).nome || '';
-    var arrFatt = g.dataArrivo, depFatt = '';
-    if (g.dataArrivo && g.permanenza){
-      var dObj = new Date(g.dataArrivo); dObj.setDate(dObj.getDate() + parseInt(g.permanenza,10));
-      depFatt = dObj.toISOString().slice(0,10);
-    }
-    var descrizioneDefault = 'Soggiorno' + (appNomeFatt? ' presso ' + appNomeFatt : '') + (arrFatt? ' dal ' + toItDate(arrFatt) : '') + (depFatt? ' al ' + toItDate(depFatt) : '');
-
-    html += buildFatturaFormHtml(g.id, (g.cognome+' '+g.nome).trim(), descrizioneDefault);
   }
 
   html += '</div>';
