@@ -3130,7 +3130,7 @@ function generaEInviaPanel(ordered, wrapEl){
     istatBox.style.borderTop = '1px solid var(--border)';
     istatBox.style.paddingTop = '14px';
     istatBox.innerHTML =
-      '<p class="as-sub"><strong>Piemonte Dati Turismo (ISTAT)</strong> — invia gli arrivi di oggi (' + toItDate(todayISO()) + '). Le partenze vanno inviate separatamente il giorno della partenza.</p>' +
+      '<p class="as-sub"><strong>Piemonte Dati Turismo (ISTAT)</strong> — invia gli arrivi di oggi (' + toItDate(todayISO()) + ') insieme alla partenza presunta calcolata dalla permanenza indicata: con questo l\'obbligo è assolto. Serve un nuovo invio solo se la prenotazione cambia davvero (proroga o partenza anticipata).</p>' +
       '<button class="as-btn secondary" data-role="istat">Invia dati ISTAT (arrivi di oggi)</button>' +
       '<div class="as-istat-result" style="margin-top:10px;"></div>';
     wrapEl.appendChild(istatBox);
@@ -3162,6 +3162,14 @@ function buildIstatArrivo(g, allOrdered){
   };
 }
 
+function calcolaDataPartenzaPresunta(dataArrivoISO, permanenza){
+  if (!dataArrivoISO) return null;
+  var d = new Date(dataArrivoISO);
+  if (isNaN(d.getTime())) return null;
+  d.setDate(d.getDate() + (parseInt(permanenza, 10) || 0));
+  return d.toISOString().slice(0, 10);
+}
+
 async function inviaIstatArrivi(arriviOggi, allOrdered){
   if (!arriviOggi.length) throw new Error('nessun ospite con arrivo odierno');
   var arrivi = arriviOggi.map(function(g){ return buildIstatArrivo(g, allOrdered); });
@@ -3177,6 +3185,37 @@ async function inviaIstatArrivi(arriviOggi, allOrdered){
   var data = await resp.json();
   if (!resp.ok) throw new Error(data.error || 'errore invio ISTAT');
   await segnaIstatInviato(todayISO());
+
+  var gruppiPerPartenza = {};
+  arriviOggi.forEach(function(g){
+    var dataPartenza = calcolaDataPartenzaPresunta(g.dataArrivo, g.permanenza);
+    if (!dataPartenza) return;
+    if (!gruppiPerPartenza[dataPartenza]) gruppiPerPartenza[dataPartenza] = [];
+    gruppiPerPartenza[dataPartenza].push(g);
+  });
+  var partenzeInviate = 0;
+  var partenzeFallite = [];
+  for (var dataPartenza in gruppiPerPartenza){
+    var ospitiGruppo = gruppiPerPartenza[dataPartenza];
+    var partenze = ospitiGruppo.map(function(g){
+      return { idswh: g.id, tipoalloggiato: ruoloCode[g.ruolo] || '16', arrivo: (g.dataArrivo||'').replace(/-/g,'') };
+    });
+    try {
+      var respP = await fetch(backendUrl('/api/istat/movimento'), {
+        method: 'POST',
+        headers: backendHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ data: dataPartenza.replace(/-/g,''), camereOccupate: 0, partenze: partenze })
+      });
+      var dataP = await respP.json();
+      if (!respP.ok) throw new Error(dataP.error || 'errore invio partenza');
+      partenzeInviate += ospitiGruppo.length;
+      await segnaIstatInviato(dataPartenza);
+    } catch(ePartenza){
+      partenzeFallite.push({ data: dataPartenza, errore: ePartenza.message });
+    }
+  }
+  data.partenzeInviate = partenzeInviate;
+  data.partenzeFallite = partenzeFallite;
   return data;
 }
 
@@ -3190,8 +3229,14 @@ async function inviaIstat(ordered, outEl){
   }
   out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>invio in corso…</span>';
   try {
-    await inviaIstatArrivi(arriviOggi, ordered);
-    out.innerHTML = '<p class="as-ok">Inviato correttamente a Piemonte Dati Turismo (' + arriviOggi.length + ' ospiti).</p>';
+    var risultato = await inviaIstatArrivi(arriviOggi, ordered);
+    var msg = '<p class="as-ok">Inviato correttamente a Piemonte Dati Turismo (' + arriviOggi.length + ' arrivi';
+    if (risultato.partenzeInviate) msg += ', ' + risultato.partenzeInviate + ' partenze presunte';
+    msg += ').</p>';
+    if (risultato.partenzeFallite && risultato.partenzeFallite.length){
+      msg += '<div class="as-err">⚠️ Partenza presunta non inviata per: ' + risultato.partenzeFallite.map(function(f){ return toItDate(f.data)+' ('+f.errore+')'; }).join(', ') + '. Riprova più tardi o usa "Segnala partenza" in Archivio.</div>';
+    }
+    out.innerHTML = msg;
   } catch(e){
     out.innerHTML = '<div class="as-err">'+e.message+'</div>';
   }
@@ -3214,15 +3259,23 @@ async function sendToBackend(lines, real, idAppartamento, ordered, outEl){
       html += '<div class="as-err">Errori per riga:<br>' + errori.map(function(e,i){return (i+1)+': '+e;}).join('<br>') + '</div>';
     } else if (real) {
       html += '<p class="as-ok">Inviato correttamente alla Questura.</p>';
+      var arrivoIstatOk = false, partenzaIstatOk = false;
       if (state.backend.url){
         try {
-          await inviaIstatArrivi(ordered.filter(function(g){ return g.dataArrivo === todayISO(); }), ordered);
-          html += '<p class="as-ok">Inviato correttamente anche a Piemonte Dati Turismo (ISTAT).</p>';
+          var risultatoIstat = await inviaIstatArrivi(ordered.filter(function(g){ return g.dataArrivo === todayISO(); }), ordered);
+          arrivoIstatOk = true;
+          partenzaIstatOk = !!(risultatoIstat.partenzeInviate && (!risultatoIstat.partenzeFallite || !risultatoIstat.partenzeFallite.length));
+          html += '<p class="as-ok">Inviato correttamente anche a Piemonte Dati Turismo (arrivo';
+          if (risultatoIstat.partenzeInviate) html += ' + partenza presunta';
+          html += ').</p>';
+          if (risultatoIstat.partenzeFallite && risultatoIstat.partenzeFallite.length){
+            html += '<div class="as-err">⚠️ Partenza presunta non inviata: ' + risultatoIstat.partenzeFallite.map(function(f){ return f.errore; }).join(', ') + '. Puoi rimediare da Archivio con "Segnala partenza".</div>';
+          }
         } catch(e){
-          html += '<div class="as-err">Questura OK, ma invio ISTAT fallito: '+e.message+'. Puoi ripeterlo da "Genera file".</div>';
+          html += '<div class="as-err">Questura OK, ma invio ISTAT fallito: '+e.message+'. Puoi ripeterlo da "Genera file" o da Archivio.</div>';
         }
       }
-      await archiveInvio(ordered, idAppartamento, lines.length);
+      await archiveInvio(ordered, idAppartamento, lines.length, arrivoIstatOk, partenzaIstatOk);
       html += '<p class="as-sub">Ospiti spostati nell\'archivio invii.</p>';
       html += '<button class="as-btn secondary" data-role="ricevuta" style="margin-top:8px;">Scarica ricevuta di oggi</button>';
     }
@@ -3235,7 +3288,7 @@ async function sendToBackend(lines, real, idAppartamento, ordered, outEl){
   }
 }
 
-async function archiveInvio(ordered, idAppartamento, nRighe){
+async function archiveInvio(ordered, idAppartamento, nRighe, arrivoIstatOk, partenzaIstatOk){
   var appNome = (state.tables.appartamenti.find(function(a){ return a.id===idAppartamento; })||{}).nome || idAppartamento || '';
   var entry = {
     id: uid(),
@@ -3244,8 +3297,8 @@ async function archiveInvio(ordered, idAppartamento, nRighe){
     appartamentoNome: appNome,
     nRighe: nRighe,
     ospiti: ordered.map(function(g){ return { id: g.id, cognome: g.cognome, nome: g.nome, ruolo: g.ruolo, groupOf: g.groupOf || '', dataArrivo: g.dataArrivo, permanenza: g.permanenza, dataNascita: g.dataNascita || '', sesso: g.sesso || '', nascitaEstero: !!g.nascitaEstero, comuneNascitaNome: g.comuneNascitaNome || '', statoNascitaNome: g.statoNascitaNome || '', residenzaEstero: !!g.residenzaEstero, comuneResidenzaNome: g.comuneResidenzaNome || '', statoResidenzaNome: g.statoResidenzaNome || '', indirizzoResidenza: g.indirizzoResidenza || '', cittadinanzaNome: g.cittadinanzaNome || '', tipoDocumentoNome: g.tipoDocumentoNome || '', numeroDocumento: g.numeroDocumento || '', rilascioEstero: !!g.rilascioEstero, luogoRilascioNome: g.luogoRilascioNome || '', dataScadenzaDocumento: g.dataScadenzaDocumento || '', smoobuBookingId: g.smoobuBookingId || '' }; }),
-    arrivoSegnalato: false,
-    partenzaSegnalata: false
+    arrivoSegnalato: !!arrivoIstatOk,
+    partenzaSegnalata: !!partenzaIstatOk
   };
   state.invii.push(entry);
   var sentIds = ordered.map(function(g){ return g.id; });
@@ -3306,7 +3359,28 @@ async function segnalaArrivo(invioId, btn){
     iv.arrivoSegnalato = true;
     await remoteStorage.set('as-invii', JSON.stringify(state.invii));
     await segnaIstatInviato(dataArrivo);
-    out.innerHTML = '<p class="as-ok">Arrivo segnalato correttamente.</p>';
+    var msg = '<p class="as-ok">Arrivo segnalato correttamente.</p>';
+
+    var dataPartenzaPresunta = calcolaDataPartenzaPresunta(dataArrivo, iv.ospiti[0] && iv.ospiti[0].permanenza);
+    if (dataPartenzaPresunta){
+      try {
+        var partenze = iv.ospiti.map(function(o){ return { idswh: o.id, tipoalloggiato: ruoloCode[o.ruolo] || '16', arrivo: dataArrivo.replace(/-/g,'') }; });
+        var respP = await fetch(backendUrl('/api/istat/movimento'), {
+          method: 'POST',
+          headers: backendHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ data: dataPartenzaPresunta.replace(/-/g,''), camereOccupate: 0, partenze: partenze })
+        });
+        var dataP = await respP.json();
+        if (!respP.ok) throw new Error(dataP.error || 'errore invio partenza');
+        iv.partenzaSegnalata = true;
+        await remoteStorage.set('as-invii', JSON.stringify(state.invii));
+        await segnaIstatInviato(dataPartenzaPresunta);
+        msg += '<p class="as-ok">Partenza presunta (' + toItDate(dataPartenzaPresunta) + ') segnalata correttamente.</p>';
+      } catch(eP){
+        msg += '<div class="as-err">⚠️ Partenza presunta non inviata: '+eP.message+'. Riprova con "Segnala partenza".</div>';
+      }
+    }
+    out.innerHTML = msg;
     render();
   } catch(e){
     out.innerHTML = '<div class="as-err">'+e.message+'</div>';
@@ -3425,12 +3499,12 @@ function renderArchivio(){
         '<div class="as-sub" style="margin:0;">' + nomi + '</div>' +
         (dateUniche.indexOf(dataISO)===-1 ? '<button class="as-btn ghost" data-ricevuta="'+dataISO+'" style="margin-top:6px;">Scarica ricevuta del '+g.toLocaleDateString('it-IT')+'</button>' : '') +
         (iv.arrivoSegnalato
-          ? '<span class="as-ok" style="margin-left:8px;">Arrivo segnalato (ISTAT)</span>'
+          ? '<span class="as-ok" style="margin-left:8px;">Arrivo + partenza presunta segnalati (ISTAT)</span>'
           : '<button class="as-btn secondary" data-arrivo="'+iv.id+'" style="margin-top:6px;margin-left:8px;">Segnala arrivo (ISTAT)</button>') +
         '<div id="as-arrivo-result-'+iv.id+'" style="margin-top:6px;"></div>' +
         (iv.partenzaSegnalata
           ? '<span class="as-ok" style="margin-left:8px;">Partenza segnalata (ISTAT)</span>'
-          : '<button class="as-btn secondary" data-partenza="'+iv.id+'" style="margin-top:6px;margin-left:8px;">Segnala partenza (ISTAT)</button>') +
+          : '<button class="as-btn secondary" data-partenza="'+iv.id+'" style="margin-top:6px;margin-left:8px;" title="Serve solo se la prenotazione è cambiata rispetto a quanto già segnalato">Aggiorna partenza (ISTAT)</button>') +
         '<div id="as-partenza-result-'+iv.id+'" style="margin-top:6px;"></div>';
       var headInvio = iv.ospiti[0];
       if (headInvio){
