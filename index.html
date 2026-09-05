@@ -3213,7 +3213,8 @@ async function archiveInvio(ordered, idAppartamento, nRighe){
     idAppartamento: idAppartamento || '',
     appartamentoNome: appNome,
     nRighe: nRighe,
-    ospiti: ordered.map(function(g){ return { id: g.id, cognome: g.cognome, nome: g.nome, ruolo: g.ruolo, dataArrivo: g.dataArrivo, permanenza: g.permanenza, dataNascita: g.dataNascita || '', sesso: g.sesso || '', nascitaEstero: !!g.nascitaEstero, comuneNascitaNome: g.comuneNascitaNome || '', statoNascitaNome: g.statoNascitaNome || '', residenzaEstero: !!g.residenzaEstero, comuneResidenzaNome: g.comuneResidenzaNome || '', statoResidenzaNome: g.statoResidenzaNome || '', indirizzoResidenza: g.indirizzoResidenza || '', cittadinanzaNome: g.cittadinanzaNome || '', tipoDocumentoNome: g.tipoDocumentoNome || '', numeroDocumento: g.numeroDocumento || '', rilascioEstero: !!g.rilascioEstero, luogoRilascioNome: g.luogoRilascioNome || '', dataScadenzaDocumento: g.dataScadenzaDocumento || '', smoobuBookingId: g.smoobuBookingId || '' }; }),
+    ospiti: ordered.map(function(g){ return { id: g.id, cognome: g.cognome, nome: g.nome, ruolo: g.ruolo, groupOf: g.groupOf || '', dataArrivo: g.dataArrivo, permanenza: g.permanenza, dataNascita: g.dataNascita || '', sesso: g.sesso || '', nascitaEstero: !!g.nascitaEstero, comuneNascitaNome: g.comuneNascitaNome || '', statoNascitaNome: g.statoNascitaNome || '', residenzaEstero: !!g.residenzaEstero, comuneResidenzaNome: g.comuneResidenzaNome || '', statoResidenzaNome: g.statoResidenzaNome || '', indirizzoResidenza: g.indirizzoResidenza || '', cittadinanzaNome: g.cittadinanzaNome || '', tipoDocumentoNome: g.tipoDocumentoNome || '', numeroDocumento: g.numeroDocumento || '', rilascioEstero: !!g.rilascioEstero, luogoRilascioNome: g.luogoRilascioNome || '', dataScadenzaDocumento: g.dataScadenzaDocumento || '', smoobuBookingId: g.smoobuBookingId || '' }; }),
+    arrivoSegnalato: false,
     partenzaSegnalata: false
   };
   state.invii.push(entry);
@@ -3249,6 +3250,37 @@ async function inviaGiorniMancantiIstat(giorni, btn){
   }
   out.innerHTML = '<p class="as-ok">Inviata conferma apertura per '+okCount+' giorni.</p>';
   render();
+}
+
+async function segnalaArrivo(invioId, btn){
+  var iv = state.invii.find(function(x){ return x.id === invioId; });
+  if (!iv) return;
+  var suggerita = (iv.ospiti[0] && iv.ospiti[0].dataArrivo) || todayISO();
+  var dataArrivo = prompt('Data di arrivo da segnalare (AAAA-MM-GG):', suggerita);
+  if (!dataArrivo) return;
+  var out = document.getElementById('as-arrivo-result-'+invioId);
+  out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>invio in corso…</span>';
+  try {
+    var arrivi = iv.ospiti.map(function(o){ return buildIstatArrivo(o, iv.ospiti); });
+    var resp = await fetch(backendUrl('/api/istat/movimento'), {
+      method: 'POST',
+      headers: backendHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        data: dataArrivo.replace(/-/g,''),
+        camereOccupate: 1,
+        arrivi: arrivi
+      })
+    });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'errore invio ISTAT');
+    iv.arrivoSegnalato = true;
+    await remoteStorage.set('as-invii', JSON.stringify(state.invii));
+    await segnaIstatInviato(dataArrivo);
+    out.innerHTML = '<p class="as-ok">Arrivo segnalato correttamente.</p>';
+    render();
+  } catch(e){
+    out.innerHTML = '<div class="as-err">'+e.message+'</div>';
+  }
 }
 
 async function segnalaPartenza(invioId, btn){
@@ -3362,6 +3394,10 @@ function renderArchivio(){
         '<div>' + dataLocale + ' — ' + (iv.appartamentoNome||'nessun appartamento') + ' (' + iv.nRighe + ' schedine)</div>' +
         '<div class="as-sub" style="margin:0;">' + nomi + '</div>' +
         (dateUniche.indexOf(dataISO)===-1 ? '<button class="as-btn ghost" data-ricevuta="'+dataISO+'" style="margin-top:6px;">Scarica ricevuta del '+g.toLocaleDateString('it-IT')+'</button>' : '') +
+        (iv.arrivoSegnalato
+          ? '<span class="as-ok" style="margin-left:8px;">Arrivo segnalato (ISTAT)</span>'
+          : '<button class="as-btn secondary" data-arrivo="'+iv.id+'" style="margin-top:6px;margin-left:8px;">Segnala arrivo (ISTAT)</button>') +
+        '<div id="as-arrivo-result-'+iv.id+'" style="margin-top:6px;"></div>' +
         (iv.partenzaSegnalata
           ? '<span class="as-ok" style="margin-left:8px;">Partenza segnalata (ISTAT)</span>'
           : '<button class="as-btn secondary" data-partenza="'+iv.id+'" style="margin-top:6px;margin-left:8px;">Segnala partenza (ISTAT)</button>') +
@@ -3387,6 +3423,9 @@ function renderArchivio(){
     el.innerHTML = html;
     el.querySelectorAll('[data-ricevuta]').forEach(function(btn){
       btn.onclick = function(){ scaricaRicevuta(btn.getAttribute('data-ricevuta'), btn); };
+    });
+    el.querySelectorAll('[data-arrivo]').forEach(function(btn){
+      btn.onclick = function(){ segnalaArrivo(btn.getAttribute('data-arrivo'), btn); };
     });
     el.querySelectorAll('[data-partenza]').forEach(function(btn){
       btn.onclick = function(){ segnalaPartenza(btn.getAttribute('data-partenza'), btn); };
@@ -3430,6 +3469,9 @@ function renderArchivio(){
   el.innerHTML = html;
   el.querySelectorAll('[data-ricevuta]').forEach(function(btn){
     btn.onclick = function(){ scaricaRicevuta(btn.getAttribute('data-ricevuta'), btn); };
+  });
+  el.querySelectorAll('[data-arrivo]').forEach(function(btn){
+    btn.onclick = function(){ segnalaArrivo(btn.getAttribute('data-arrivo'), btn); };
   });
   el.querySelectorAll('[data-partenza]').forEach(function(btn){
     btn.onclick = function(){ segnalaPartenza(btn.getAttribute('data-partenza'), btn); };
