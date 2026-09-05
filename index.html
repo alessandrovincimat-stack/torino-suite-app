@@ -2159,6 +2159,22 @@ function creaSchedaDaPrenotazioneSmoobu(b, capoId){
   var g = newGuest();
   g.dataArrivo = b.arrival;
   g.smoobuBookingId = String(b.id);
+  var nomeCompleto = (b['guest-name'] || '').trim();
+  if (nomeCompleto){
+    var parti = nomeCompleto.split(/\s+/);
+    var prefissiCognome = ['di','de','del','della','dei','delle','van','von','dos','das','la','le','lo'];
+    if (parti.length > 1){
+      var cognomeParti = [parti.pop()];
+      while (parti.length > 1 && prefissiCognome.indexOf(parti[parti.length-1].toLowerCase()) !== -1){
+        cognomeParti.unshift(parti.pop());
+      }
+      g.cognome = cognomeParti.join(' ');
+      g.nome = parti.join(' ');
+    } else {
+      g.cognome = parti[0];
+      g.nome = '';
+    }
+  }
   var arr = new Date(b.arrival), dep = new Date(b.departure);
   g.permanenza = String(Math.max(1, Math.round((dep-arr)/86400000)));
   var appMatch = state.tables.appartamenti.find(function(a){ return a.smoobuId && b.apartment && String(a.smoobuId) === String(b.apartment.id); });
@@ -3951,14 +3967,13 @@ function vaiECreaFattura(b){
   switchTab(collegamento.dove);
   setTimeout(function(){
     scrollCardIntoView(collegamento.id);
-    if (appenaCreata){
-      alert('Non c\'era ancora una scheda Questura per questa prenotazione: te ne ho creata una precompilata (alloggio e date). Carica la foto del documento per completarla, poi potrai creare la fattura da qui.');
-    } else {
-      setTimeout(function(){
-        var toggleBtn = document.querySelector('[data-fattura-toggle="'+collegamento.id+'"]');
-        if (toggleBtn) toggleBtn.click();
-      }, 350);
-    }
+    setTimeout(function(){
+      var toggleBtn = document.querySelector('[data-fattura-toggle="'+collegamento.id+'"]');
+      if (toggleBtn) toggleBtn.click();
+      if (appenaCreata){
+        alert('Non c\'era una scheda per questa prenotazione: te ne ho creata una con nome, alloggio e date già compilati. Il modulo fattura qui sotto è pronto — se ti serve anche inviare la Questura per questo soggiorno, completa gli altri dati e usa "Genera e invia questa scheda".');
+      }
+    }, 350);
   }, 100);
 }
 
