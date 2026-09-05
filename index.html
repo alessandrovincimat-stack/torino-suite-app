@@ -4080,7 +4080,7 @@ function trovaCollegamentoOspite(bookingId){
   return null;
 }
 
-function vaiECreaFattura(b, btn){
+async function vaiECreaFattura(b, btn){
   var bookingId = String(b.id);
   var collegamento = trovaCollegamentoOspite(bookingId);
   var appenaCreata = false;
@@ -4097,6 +4097,15 @@ function vaiECreaFattura(b, btn){
   wrap.innerHTML = nota + buildFatturaFormHtml(collegamento.id, nomeOspite, descrDefault);
   attachGuestHandlers(wrap);
   if (btn) btn.style.display = 'none';
+
+  var id = collegamento.id;
+  await calcolaTassaSoggiorno(id);
+  await precompilaPrezzoDaSmoobu(id);
+  precompilaArticoliFattura(id);
+  precompilaCodiceFiscale(id);
+  var tipoInput = wrap.querySelector('[data-fattura-tipo="'+id+'"]');
+  if (tipoInput) precompilaIndirizzoFattura(id, tipoInput.value);
+  precompilaContattiFattura(id);
 }
 
 async function verificaStatoSdi(bookingId){
