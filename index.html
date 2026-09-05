@@ -1295,7 +1295,7 @@ async function ocrDocument(files, guest){
     guest.numeroDocumento = (parsed.numero_documento || '').toUpperCase();
     guest.dataScadenzaDocumento = parsed.data_scadenza || '';
     guest.rilascioEstero = !!parsed.rilascio_estero;
-    guest.luogoRilascioNome = (parsed.luogo_rilascio || '').toUpperCase();
+    guest.luogoRilascioNome = (parsed.luogo_rilascio || (guest.rilascioEstero ? guest.cittadinanzaNome : '') || '').toUpperCase();
     if (parsed.indirizzo_residenza) guest.indirizzoResidenza = parsed.indirizzo_residenza;
     guest.residenzaEstero = !!parsed.residenza_estero;
     if (parsed.comune_residenza){
