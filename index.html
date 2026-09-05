@@ -2228,6 +2228,12 @@ function renderSmoobuBox(box, bookings){
       if (r.invioCollegato){
         var nomiInviati = r.invioCollegato.ospiti.filter(function(o){return o.smoobuBookingId===String(b.id);}).map(function(o){return (o.cognome+' '+o.nome).trim();}).join(', ');
         stato = '<p class="as-ok" style="margin:4px 0 0;">Già inviata alla Questura (' + nomiInviati + ')</p>';
+        stato += r.invioCollegato.arrivoSegnalato
+          ? '<p class="as-ok" style="margin:4px 0 0;">Arrivo + partenza presunta segnalati (ISTAT)</p>'
+          : '<button class="as-btn secondary" data-arrivo="'+r.invioCollegato.id+'" style="margin-top:6px;">Segnala arrivo (ISTAT)</button><div style="margin-top:6px;"></div>';
+        if (r.invioCollegato.arrivoSegnalato && !r.invioCollegato.partenzaSegnalata){
+          stato += '<button class="as-btn secondary" data-partenza="'+r.invioCollegato.id+'" style="margin-top:6px;" title="Serve solo se la prenotazione è cambiata rispetto a quanto già segnalato">Aggiorna partenza (ISTAT)</button><div style="margin-top:6px;"></div>';
+        }
       } else if (r.collegate.length){
         var capo = r.collegate.find(function(g){ return g.ruolo==='capofamiglia'||g.ruolo==='capogruppo'; });
         var aperto = smoobuDetailsAperti[b.id] ? ' open' : '';
@@ -2255,6 +2261,12 @@ function renderSmoobuBox(box, bookings){
       var g = creaSchedaDaPrenotazioneSmoobu(b, capoId);
       setTimeout(function(){ scrollCardIntoView(g.id); }, 60);
     };
+  });
+  box.querySelectorAll('[data-arrivo]').forEach(function(btn){
+    btn.onclick = function(){ segnalaArrivo(btn.getAttribute('data-arrivo'), btn); };
+  });
+  box.querySelectorAll('[data-partenza]').forEach(function(btn){
+    btn.onclick = function(){ segnalaPartenza(btn.getAttribute('data-partenza'), btn); };
   });
   box.querySelectorAll('[data-smoobu-details]').forEach(function(det){
     det.addEventListener('toggle', function(){
@@ -3364,7 +3376,7 @@ async function segnalaArrivo(invioId, btn){
   var suggerita = (iv.ospiti[0] && iv.ospiti[0].dataArrivo) || todayISO();
   var dataArrivo = prompt('Data di arrivo da segnalare (AAAA-MM-GG):', suggerita);
   if (!dataArrivo) return;
-  var out = document.getElementById('as-arrivo-result-'+invioId);
+  var out = btn.nextElementSibling;
   out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>invio in corso…</span>';
   try {
     var arrivi = iv.ospiti.map(function(o){ return buildIstatArrivo(o, iv.ospiti); });
@@ -3421,7 +3433,7 @@ async function segnalaPartenza(invioId, btn){
   }
   var dataPartenza = prompt('Data di partenza effettiva (AAAA-MM-GG):', suggerita || todayISO());
   if (!dataPartenza) return;
-  var out = document.getElementById('as-partenza-result-'+invioId);
+  var out = btn.nextElementSibling;
   out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>invio in corso…</span>';
   try {
     var partenze = iv.ospiti.map(function(o){
@@ -3497,36 +3509,6 @@ function renderArchivio(){
     html += '<div class="as-field"><input id="as-archivio-search" placeholder="Cerca per nome o cognome…"></div>';
   }
 
-  html += '<div class="as-tabs" id="arch-subtabs">' +
-    '<div class="as-tab" data-archsubtab="documenti">Documenti</div>' +
-    '<div class="as-tab" data-archsubtab="istat-dafare">ISTAT da fare</div>' +
-    '<div class="as-tab" data-archsubtab="istat-ok">ISTAT OK</div>' +
-    '<div class="as-tab" data-archsubtab="fatture-emesse">Fatture emesse</div>' +
-    '</div><div id="arch-content"></div>';
-
-  el.innerHTML = html;
-
-  el.querySelectorAll('#arch-subtabs [data-archsubtab]').forEach(function(t){
-    var nome = t.getAttribute('data-archsubtab');
-    t.classList.toggle('active', nome === archivioSubtabAttivo);
-    t.onclick = function(){ archivioSubtabAttivo = nome; renderArchivio(); };
-  });
-
-  var contentEl = document.getElementById('arch-content');
-  if (archivioSubtabAttivo === 'istat-dafare') renderArchivioIstatDaFare(contentEl);
-  else if (archivioSubtabAttivo === 'istat-ok') renderArchivioIstatOk(contentEl);
-  else if (archivioSubtabAttivo === 'fatture-emesse') renderArchivioFattureEmesse(contentEl);
-  else renderArchivioDocumenti(contentEl);
-
-  collegaRicercaArchivio();
-}
-
-function invioCompletato(iv){
-  return !!(iv.arrivoSegnalato && iv.partenzaSegnalata);
-}
-
-function renderArchivioIstatDaFare(el){
-  var html = '';
   if (state.backend.url && state.istatUltimaData){
     var mancanti = giorniIstatMancanti();
     if (mancanti.length){
@@ -3539,58 +3521,33 @@ function renderArchivioIstatDaFare(el){
     }
   }
 
-  var invDaFare = state.invii.filter(function(iv){ return !invioCompletato(iv); }).sort(function(a,b){ return b.dataInvio.localeCompare(a.dataInvio); });
-  if (!invDaFare.length){
-    html += '<div class="as-card"><p class="as-sub">Nessuna scheda in attesa: tutti gli invii hanno arrivo e partenza segnalati.</p></div>';
-  } else {
-    html += '<div class="as-card">';
-    var dateUniche = [];
-    invDaFare.forEach(function(iv){
-      var g = new Date(iv.dataInvio);
-      var dataLocale = g.toLocaleDateString('it-IT') + ' ' + g.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
-      var dataISO = iv.dataInvio.slice(0,10);
-      var nomi = iv.ospiti.map(function(o){ return (o.cognome+' '+o.nome).trim(); }).join(', ');
-      html += '<div data-search="'+escapeHtml(normalizzaNome(nomi))+'" style="border-bottom:1px solid var(--border);padding:8px 0;">' +
-        '<div>' + dataLocale + ' — ' + (iv.appartamentoNome||'nessun appartamento') + ' (' + iv.nRighe + ' schedine)</div>' +
-        '<div class="as-sub" style="margin:0;">' + nomi + '</div>' +
-        (dateUniche.indexOf(dataISO)===-1 ? '<button class="as-btn ghost" data-ricevuta="'+dataISO+'" style="margin-top:6px;">Scarica ricevuta del '+g.toLocaleDateString('it-IT')+'</button>' : '') +
-        (iv.arrivoSegnalato
-          ? '<span class="as-ok" style="margin-left:8px;">Arrivo + partenza presunta segnalati (ISTAT)</span>'
-          : '<button class="as-btn secondary" data-arrivo="'+iv.id+'" style="margin-top:6px;margin-left:8px;">Segnala arrivo (ISTAT)</button>') +
-        '<div id="as-arrivo-result-'+iv.id+'" style="margin-top:6px;"></div>' +
-        (iv.partenzaSegnalata
-          ? '<span class="as-ok" style="margin-left:8px;">Partenza segnalata (ISTAT)</span>'
-          : '<button class="as-btn secondary" data-partenza="'+iv.id+'" style="margin-top:6px;margin-left:8px;" title="Serve solo se la prenotazione è cambiata rispetto a quanto già segnalato">Aggiorna partenza (ISTAT)</button>') +
-        '<div id="as-partenza-result-'+iv.id+'" style="margin-top:6px;"></div>';
-      var headInvio = iv.ospiti[0];
-      if (headInvio){
-        var arrFatt = headInvio.dataArrivo, depFatt = '';
-        if (headInvio.dataArrivo && headInvio.permanenza){
-          var dObj2 = new Date(headInvio.dataArrivo); dObj2.setDate(dObj2.getDate() + parseInt(headInvio.permanenza,10));
-          depFatt = dObj2.toISOString().slice(0,10);
-        }
-        var descrDefaultInvio = 'Soggiorno' + (iv.appartamentoNome ? ' presso ' + iv.appartamentoNome : '') + (arrFatt ? ' dal ' + toItDate(arrFatt) : '') + (depFatt ? ' al ' + toItDate(depFatt) : '');
-        html += buildFatturaFormHtml(headInvio.id, (headInvio.cognome+' '+headInvio.nome).trim(), descrDefaultInvio);
-      }
-      html += '</div>';
-      if (dateUniche.indexOf(dataISO)===-1) dateUniche.push(dataISO);
-    });
-    html += '</div>';
-  }
+  html += '<div class="as-tabs" id="arch-subtabs">' +
+    '<div class="as-tab" data-archsubtab="documenti">Documenti</div>' +
+    '<div class="as-tab" data-archsubtab="istat-ok">ISTAT e Questura OK</div>' +
+    '<div class="as-tab" data-archsubtab="fatture-emesse">Fatture emesse</div>' +
+    '</div><div id="arch-content"></div>';
 
   el.innerHTML = html;
-  el.querySelectorAll('[data-ricevuta]').forEach(function(btn){
-    btn.onclick = function(){ scaricaRicevuta(btn.getAttribute('data-ricevuta'), btn); };
-  });
-  el.querySelectorAll('[data-arrivo]').forEach(function(btn){
-    btn.onclick = function(){ segnalaArrivo(btn.getAttribute('data-arrivo'), btn); };
-  });
-  el.querySelectorAll('[data-partenza]').forEach(function(btn){
-    btn.onclick = function(){ segnalaPartenza(btn.getAttribute('data-partenza'), btn); };
-  });
+
   var gapBtn = document.getElementById('as-gap-btn');
   if (gapBtn) gapBtn.onclick = function(){ inviaGiorniMancantiIstat(giorniIstatMancanti(), gapBtn); };
-  attachGuestHandlers(el);
+
+  el.querySelectorAll('#arch-subtabs [data-archsubtab]').forEach(function(t){
+    var nome = t.getAttribute('data-archsubtab');
+    t.classList.toggle('active', nome === archivioSubtabAttivo);
+    t.onclick = function(){ archivioSubtabAttivo = nome; renderArchivio(); };
+  });
+
+  var contentEl = document.getElementById('arch-content');
+  if (archivioSubtabAttivo === 'istat-ok') renderArchivioIstatOk(contentEl);
+  else if (archivioSubtabAttivo === 'fatture-emesse') renderArchivioFattureEmesse(contentEl);
+  else renderArchivioDocumenti(contentEl);
+
+  collegaRicercaArchivio();
+}
+
+function invioCompletato(iv){
+  return !!(iv.arrivoSegnalato && iv.partenzaSegnalata);
 }
 
 function renderArchivioIstatOk(el){
