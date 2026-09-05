@@ -2389,6 +2389,9 @@ async function fetchTabella(kind){
     out.innerHTML =
       '<p class="as-sub">'+lines.length+' righe ricevute. Anteprima:</p>' +
       '<div id="as-file-preview" style="max-height:160px;">'+preview.replace(/</g,'&lt;')+'</div>' +
+      '<div class="as-field" style="margin-top:8px;"><label>Cerca nel testo scaricato (es. "GERMANIA") per vedere come appaiono le righe</label>' +
+        '<input type="text" id="as-fetch-search" placeholder="Scrivi un termine e premi Invio…"></div>' +
+      '<div id="as-fetch-search-result" style="max-height:160px;white-space:pre-wrap;"></div>' +
       '<div class="as-row" style="margin-top:10px;">' +
         '<div class="as-field"><label>Colonna codice (0=prima)</label><input type="number" id="col-codice" value="0"></div>' +
         '<div class="as-field"><label>Colonna nome</label><input type="number" id="col-nome" value="1"></div>' +
@@ -2399,6 +2402,15 @@ async function fetchTabella(kind){
           '<button class="as-btn" id="import-comuni">Importa come Comuni</button><button class="as-btn secondary" id="import-stati">Importa come Stati</button>'
           : '<button class="as-btn" id="import-doc">Importa come tipi documento</button>') +
       '</div>';
+
+    document.getElementById('as-fetch-search').addEventListener('keydown', function(ev){
+      if (ev.key !== 'Enter') return;
+      var termine = normalizzaNome(ev.target.value);
+      var risultatoEl = document.getElementById('as-fetch-search-result');
+      if (!termine){ risultatoEl.textContent = ''; return; }
+      var trovate = lines.filter(function(l){ return normalizzaNome(l).indexOf(termine) !== -1; }).slice(0, 30);
+      risultatoEl.textContent = trovate.length ? trovate.join('\n') : 'Nessuna riga trovata contenente "'+ev.target.value+'".';
+    });
 
 function mergeTable(existing, incoming){
   var out = existing.slice();
