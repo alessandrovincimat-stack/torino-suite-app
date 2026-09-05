@@ -2421,6 +2421,49 @@ function renderTabelle(){
         out.innerHTML = '<div class="as-err">'+e.message+'</div>';
       }
     };
+
+    if (state.tables.appartamenti.length){
+      var ficCheckBox = document.createElement('div');
+      ficCheckBox.className = 'as-card';
+      ficCheckBox.innerHTML = '<p class="as-title" style="font-size:15px;">Corrispondenza con gli articoli di Fatture in Cloud</p>' +
+        '<p class="as-sub">Verifica che ogni appartamento (e la tassa di soggiorno) trovi un articolo dal nome corrispondente su Fatture in Cloud, così le fatture finiscono catalogate correttamente invece che come voce libera.</p>' +
+        '<div id="as-fic-match-result"><span class="as-warn"><span class="as-spin"></span>verifica in corso…</span></div>';
+      el.appendChild(ficCheckBox);
+      verificaCorrispondenzaArticoliFic();
+    }
+  }
+}
+
+async function verificaCorrispondenzaArticoliFic(){
+  var out = document.getElementById('as-fic-match-result');
+  if (!out) return;
+  try {
+    var prodotti = await caricaProdottiFic();
+    if (!prodotti.length){
+      out.innerHTML = '<p class="as-sub">Catalogo articoli non disponibile (controlla token e ID azienda in Backend).</p>';
+      return;
+    }
+    var mancanti = [];
+    state.tables.appartamenti.forEach(function(a){
+      var match = prodotti.find(function(p){ return normalizzaNome(p.name) === normalizzaNome(a.nome); });
+      if (!match) match = prodotti.find(function(p){ return normalizzaNome(p.name).indexOf(normalizzaNome(a.nome)) !== -1; });
+      if (!match) mancanti.push(a.nome);
+    });
+    var tassaOk = prodotti.some(function(p){ return /tassa di soggiorno/i.test(p.name || ''); });
+    if (!mancanti.length && tassaOk){
+      out.innerHTML = '<p class="as-ok">Tutti gli appartamenti e la tassa di soggiorno trovano un articolo corrispondente su Fatture in Cloud.</p>';
+      return;
+    }
+    var html = '';
+    if (mancanti.length){
+      html += '<div class="as-err">⚠️ Nessun articolo trovato su Fatture in Cloud per: ' + mancanti.map(escapeHtml).join(', ') + '. Le fatture per questi alloggi finiranno come voce libera, non catalogata — verifica che il nome coincida esattamente con quello dell\'articolo.</div>';
+    }
+    if (!tassaOk){
+      html += '<div class="as-err" style="margin-top:6px;">⚠️ Nessun articolo con "tassa di soggiorno" nel nome trovato su Fatture in Cloud.</div>';
+    }
+    out.innerHTML = html;
+  } catch(e){
+    out.innerHTML = '<div class="as-err">Verifica non riuscita: ' + e.message + '</div>';
   }
 }
 
