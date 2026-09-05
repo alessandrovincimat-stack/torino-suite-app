@@ -2174,10 +2174,10 @@ function renderSmoobuBox(box, bookings){
         stato = '<details style="margin-top:6px;" data-smoobu-details="'+b.id+'"'+aperto+'><summary style="cursor:pointer;color:var(--brass);font-size:13px;font-weight:600;">▸ ' +
           r.collegate.length + ' scheda/e: ' + r.collegate.map(function(g){ return (g.cognome+' '+g.nome).trim() || '(dati da inserire)'; }).join(', ') +
           '</summary><div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);">' +
-          r.collegate.map(buildGuestCardHtml).join('') +
           (capo
             ? '<button class="as-btn ghost" data-crea-smoobu="'+encodeURIComponent(JSON.stringify(b))+'" data-capo-id="'+capo.id+'">+ altro ospite in questa prenotazione</button>'
             : '<p class="as-sub">Per aggiungere altri ospiti a questa prenotazione, cambia prima il Ruolo in "Capofamiglia" o "Capogruppo".</p>') +
+          r.collegate.map(buildGuestCardHtml).join('') +
           '</div></details>';
       } else {
         stato = '<button class="as-btn secondary" style="margin-top:6px;" data-crea-smoobu="'+encodeURIComponent(JSON.stringify(b))+'">Crea scheda</button>';
