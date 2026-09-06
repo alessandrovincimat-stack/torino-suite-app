@@ -1462,11 +1462,17 @@ function buildFatturaFormHtml(id, nomeCompleto, descrizioneDefault){
 
 function buildGuestCardHtml(g, extraPrimaDiGenera){
   var isDependent = g.ruolo === 'familiare' || g.ruolo === 'membro';
+  var faseBadge = '';
+  if (!isDependent && !g.ocrPending){
+    faseBadge = g.istatArrivoOk
+      ? ' <span class="as-info" style="font-size:11.5px;padding:2px 7px;border-radius:10px;">📨 ISTAT fatto, manca Questura</span>'
+      : ' <span class="as-warn" style="font-size:11.5px;padding:2px 7px;border-radius:10px;">🆕 Da avviare</span>';
+  }
   var capiOptions = getCapiOptions();
   var html = '';
 
   html += '<div class="as-guest" data-id="'+g.id+'">';
-  html += '<div class="as-guest-head"><div><span class="as-name">'+(g.cognome||g.nome? (g.cognome+' '+g.nome).trim() : 'Nuovo ospite')+'</span><span class="as-role">'+roleLabel(g.ruolo)+'</span></div>' +
+  html += '<div class="as-guest-head"><div><span class="as-name">'+(g.cognome||g.nome? (g.cognome+' '+g.nome).trim() : 'Nuovo ospite')+'</span><span class="as-role">'+roleLabel(g.ruolo)+'</span>'+faseBadge+'</div>' +
           (g.ocrPending? '<span class="as-warn"><span class="as-spin"></span>estrazione in corso… <button class="as-remove" data-remove="'+g.id+'">annulla</button></span>' : '<button class="as-remove" data-remove="'+g.id+'">rimuovi</button>') +
           '</div>';
 
@@ -2253,6 +2259,7 @@ function renderSmoobuBox(box, bookings){
     box.innerHTML = '<p class="as-sub">Nessun arrivo previsto nei prossimi 7 giorni su Smoobu.</p>';
     return;
   }
+  bookings = bookings.slice().sort(function(x, y){ return String(x.arrival).localeCompare(String(y.arrival)); });
   var righe = bookings.map(function(b){
     var nomeCompleto = b['guest-name'] || '';
     var collegate = state.guests.filter(function(g){ return g.smoobuBookingId === String(b.id); });
@@ -2275,10 +2282,10 @@ function renderSmoobuBox(box, bookings){
           stato += '<button class="as-btn secondary" data-partenza="'+r.invioCollegato.id+'" style="margin-top:6px;" title="Serve solo se la prenotazione è cambiata rispetto a quanto già segnalato">Aggiorna partenza (ISTAT)</button><div style="margin-top:6px;"></div>';
         }
       } else if (r.collegate.length){
-        var capo = r.collegate.find(function(g){ return g.ruolo==='capofamiglia'||g.ruolo==='capogruppo'; });
+        var capo = r.collegate.find(function(g){ return g.ruolo==='capofamiglia'||g.ruolo==='capogruppo'; }) || r.collegate[0];
         var aperto = smoobuDetailsAperti[b.id] ? ' open' : '';
         var corpoSchede;
-        if (capo){
+        if (capo.ruolo==='capofamiglia'||capo.ruolo==='capogruppo'){
           var dipendenti = r.collegate.filter(function(g){ return g.id !== capo.id; });
           var pulsanteAltroOspite = '<button class="as-btn ghost" data-crea-smoobu="'+encodeURIComponent(JSON.stringify(b))+'" data-capo-id="'+capo.id+'" style="margin-bottom:10px;">+ altro ospite in questa prenotazione</button>';
           var extraCapo = pulsanteAltroOspite + dipendenti.map(function(g){ return buildGuestCardHtml(g); }).join('');
@@ -2287,8 +2294,10 @@ function renderSmoobuBox(box, bookings){
           corpoSchede = '<p class="as-sub">Per aggiungere altri ospiti a questa prenotazione, cambia prima il Ruolo in "Capofamiglia" o "Capogruppo".</p>' +
             r.collegate.map(function(g){ return buildGuestCardHtml(g); }).join('');
         }
+        var faseRiepilogo = capo.istatArrivoOk ? '📨 ISTAT fatto, manca Questura' : '🆕 Da avviare';
         stato = '<details style="margin-top:6px;" data-smoobu-details="'+b.id+'"'+aperto+'><summary style="cursor:pointer;color:var(--brass);font-size:13px;font-weight:600;">▸ ' +
           r.collegate.length + ' scheda/e: ' + r.collegate.map(function(g){ return (g.cognome+' '+g.nome).trim() || '(dati da inserire)'; }).join(', ') +
+          ' — ' + faseRiepilogo +
           '</summary><div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);">' +
           corpoSchede +
           '</div></details>';
@@ -3459,7 +3468,7 @@ function generaEInviaPanel(ordered, wrapEl){
       : '<p class="as-sub">Nessun appartamento selezionato negli ospiti — invio senza riferimento appartamento.</p>';
     if (appIds.length > 1) appLine += '<p class="as-warn">Attenzione: gli ospiti hanno appartamenti diversi tra loro; verrà usato solo "'+(appNome||idAppartamento)+'". Invia gli altri separatamente.</p>';
 
-    var istatStato = { arrivoOk: false, partenzaOk: false };
+    var istatStato = { arrivoOk: !!ordered[0].istatArrivoOk, partenzaOk: !!ordered[0].istatPartenzaOk };
 
     var istatBox = document.createElement('div');
     istatBox.style.marginTop = '14px';
@@ -3480,7 +3489,7 @@ function generaEInviaPanel(ordered, wrapEl){
       '<p class="as-warn" data-role="istat-lock">Invia prima i dati ISTAT qui sopra: una volta inviata, la Questura non è più modificabile.</p>' +
       '<div class="as-row">' +
         '<button class="as-btn secondary" data-role="test">Valida con la Questura (senza inviare)</button>' +
-        '<button class="as-btn" data-role="send" disabled>Invia alla Questura</button>' +
+        '<button class="as-btn" data-role="send"' + (istatStato.arrivoOk ? '' : ' disabled') + '>Invia alla Questura</button>' +
       '</div>' +
       '<button class="as-btn ghost" data-role="salta-istat" style="margin-top:8px;font-size:12px;">ISTAT già inviato tramite altro canale / lo farò dopo — sblocca comunque</button>' +
       '<div class="as-send-result" style="margin-top:10px;"></div>';
@@ -3489,6 +3498,7 @@ function generaEInviaPanel(ordered, wrapEl){
     var resultEl = sendBox.querySelector('.as-send-result');
     var sendBtn = sendBox.querySelector('[data-role="send"]');
     var lockNote = sendBox.querySelector('[data-role="istat-lock"]');
+    if (istatStato.arrivoOk) lockNote.style.display = 'none';
 
     function sbloccaQuestura(){
       sendBtn.disabled = false;
@@ -3499,6 +3509,9 @@ function generaEInviaPanel(ordered, wrapEl){
       inviaIstat(ordered, istatResultEl, function(esito){
         istatStato.arrivoOk = esito.arrivoOk;
         istatStato.partenzaOk = esito.partenzaOk;
+        ordered[0].istatArrivoOk = esito.arrivoOk;
+        ordered[0].istatPartenzaOk = esito.partenzaOk;
+        saveGuests();
         sbloccaQuestura();
       });
     };
