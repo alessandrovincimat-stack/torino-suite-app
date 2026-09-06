@@ -4490,14 +4490,15 @@ function renderListaRecupero(prenotazioni, oggiISO){
     var nomeOspite = b['guest-name'] || 'sconosciuto';
     var nomeApp = b.apartment ? b.apartment.name : '';
     var html = '<div class="as-card" style="padding:12px;">';
-    var pallino = !collegamento ? '🔴 ' : (collegamento.dove === 'duplicato' ? '⚠️ ' : '🟢 ');
+    var pallino = !collegamento ? '🔴 ' : (collegamento.dove === 'duplicato' ? '⚠️ ' : (collegamento.manuale ? '🔵 ' : '🟢 '));
     html += '<div>' + pallino + '<strong>' + escapeHtml(nomeOspite) + '</strong></div>';
     html += '<div class="as-sub" style="margin:2px 0 8px;">' + toItDate(b.arrival) + ' → ' + toItDate(b.departure) + ' · ' + escapeHtml(nomeApp) + '</div>';
     if (collegamento && collegamento.dove === 'duplicato'){
       html += '<p style="margin:0;color:var(--danger);">Presente sia in Ospiti (non ancora inviata) sia in Archivio (già inviata) — probabile doppione. Controlla ed elimina la scheda attiva in Ospiti prima di inviarla per errore una seconda volta.</p>';
       html += '<button class="as-btn secondary" data-recupero-vai-ospiti="'+collegamento.id+'" style="margin-top:8px;">Vai alla scheda in Ospiti</button>';
     } else if (collegamento){
-      html += '<p class="as-sub" style="margin:0;">Scheda già presente (' + (collegamento.dove === 'archivio' ? 'in Archivio' : 'in Ospiti') + ').</p>';
+      var doveTesto = collegamento.dove === 'archivio' ? 'in Archivio' : 'in Ospiti';
+      html += '<p class="as-sub" style="margin:0;">Scheda già presente (' + doveTesto + (collegamento.manuale ? ' — altri canali/verifica esterna' : '') + ').</p>';
     } else if (schedaFuoriTempoMassimo(b, oggiISO)){
       html += '<button class="as-btn secondary" data-recupero-crea="'+b.id+'" data-recupero-booking="'+encodeURIComponent(JSON.stringify(b))+'">📦 Segna come già inviata (altri canali) e archivia</button>';
       html += '<div style="margin-top:6px;"></div>';
@@ -4601,7 +4602,7 @@ async function renderArchivioRecuperoSchede(el){
 
     function mostraDettaglio(){
       dettaglio.innerHTML =
-        '<p class="as-sub">🟢 scheda già presente · ⚠️ doppione (Ospiti + Archivio) · 🔴 mancante, oltre i termini per l\'invio Questura (24h dall\'arrivo, 6h se il soggiorno dura meno di 24h)</p>' +
+        '<p class="as-sub">🟢 compilata e inviata dall\'app · 🔵 già presente ma segnata come inviata altrove (altri canali/verifica esterna, es. ROSS1000) · ⚠️ doppione (Ospiti + Archivio) · 🔴 mancante, oltre i termini per l\'invio Questura (24h dall\'arrivo, 6h se il soggiorno dura meno di 24h)</p>' +
         '<button class="as-btn secondary" id="recupero-bulk-btn" style="margin:8px 0;">Recupera tutte le mancanti di questo mese</button>' +
         '<div id="recupero-bulk-result" class="as-sub" style="margin-bottom:8px;"></div>' +
         '<div id="recupero-lista">' + renderListaRecupero(prenotazioni, oggiISO) + '</div>';
@@ -4802,8 +4803,8 @@ function trovaCollegamentoOspite(bookingId){
     return g.smoobuBookingId === String(bookingId) && (g.ruolo === 'singolo' || g.ruolo === 'capofamiglia' || g.ruolo === 'capogruppo');
   });
   var invio = state.invii.find(function(iv){ return iv.ospiti && iv.ospiti[0] && iv.ospiti[0].smoobuBookingId === String(bookingId); });
-  if (live && invio) return { id: live.id, dove: 'duplicato', idArchivio: invio.ospiti[0].id };
-  if (invio) return { id: invio.ospiti[0].id, dove: 'archivio' };
+  if (live && invio) return { id: live.id, dove: 'duplicato', idArchivio: invio.ospiti[0].id, manuale: !!invio.manuale };
+  if (invio) return { id: invio.ospiti[0].id, dove: 'archivio', manuale: !!invio.manuale };
   if (live) return { id: live.id, dove: 'ospiti' };
   return null;
 }
