@@ -2654,6 +2654,23 @@ async function caricaConfigTassa(){
   return tassaConfigCache;
 }
 
+var pulizieConfigCache = null;
+async function caricaConfigPulizie(){
+  if (pulizieConfigCache) return pulizieConfigCache;
+  try {
+    var respP = await fetch(backendUrl('/api/settings'), { headers: backendHeaders() });
+    var dataP = await respP.json();
+    pulizieConfigCache = {
+      ordinaria: parseFloat(String(dataP.PULIZIA_ORDINARIA_IMPORTO || '').replace(',', '.')) || 0,
+      straordinaria: parseFloat(String(dataP.PULIZIA_STRAORDINARIA_IMPORTO || '').replace(',', '.')) || 0,
+      oraria: parseFloat(String(dataP.PULIZIA_ORARIA_IMPORTO || '').replace(',', '.')) || 0
+    };
+  } catch(e){
+    pulizieConfigCache = { ordinaria: 0, straordinaria: 0, oraria: 0 };
+  }
+  return pulizieConfigCache;
+}
+
 function calcolaEta(dataNascita, dataRif){
   if (!dataNascita || !dataRif) return null;
   var b = new Date(dataNascita), r = new Date(dataRif);
@@ -3946,6 +3963,11 @@ function renderBackend(){
       '</div>' +
       '<div class="as-field"><label>Notti massime tassabili</label><input id="cfg-TASSA_SOGGIORNO_MAX_NOTTI" placeholder="7"></div>' +
       '<div class="as-field"><label>Aliquota IVA tassa di soggiorno (di solito "Escluso")</label><select id="cfg-TASSA_SOGGIORNO_VAT_ID"><option value="">— scegli dopo aver salvato token e ID azienda —</option></select></div>' +
+      '<p class="as-sub" style="margin-top:14px;"><strong>Pulizie</strong></p>' +
+      '<p class="as-sub">Tariffe usate nel report Pulizie (Archivio → Pulizie). Modificabili in qualsiasi momento se cambiano.</p>' +
+      '<div class="as-field"><label>Pulizia ordinaria per alloggio al check-out (€)</label><input id="cfg-PULIZIA_ORDINARIA_IMPORTO" placeholder="es. 30.00"></div>' +
+      '<div class="as-field"><label>Pulizia straordinaria per alloggio (€)</label><input id="cfg-PULIZIA_STRAORDINARIA_IMPORTO" placeholder="es. 50.00"></div>' +
+      '<div class="as-field"><label>Costo orario "Varie" (€/ora)</label><input id="cfg-PULIZIA_ORARIA_IMPORTO" placeholder="es. 15.00"></div>' +
       '<p class="as-sub" style="margin-top:14px;"><strong>Soggiorniamo (Città di Torino)</strong></p>' +
       '<p class="as-sub">Per la compilazione automatica della dichiarazione trimestrale della tassa di soggiorno (i risultati e l\'invio si trovano nella sezione "Tassa di soggiorno" in alto).</p>' +
       '<div class="as-row">' +
@@ -3958,7 +3980,7 @@ function renderBackend(){
       '<div id="cfg-result" style="margin-top:10px;"></div>';
     document.getElementById('tab-backend').appendChild(settingsBox);
 
-    var cfgKeys = ['SMOOBU_API_KEY','SMOOBU_API_SECRET','ISTAT_UTENTE','ISTAT_PASSWORD','ISTAT_CODICE_STRUTTURA','ISTAT_CAMERE_DISPONIBILI','ISTAT_LETTI_DISPONIBILI','FIC_ACCESS_TOKEN','FIC_COMPANY_ID','FIC_VAT_ID','TASSA_SOGGIORNO_IMPORTO','TASSA_SOGGIORNO_ETA_ESENZIONE','TASSA_SOGGIORNO_MAX_NOTTI','TASSA_SOGGIORNO_VAT_ID','SOGGIORNIAMO_UTENTE','SOGGIORNIAMO_PASSWORD','SOGGIORNIAMO_MAPPATURA'];
+    var cfgKeys = ['SMOOBU_API_KEY','SMOOBU_API_SECRET','ISTAT_UTENTE','ISTAT_PASSWORD','ISTAT_CODICE_STRUTTURA','ISTAT_CAMERE_DISPONIBILI','ISTAT_LETTI_DISPONIBILI','FIC_ACCESS_TOKEN','FIC_COMPANY_ID','FIC_VAT_ID','TASSA_SOGGIORNO_IMPORTO','TASSA_SOGGIORNO_ETA_ESENZIONE','TASSA_SOGGIORNO_MAX_NOTTI','TASSA_SOGGIORNO_VAT_ID','PULIZIA_ORDINARIA_IMPORTO','PULIZIA_STRAORDINARIA_IMPORTO','PULIZIA_ORARIA_IMPORTO','SOGGIORNIAMO_UTENTE','SOGGIORNIAMO_PASSWORD','SOGGIORNIAMO_MAPPATURA'];
     fetch(backendUrl('/api/settings'), { headers: backendHeaders() }).then(function(r){ return r.json(); }).then(function(data){
       cfgKeys.forEach(function(k){ var el2 = document.getElementById('cfg-'+k); if (el2 && data[k] && el2.tagName !== 'SELECT') el2.value = data[k]; });
       if (data.FIC_ACCESS_TOKEN && data.FIC_COMPANY_ID){
@@ -3973,6 +3995,9 @@ function renderBackend(){
       var payload = {};
       cfgKeys.forEach(function(k){ var el3 = document.getElementById('cfg-'+k); payload[k] = (el3.value||'').trim(); });
       if (payload.TASSA_SOGGIORNO_IMPORTO) payload.TASSA_SOGGIORNO_IMPORTO = payload.TASSA_SOGGIORNO_IMPORTO.replace(',', '.');
+      if (payload.PULIZIA_ORDINARIA_IMPORTO) payload.PULIZIA_ORDINARIA_IMPORTO = payload.PULIZIA_ORDINARIA_IMPORTO.replace(',', '.');
+      if (payload.PULIZIA_STRAORDINARIA_IMPORTO) payload.PULIZIA_STRAORDINARIA_IMPORTO = payload.PULIZIA_STRAORDINARIA_IMPORTO.replace(',', '.');
+      if (payload.PULIZIA_ORARIA_IMPORTO) payload.PULIZIA_ORARIA_IMPORTO = payload.PULIZIA_ORARIA_IMPORTO.replace(',', '.');
       try {
         var resp2 = await fetch(backendUrl('/api/settings'), {
           method: 'POST',
@@ -4416,17 +4441,23 @@ async function renderArchivioRecuperoSchede(el){
 async function renderArchivioPulizie(el){
   var nomeMese = new Date(pulizieMeseCorrente.anno, pulizieMeseCorrente.mese, 1).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
   el.innerHTML =
-    '<p class="as-sub" style="margin-top:-6px;">Un check-out = un alloggio da pulire in quel giorno. Elenco basato sulle prenotazioni Smoobu, non solo su quelle già trasformate in scheda. Puoi escludere un checkout (es. ospite non presentato) o aggiungere una pulizia extra (es. cambio biancheria a metà soggiorno).</p>' +
+    '<p class="as-sub" style="margin-top:-6px;">Un check-out = una pulizia ordinaria in quel giorno. Elenco basato sulle prenotazioni Smoobu, non solo su quelle già trasformate in scheda. Puoi escludere un checkout (es. ospite non presentato) o aggiungere una pulizia extra.</p>' +
     '<div class="as-row" style="margin:12px 0;"><button class="as-btn ghost" id="pulizie-mese-prec">‹</button>' +
     '<span style="padding:8px 4px;font-weight:600;text-transform:capitalize;">'+nomeMese+'</span>' +
     '<button class="as-btn ghost" id="pulizie-mese-succ">›</button></div>' +
     '<div class="as-card" style="margin-bottom:10px;">' +
       '<p class="as-title" style="font-size:14px;">+ Aggiungi pulizia extra</p>' +
+      '<div class="as-field"><label>Tipo</label><select id="pulizie-extra-tipo">' +
+        '<option value="ordinaria">Pulizia ordinaria supplementare (durante il soggiorno)</option>' +
+        '<option value="straordinaria">Pulizia straordinaria (periodica)</option>' +
+        '<option value="varie">Varie (ore lavorate)</option>' +
+      '</select></div>' +
       '<div class="as-field"><label>Data</label><input type="date" id="pulizie-extra-data"></div>' +
-      '<div class="as-field"><label>Alloggio</label><select id="pulizie-extra-alloggio"><option value="">(scegli)</option>' +
+      '<div class="as-field" id="pulizie-extra-wrap-alloggio"><label>Alloggio</label><select id="pulizie-extra-alloggio"><option value="">(scegli)</option>' +
         (state.tables.appartamenti||[]).map(function(a){ return '<option value="'+escapeHtml(a.nome)+'">'+escapeHtml(a.nome)+'</option>'; }).join('') +
       '</select></div>' +
-      '<div class="as-field"><label>Nota (facoltativa)</label><input id="pulizie-extra-nota" placeholder="es. pulizia intermedia"></div>' +
+      '<div class="as-field" id="pulizie-extra-wrap-ore" style="display:none;"><label>Ore lavorate</label><input type="number" step="0.5" min="0" id="pulizie-extra-ore" placeholder="es. 2.5"></div>' +
+      '<div class="as-field"><label>Nota (facoltativa)</label><input id="pulizie-extra-nota" placeholder="es. cambio biancheria a metà soggiorno"></div>' +
       '<button class="as-btn secondary" id="pulizie-extra-add">Aggiungi</button>' +
     '</div>' +
     '<div id="pulizie-lista"><p class="as-sub"><span class="as-spin"></span> caricamento prenotazioni…</p></div>';
@@ -4441,12 +4472,27 @@ async function renderArchivioPulizie(el){
     if (pulizieMeseCorrente.mese > 11){ pulizieMeseCorrente.mese = 0; pulizieMeseCorrente.anno++; }
     renderArchivio();
   };
+  document.getElementById('pulizie-extra-tipo').onchange = function(){
+    var isVarie = this.value === 'varie';
+    document.getElementById('pulizie-extra-wrap-alloggio').style.display = isVarie ? 'none' : '';
+    document.getElementById('pulizie-extra-wrap-ore').style.display = isVarie ? '' : 'none';
+  };
   document.getElementById('pulizie-extra-add').onclick = async function(){
+    var tipoV = document.getElementById('pulizie-extra-tipo').value;
     var dataV = document.getElementById('pulizie-extra-data').value;
-    var alloggioV = document.getElementById('pulizie-extra-alloggio').value;
     var notaV = document.getElementById('pulizie-extra-nota').value.trim();
-    if (!dataV || !alloggioV){ alert('Indica almeno data e alloggio.'); return; }
-    state.pulizieExtra.push({ id: uid(), data: dataV, appartamentoNome: alloggioV, nota: notaV });
+    if (!dataV){ alert('Indica la data.'); return; }
+    var voce = { id: uid(), tipo: tipoV, data: dataV, nota: notaV };
+    if (tipoV === 'varie'){
+      var oreV = parseFloat(document.getElementById('pulizie-extra-ore').value.replace(',', '.'));
+      if (!oreV || oreV <= 0){ alert('Indica le ore lavorate.'); return; }
+      voce.oreLavorate = oreV;
+    } else {
+      var alloggioV = document.getElementById('pulizie-extra-alloggio').value;
+      if (!alloggioV){ alert('Indica l\'alloggio.'); return; }
+      voce.appartamentoNome = alloggioV;
+    }
+    state.pulizieExtra.push(voce);
     await savePulizieExtra();
     renderArchivio();
   };
@@ -4457,6 +4503,7 @@ async function renderArchivioPulizie(el){
     return;
   }
   try {
+    var cfgPulizie = await caricaConfigPulizie();
     var da = primoGiornoMese(pulizieMeseCorrente.anno, pulizieMeseCorrente.mese);
     var aData = ultimoGiornoMese(pulizieMeseCorrente.anno, pulizieMeseCorrente.mese);
     var resp = await fetch(backendUrl('/api/smoobu/reservations?departureFrom=' + da + '&departureTo=' + aData), { headers: backendHeaders() });
@@ -4472,6 +4519,7 @@ async function renderArchivioPulizie(el){
       if (!perGiorno[giorno]) perGiorno[giorno] = [];
       perGiorno[giorno].push({
         bookingId: String(b.id),
+        tipo: 'ordinaria',
         appartamentoNome: (b.apartment && b.apartment.name) ? b.apartment.name : '(alloggio sconosciuto)',
         escluso: !!state.pulizieEscluse[String(b.id)]
       });
@@ -4479,7 +4527,7 @@ async function renderArchivioPulizie(el){
     state.pulizieExtra.forEach(function(x){
       if (!x.data || x.data < da || x.data > aData) return;
       if (!perGiorno[x.data]) perGiorno[x.data] = [];
-      perGiorno[x.data].push({ extraId: x.id, appartamentoNome: x.appartamentoNome, nota: x.nota, manuale: true });
+      perGiorno[x.data].push({ extraId: x.id, tipo: x.tipo || 'ordinaria', appartamentoNome: x.appartamentoNome, oreLavorate: x.oreLavorate, nota: x.nota, manuale: true });
     });
 
     var giorni = Object.keys(perGiorno).sort();
@@ -4487,19 +4535,27 @@ async function renderArchivioPulizie(el){
       lista.innerHTML = '<p class="as-sub">Nessun check-out o pulizia extra in questo mese.</p>';
       return;
     }
-    var totale = 0;
+    var etichetteTipo = { ordinaria: 'ordinaria', straordinaria: 'straordinaria', varie: 'varie' };
+    var contaOrdinarie = 0, contaStraordinarie = 0, oreVarie = 0;
     var html = '<div class="as-card">';
     giorni.forEach(function(g){
       var voci = perGiorno[g];
-      var contate = voci.filter(function(v){ return !v.escluso; }).length;
-      totale += contate;
+      var contateGiorno = voci.filter(function(v){ return !v.escluso; }).length;
       html += '<div style="border-bottom:1px solid var(--border);padding:8px 0;">' +
-        '<strong>' + toItDate(g) + '</strong> — ' + contate + ' alloggio/i da pulire<br>' +
+        '<strong>' + toItDate(g) + '</strong> — ' + contateGiorno + ' intervento/i<br>' +
         voci.map(function(v){
+          if (!v.escluso){
+            if (v.tipo === 'straordinaria') contaStraordinarie++;
+            else if (v.tipo === 'varie') oreVarie += (v.oreLavorate || 0);
+            else contaOrdinarie++;
+          }
           if (v.manuale){
+            var descrizione = v.tipo === 'varie'
+              ? (v.oreLavorate + ' ore' + (v.nota ? ' — ' + escapeHtml(v.nota) : ''))
+              : (escapeHtml(v.appartamentoNome) + (v.nota ? ' — ' + escapeHtml(v.nota) : ''));
             return '<span style="display:inline-block;margin:3px 6px 0 0;padding:2px 8px;border:1px solid var(--border);border-radius:12px;">' +
-              escapeHtml(v.appartamentoNome) + (v.nota ? ' — ' + escapeHtml(v.nota) : '') +
-              ' <em style="color:var(--brass);font-style:normal;font-size:11px;">extra</em>' +
+              descrizione +
+              ' <em style="color:var(--brass);font-style:normal;font-size:11px;">' + etichetteTipo[v.tipo] + '</em>' +
               ' <a href="#" data-pulizie-rimuovi-extra="'+v.extraId+'" style="color:var(--danger);text-decoration:none;">×</a></span>';
           }
           if (v.escluso){
@@ -4513,7 +4569,16 @@ async function renderArchivioPulizie(el){
         }).join('') +
         '</div>';
     });
-    html += '<p style="margin-top:10px;font-weight:600;">Totale alloggi puliti nel mese: ' + totale + '</p>';
+
+    var totaleEuro = contaOrdinarie * cfgPulizie.ordinaria + contaStraordinarie * cfgPulizie.straordinaria + oreVarie * cfgPulizie.oraria;
+    html += '<div style="margin-top:10px;font-weight:600;">' +
+      '<p style="margin:2px 0;">Pulizie ordinarie: ' + contaOrdinarie + (cfgPulizie.ordinaria ? ' × €' + cfgPulizie.ordinaria.toFixed(2).replace('.',',') + ' = €' + (contaOrdinarie*cfgPulizie.ordinaria).toFixed(2).replace('.',',') : '') + '</p>' +
+      '<p style="margin:2px 0;">Pulizie straordinarie: ' + contaStraordinarie + (cfgPulizie.straordinaria ? ' × €' + cfgPulizie.straordinaria.toFixed(2).replace('.',',') + ' = €' + (contaStraordinarie*cfgPulizie.straordinaria).toFixed(2).replace('.',',') : '') + '</p>' +
+      '<p style="margin:2px 0;">Ore varie: ' + oreVarie + (cfgPulizie.oraria ? ' × €' + cfgPulizie.oraria.toFixed(2).replace('.',',') + ' = €' + (oreVarie*cfgPulizie.oraria).toFixed(2).replace('.',',') : '') + '</p>' +
+      (cfgPulizie.ordinaria || cfgPulizie.straordinaria || cfgPulizie.oraria
+        ? '<p style="margin-top:6px;">Totale: €' + totaleEuro.toFixed(2).replace('.',',') + '</p>'
+        : '<p class="as-sub" style="margin-top:6px;font-weight:normal;">Configura le tariffe in Impostazioni → Backend → Pulizie per vedere anche il totale in euro.</p>') +
+      '</div>';
     html += '</div>';
     lista.innerHTML = html;
 
