@@ -2004,39 +2004,6 @@ async function renderOggi(){
   el.innerHTML = html;
 
   if (state.backend.url){
-    var fattureBox = document.createElement('div');
-    fattureBox.className = 'as-card';
-    fattureBox.innerHTML = '<p class="as-title" style="font-size:16px;">Fatture da fare</p><p class="as-sub"><span class="as-spin"></span> verifica in corso…</p>';
-    el.appendChild(fattureBox);
-    try {
-      var da7 = new Date(); da7.setDate(da7.getDate() - 7);
-      var respFatt = await fetch(backendUrl('/api/smoobu/reservations?departureFrom=' + da7.toISOString().slice(0,10) + '&departureTo=' + oggiISO), { headers: backendHeaders() });
-      var dataFatt = await respFatt.json();
-      if (!respFatt.ok) throw new Error(dataFatt.error || 'errore');
-      var partitiSenzaFattura = (dataFatt.bookings || []).filter(function(b){
-        if (b.type === 'blocked-booking' || b.type === 'cancellation') return false;
-        if (!b.departure || b.departure > oggiISO) return false; // non ancora partiti
-        var entry = state.fatture[String(b.id)];
-        return !entry || entry.stato === 'pendente';
-      });
-      if (!partitiSenzaFattura.length){
-        fattureBox.innerHTML = '<p class="as-title" style="font-size:16px;">Fatture da fare</p><p class="as-ok">Nessun ospite partito negli ultimi 7 giorni è ancora senza fattura.</p>';
-      } else {
-        fattureBox.innerHTML = '<p class="as-title" style="font-size:16px;">Fatture da fare</p>' +
-          '<p style="color:var(--danger);">⚠️ ' + partitiSenzaFattura.length + ' ospite/i partito/i negli ultimi 7 giorni, fattura ancora da fare.</p>' +
-          partitiSenzaFattura.map(function(b){
-            return '<div style="padding:10px 0;border-top:1px solid var(--border);">' +
-              '<strong>'+(b['guest-name']||'sconosciuto')+'</strong> — partito il ' + toItDate(b.departure) + ' · ' + (b.apartment?b.apartment.name:'') +
-              '</div>';
-          }).join('') +
-          '<p class="as-sub" style="margin-top:8px;">Vai sul tab "Fatture" per crearle.</p>';
-      }
-    } catch(eFatt){
-      fattureBox.innerHTML = '<p class="as-title" style="font-size:16px;">Fatture da fare</p><div class="as-err">Impossibile verificare: '+eFatt.message+'</div>';
-    }
-  }
-
-  if (state.backend.url){
     var statusBox = document.createElement('div');
     statusBox.className = 'as-card';
     statusBox.innerHTML = '<p class="as-title" style="font-size:16px;">Stato integrazioni</p><p class="as-sub"><span class="as-spin"></span> verifica in corso…</p>';
