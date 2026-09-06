@@ -2975,7 +2975,8 @@ function gruppiPerRiepilogoTassa(){
       if (smoobuIdGiaVisti[g.smoobuBookingId]) return;
       smoobuIdGiaVisti[g.smoobuBookingId] = true;
     }
-    gruppi.push({ dataArrivo: g.dataArrivo, permanenza: g.permanenza, membri: orderedGuestsFor(g.id) });
+    var app = (state.tables.appartamenti || []).find(function(a){ return a.id === g.idAppartamento; });
+    gruppi.push({ dataArrivo: g.dataArrivo, permanenza: g.permanenza, appartamentoNome: app ? app.nome : (g.idAppartamento || ''), membri: orderedGuestsFor(g.id) });
   });
   (state.invii || []).forEach(function(entry){
     if (!entry.ospiti || !entry.ospiti.length) return;
@@ -2984,7 +2985,7 @@ function gruppiPerRiepilogoTassa(){
       if (smoobuIdGiaVisti[head.smoobuBookingId]) return;
       smoobuIdGiaVisti[head.smoobuBookingId] = true;
     }
-    gruppi.push({ dataArrivo: head.dataArrivo, permanenza: head.permanenza, membri: entry.ospiti });
+    gruppi.push({ dataArrivo: head.dataArrivo, permanenza: head.permanenza, appartamentoNome: entry.appartamentoNome || '', membri: entry.ospiti });
   });
   return gruppi;
 }
@@ -3016,6 +3017,90 @@ async function calcolaRiepilogoTassa(anno, trimestre){
     righe[idx].mancantiDati += mancanti;
   });
   return righe;
+}
+
+var TIPOLOGIA_TESTO_CLIENT = {
+  paganti: 'Ospiti paganti',
+  minori: 'Minori di anni 13 non compiuti',
+  eccedenti: 'Pernottamenti eccedenti il massimo previsto dal regolamento'
+};
+
+async function calcolaDettaglioTassa(anno, trimestre){
+  var cfgTassa = await caricaConfigTassa();
+  var meseInizio = (trimestre-1)*3;
+  var mesi = [meseInizio, meseInizio+1, meseInizio+2];
+
+  // righe[mese][appartamento][tipologia] = { ospiti, pernottamenti, mancantiDati, prenotazioni: [...] }
+  var righe = {};
+  mesi.forEach(function(m){ righe[m] = {}; });
+
+  var gruppi = gruppiPerRiepilogoTassa();
+  gruppi.forEach(function(gr){
+    if (!gr.dataArrivo) return;
+    var d = new Date(gr.dataArrivo);
+    if (isNaN(d) || d.getFullYear() !== anno) return;
+    var idx = mesi.indexOf(d.getMonth());
+    if (idx === -1) return;
+    var mese = mesi[idx];
+
+    var notti = parseInt(gr.permanenza, 10) || 0;
+    var nottiTassate = cfgTassa.maxNotti ? Math.min(notti, cfgTassa.maxNotti) : notti;
+    var nottiEccedenti = cfgTassa.maxNotti && notti > cfgTassa.maxNotti ? (notti - cfgTassa.maxNotti) : 0;
+
+    var tassabili = 0, esentiMinori = 0, mancanti = 0;
+    gr.membri.forEach(function(m){
+      if (!m.dataNascita) mancanti++;
+      var eta = calcolaEta(m.dataNascita, gr.dataArrivo);
+      if (eta != null && eta < cfgTassa.eta) esentiMinori++; else tassabili++;
+    });
+
+    var nomeApp = gr.appartamentoNome || '(senza alloggio)';
+    if (!righe[mese][nomeApp]) righe[mese][nomeApp] = {};
+    var bucket = righe[mese][nomeApp];
+    var capo = gr.membri[0] || {};
+    var nomeOspite = ((capo.cognome||'')+' '+(capo.nome||'')).trim() || '(senza nome)';
+
+    function aggiungi(tipologia, ospiti, pernottamenti){
+      if (!ospiti || !pernottamenti) return;
+      if (!bucket[tipologia]) bucket[tipologia] = { ospiti: 0, pernottamenti: 0, mancantiDati: 0, prenotazioni: [] };
+      bucket[tipologia].ospiti += ospiti;
+      bucket[tipologia].pernottamenti += pernottamenti;
+      bucket[tipologia].mancantiDati += mancanti;
+      bucket[tipologia].prenotazioni.push({
+        ospiteNome: nomeOspite,
+        dataArrivo: gr.dataArrivo,
+        ospiti: ospiti,
+        pernottamenti: pernottamenti,
+        mancantiDati: mancanti
+      });
+    }
+    aggiungi('paganti', tassabili, nottiTassate * tassabili);
+    aggiungi('minori', esentiMinori, notti * esentiMinori);
+    aggiungi('eccedenti', tassabili, nottiEccedenti * tassabili);
+  });
+
+  var elenco = [];
+  mesi.forEach(function(mese){
+    Object.keys(righe[mese]).sort().forEach(function(nomeApp){
+      Object.keys(righe[mese][nomeApp]).forEach(function(tipologia){
+        var v = righe[mese][nomeApp][tipologia];
+        if (!v.ospiti) return;
+        v.prenotazioni.sort(function(a,b){ return (a.dataArrivo||'').localeCompare(b.dataArrivo||''); });
+        elenco.push({
+          mese: mese,
+          appartamentoNome: nomeApp,
+          tipologia: tipologia,
+          tipologiaTesto: TIPOLOGIA_TESTO_CLIENT[tipologia],
+          ospiti: v.ospiti,
+          pernottamenti: v.pernottamenti,
+          importo: tipologia === 'minori' ? 0 : v.pernottamenti * cfgTassa.importo,
+          mancantiDati: v.mancantiDati,
+          prenotazioni: v.prenotazioni
+        });
+      });
+    });
+  });
+  return elenco;
 }
 
 
@@ -3992,6 +4077,49 @@ async function renderTassaTab(){
     html += '<p class="as-sub" style="margin-top:8px;">Esenti (minori sotto '+cfgTassaR.eta+' anni) nel periodo: '+totEsenti+'. Notti tassate limitate a '+(cfgTassaR.maxNotti||'—')+' per soggiorno.</p>';
     if (totMancanti) html += '<div class="as-err" style="margin-top:6px;">⚠️ '+totMancanti+' ospite/i in questo periodo senza data di nascita registrata: sono stati conteggiati come tassabili anche se fossero minori esenti. Controlla manualmente prima di dichiarare.</div>';
     html += '<p class="as-sub" style="margin-top:8px;">I dati dei soggiorni già archiviati prima dell\'introduzione di questo riepilogo potrebbero non avere la data di nascita salvata: verifica i mesi più vecchi.</p>';
+
+    var dettaglio = await calcolaDettaglioTassa(anno, trimestre);
+    var nomiMesiDett = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+    html += '<details style="margin-top:12px;"><summary style="cursor:pointer;color:var(--brass);font-size:13px;font-weight:600;">▸ Dettaglio righe da inserire sul portale ('+dettaglio.length+') — per un controllo incrociato</summary>';
+    if (!dettaglio.length){
+      html += '<p class="as-sub" style="margin-top:8px;">Nessuna riga da inserire in questo periodo.</p>';
+    } else {
+      html += '<table style="width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px;">' +
+        '<tr style="text-align:left;color:var(--muted);">' +
+          '<th style="padding:4px 6px 4px 0;">Mese</th>' +
+          '<th style="padding:4px 6px;">Alloggio</th>' +
+          '<th style="padding:4px 6px;">Tipologia</th>' +
+          '<th style="padding:4px 6px;">Ospiti</th>' +
+          '<th style="padding:4px 6px;">Pernott.</th>' +
+          '<th style="padding:4px 0;">Importo</th>' +
+        '</tr>';
+      dettaglio.forEach(function(r){
+        var avviso = r.mancantiDati ? ' ⚠️' : '';
+        html += '<tr style="border-top:1px solid var(--border);">' +
+          '<td style="padding:5px 6px 5px 0;">'+nomiMesiDett[r.mese]+'</td>' +
+          '<td style="padding:5px 6px;">'+escapeHtml(r.appartamentoNome)+'</td>' +
+          '<td style="padding:5px 6px;">'+r.tipologiaTesto+avviso+'</td>' +
+          '<td style="padding:5px 6px;">'+r.ospiti+'</td>' +
+          '<td style="padding:5px 6px;">'+r.pernottamenti+'</td>' +
+          '<td style="padding:5px 0;">'+(r.tipologia==='minori'?'—':'€'+r.importo.toFixed(2).replace('.',','))+'</td>' +
+        '</tr>';
+        html += '<tr style="border-top:none;"><td colspan="6" style="padding:0 0 6px 0;">' +
+          '<details><summary style="cursor:pointer;color:var(--text-muted);font-size:11.5px;">▸ da quali prenotazioni viene questo totale (' + r.prenotazioni.length + ')</summary>' +
+          '<table style="width:100%;border-collapse:collapse;font-size:11.5px;margin:4px 0 4px 12px;">' +
+          r.prenotazioni.map(function(p){
+            var avvisoP = p.mancantiDati ? ' ⚠️' : '';
+            return '<tr><td style="padding:2px 6px 2px 0;color:var(--text-muted);">'+toItDate(p.dataArrivo)+'</td>' +
+              '<td style="padding:2px 6px;">'+escapeHtml(p.ospiteNome)+avvisoP+'</td>' +
+              '<td style="padding:2px 6px;">'+p.ospiti+' osp.</td>' +
+              '<td style="padding:2px 0;">'+p.pernottamenti+' pernott.</td></tr>';
+          }).join('') +
+          '</table></details></td></tr>';
+      });
+      html += '</table>';
+      html += '<p class="as-sub" style="margin-top:6px;">⚠️ = almeno un ospite conteggiato in quella riga/prenotazione senza data di nascita registrata.</p>';
+    }
+    html += '</details>';
+
     outR.innerHTML = html;
   };
 
