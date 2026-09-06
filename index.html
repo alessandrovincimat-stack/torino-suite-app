@@ -981,7 +981,7 @@ async function loadState(){
   // avvisa con un errore invece di mostrare un falso successo senza cancellare nulla sul server.
   try {
     var paramsUrl = new URLSearchParams(window.location.search);
-    if (paramsUrl.get('resetdati') === 'CONFERMA4'){
+    if (paramsUrl.get('resetdati') === 'CONFERMA5'){
       if (!state.backend.url){
         alert('ERRORE: il backend non risulta configurato in questo momento (state.backend.url è vuoto). Nessuna cancellazione è stata effettuata sul server. Riprova, e se persiste segnalalo.');
         try { window.history.replaceState({}, '', window.location.pathname); } catch(eUrl0){}
@@ -989,6 +989,7 @@ async function loadState(){
       }
       var chiaviDaAzzerare = ['as-guests','as-invii','as-archivio','as-istat-ultima-data','as-fatture'];
       var erroriReset = [];
+      var dettaglioDelete = [];
       for (var czi=0; czi<chiaviDaAzzerare.length; czi++){
         var k2 = chiaviDaAzzerare[czi];
         try {
@@ -1000,7 +1001,14 @@ async function loadState(){
             }
           }
         } catch(eg1){ erroriReset.push('lettura '+k2+': '+eg1.message); }
-        try { await remoteStorage.delete(k2); } catch(ed1){ erroriReset.push('cancellazione '+k2+': '+ed1.message); }
+        // Chiamata DIRETTA (non tramite remoteStorage.delete, che inghiotte gli errori HTTP) per vedere lo status vero
+        try {
+          var respDel = await fetch(backendUrl('/api/store?key='+encodeURIComponent(k2)), { method: 'DELETE', headers: backendHeaders(), cache: 'no-store' });
+          var testoDel = await respDel.text();
+          dettaglioDelete.push(k2 + ': HTTP ' + respDel.status + ' — ' + testoDel.slice(0, 120));
+        } catch(ed1){
+          dettaglioDelete.push(k2 + ': ECCEZIONE DI RETE — ' + ed1.message);
+        }
       }
       try {
         var localeDaCancellare2 = await window.storage.get('as-archivio', false);
@@ -1024,8 +1032,9 @@ async function loadState(){
 
       var msg = 'Reset completato.\n';
       msg += 'as-archivio sul server ora: ' + (verificaArc && verificaArc.value ? 'ANCORA PRESENTE (' + verificaArc.value.length + ' caratteri!)' : 'vuoto, ok') + '\n';
-      msg += 'as-guests sul server ora: ' + (verificaGuests && verificaGuests.value ? 'ANCORA PRESENTE!' : 'vuoto, ok') + '\n';
-      if (erroriReset.length) msg += 'Errori incontrati: ' + erroriReset.join(' | ');
+      msg += 'as-guests sul server ora: ' + (verificaGuests && verificaGuests.value ? 'ANCORA PRESENTE!' : 'vuoto, ok') + '\n\n';
+      msg += 'Dettaglio DELETE:\n' + dettaglioDelete.join('\n');
+      if (erroriReset.length) msg += '\n\nAltri errori: ' + erroriReset.join(' | ');
       alert(msg);
       window.location.reload();
       return;
