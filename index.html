@@ -961,7 +961,7 @@ lucide-react/dist/esm/lucide-react.js:
 
 (function(){
 
-var state = { guests: [], tables: { comuni: [], stati: [], documenti: [], appartamenti: [] }, backend: { url: '', secret: '' }, archivio: [], invii: [], istatUltimaData: '', fatture: {} };
+var state = { guests: [], tables: { comuni: [], stati: [], documenti: [], appartamenti: [] }, backend: { url: '', secret: '' }, archivio: [], invii: [], istatUltimaData: '', fatture: {}, pulizieExtra: [], pulizieEscluse: {} };
 
 function uid(){ return 'g' + Math.random().toString(36).slice(2,9); }
 
@@ -1045,6 +1045,14 @@ async function loadState(){
     var ft = await remoteStorage.get('as-fatture');
     if (ft && ft.value) state.fatture = JSON.parse(ft.value);
   } catch(e){}
+  try {
+    var pe = await remoteStorage.get('as-pulizie-extra');
+    if (pe && pe.value) state.pulizieExtra = JSON.parse(pe.value);
+  } catch(e){}
+  try {
+    var pesc = await remoteStorage.get('as-pulizie-escluse');
+    if (pesc && pesc.value) state.pulizieEscluse = JSON.parse(pesc.value);
+  } catch(e){}
 }
 async function segnaIstatInviato(dataISO){
   if (!state.istatUltimaData || dataISO > state.istatUltimaData){
@@ -1078,6 +1086,12 @@ async function saveArchivio(){
 }
 async function saveFatture(){
   try { await remoteStorage.set('as-fatture', JSON.stringify(state.fatture)); } catch(e){}
+}
+async function savePulizieExtra(){
+  try { await remoteStorage.set('as-pulizie-extra', JSON.stringify(state.pulizieExtra)); } catch(e){}
+}
+async function savePulizieEscluse(){
+  try { await remoteStorage.set('as-pulizie-escluse', JSON.stringify(state.pulizieEscluse)); } catch(e){}
 }
 
 function compressImage(file, maxWidth, quality){
@@ -4402,10 +4416,21 @@ async function renderArchivioRecuperoSchede(el){
 async function renderArchivioPulizie(el){
   var nomeMese = new Date(pulizieMeseCorrente.anno, pulizieMeseCorrente.mese, 1).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
   el.innerHTML =
-    '<p class="as-sub" style="margin-top:-6px;">Un check-out = un alloggio da pulire in quel giorno. Elenco basato sulle prenotazioni Smoobu, non solo su quelle già trasformate in scheda.</p>' +
+    '<p class="as-sub" style="margin-top:-6px;">Un check-out = un alloggio da pulire in quel giorno. Elenco basato sulle prenotazioni Smoobu, non solo su quelle già trasformate in scheda. Puoi escludere un checkout (es. ospite non presentato) o aggiungere una pulizia extra (es. cambio biancheria a metà soggiorno).</p>' +
     '<div class="as-row" style="margin:12px 0;"><button class="as-btn ghost" id="pulizie-mese-prec">‹</button>' +
     '<span style="padding:8px 4px;font-weight:600;text-transform:capitalize;">'+nomeMese+'</span>' +
     '<button class="as-btn ghost" id="pulizie-mese-succ">›</button></div>' +
+    '<div class="as-card" style="margin-bottom:10px;">' +
+      '<p class="as-title" style="font-size:14px;">+ Aggiungi pulizia extra</p>' +
+      '<div class="as-row">' +
+        '<div class="as-field"><label>Data</label><input type="date" id="pulizie-extra-data"></div>' +
+        '<div class="as-field"><label>Alloggio</label><select id="pulizie-extra-alloggio"><option value="">(scegli)</option>' +
+          (state.tables.appartamenti||[]).map(function(a){ return '<option value="'+escapeHtml(a.nome)+'">'+escapeHtml(a.nome)+'</option>'; }).join('') +
+        '</select></div>' +
+      '</div>' +
+      '<div class="as-field"><label>Nota (facoltativa)</label><input id="pulizie-extra-nota" placeholder="es. pulizia intermedia"></div>' +
+      '<button class="as-btn secondary" id="pulizie-extra-add">Aggiungi</button>' +
+    '</div>' +
     '<div id="pulizie-lista"><p class="as-sub"><span class="as-spin"></span> caricamento prenotazioni…</p></div>';
 
   document.getElementById('pulizie-mese-prec').onclick = function(){
@@ -4416,6 +4441,15 @@ async function renderArchivioPulizie(el){
   document.getElementById('pulizie-mese-succ').onclick = function(){
     pulizieMeseCorrente.mese++;
     if (pulizieMeseCorrente.mese > 11){ pulizieMeseCorrente.mese = 0; pulizieMeseCorrente.anno++; }
+    renderArchivio();
+  };
+  document.getElementById('pulizie-extra-add').onclick = async function(){
+    var dataV = document.getElementById('pulizie-extra-data').value;
+    var alloggioV = document.getElementById('pulizie-extra-alloggio').value;
+    var notaV = document.getElementById('pulizie-extra-nota').value.trim();
+    if (!dataV || !alloggioV){ alert('Indica almeno data e alloggio.'); return; }
+    state.pulizieExtra.push({ id: uid(), data: dataV, appartamentoNome: alloggioV, nota: notaV });
+    await savePulizieExtra();
     renderArchivio();
   };
 
@@ -4438,26 +4472,78 @@ async function renderArchivioPulizie(el){
       var giorno = String(b.departure).slice(0, 10);
       if (giorno < da || giorno > aData) return; // per sicurezza, nel caso l'API restituisse un range più ampio
       if (!perGiorno[giorno]) perGiorno[giorno] = [];
-      perGiorno[giorno].push((b.apartment && b.apartment.name) ? b.apartment.name : '(alloggio sconosciuto)');
+      perGiorno[giorno].push({
+        bookingId: String(b.id),
+        appartamentoNome: (b.apartment && b.apartment.name) ? b.apartment.name : '(alloggio sconosciuto)',
+        escluso: !!state.pulizieEscluse[String(b.id)]
+      });
+    });
+    state.pulizieExtra.forEach(function(x){
+      if (!x.data || x.data < da || x.data > aData) return;
+      if (!perGiorno[x.data]) perGiorno[x.data] = [];
+      perGiorno[x.data].push({ extraId: x.id, appartamentoNome: x.appartamentoNome, nota: x.nota, manuale: true });
     });
 
     var giorni = Object.keys(perGiorno).sort();
     if (!giorni.length){
-      lista.innerHTML = '<p class="as-sub">Nessun check-out in questo mese.</p>';
+      lista.innerHTML = '<p class="as-sub">Nessun check-out o pulizia extra in questo mese.</p>';
       return;
     }
     var totale = 0;
     var html = '<div class="as-card">';
     giorni.forEach(function(g){
-      var alloggi = perGiorno[g];
-      totale += alloggi.length;
+      var voci = perGiorno[g];
+      var contate = voci.filter(function(v){ return !v.escluso; }).length;
+      totale += contate;
       html += '<div style="border-bottom:1px solid var(--border);padding:8px 0;">' +
-        '<strong>' + toItDate(g) + '</strong> — ' + alloggi.length + ' alloggio/i: ' + alloggi.map(escapeHtml).join(', ') +
+        '<strong>' + toItDate(g) + '</strong> — ' + contate + ' alloggio/i da pulire<br>' +
+        voci.map(function(v){
+          if (v.manuale){
+            return '<span style="display:inline-block;margin:3px 6px 0 0;padding:2px 8px;border:1px solid var(--border);border-radius:12px;">' +
+              escapeHtml(v.appartamentoNome) + (v.nota ? ' — ' + escapeHtml(v.nota) : '') +
+              ' <em style="color:var(--brass);font-style:normal;font-size:11px;">extra</em>' +
+              ' <a href="#" data-pulizie-rimuovi-extra="'+v.extraId+'" style="color:var(--danger);text-decoration:none;">×</a></span>';
+          }
+          if (v.escluso){
+            return '<span style="display:inline-block;margin:3px 6px 0 0;padding:2px 8px;border:1px solid var(--border);border-radius:12px;text-decoration:line-through;opacity:.6;">' +
+              escapeHtml(v.appartamentoNome) +
+              ' <a href="#" data-pulizie-includi="'+v.bookingId+'" style="text-decoration:none;">(includi di nuovo)</a></span>';
+          }
+          return '<span style="display:inline-block;margin:3px 6px 0 0;padding:2px 8px;border:1px solid var(--border);border-radius:12px;">' +
+            escapeHtml(v.appartamentoNome) +
+            ' <a href="#" data-pulizie-escludi="'+v.bookingId+'" title="Non pulito (es. ospite non presentato)" style="color:var(--muted);text-decoration:none;">×</a></span>';
+        }).join('') +
         '</div>';
     });
     html += '<p style="margin-top:10px;font-weight:600;">Totale alloggi puliti nel mese: ' + totale + '</p>';
     html += '</div>';
     lista.innerHTML = html;
+
+    lista.querySelectorAll('[data-pulizie-escludi]').forEach(function(a){
+      a.onclick = async function(ev){
+        ev.preventDefault();
+        state.pulizieEscluse[a.getAttribute('data-pulizie-escludi')] = true;
+        await savePulizieEscluse();
+        renderArchivio();
+      };
+    });
+    lista.querySelectorAll('[data-pulizie-includi]').forEach(function(a){
+      a.onclick = async function(ev){
+        ev.preventDefault();
+        delete state.pulizieEscluse[a.getAttribute('data-pulizie-includi')];
+        await savePulizieEscluse();
+        renderArchivio();
+      };
+    });
+    lista.querySelectorAll('[data-pulizie-rimuovi-extra]').forEach(function(a){
+      a.onclick = async function(ev){
+        ev.preventDefault();
+        var id = a.getAttribute('data-pulizie-rimuovi-extra');
+        state.pulizieExtra = state.pulizieExtra.filter(function(x){ return x.id !== id; });
+        await savePulizieExtra();
+        renderArchivio();
+      };
+    });
   } catch(e){
     lista.innerHTML = '<div class="as-err">Impossibile caricare le prenotazioni: ' + e.message + '</div>';
   }
