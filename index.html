@@ -4692,11 +4692,11 @@ async function renderArchivioRecuperoSchede(el){
     '<div class="as-row" style="margin:12px 0;"><button class="as-btn ghost" id="recupero-mese-prec">‹</button>' +
     '<span style="padding:8px 4px;font-weight:600;text-transform:capitalize;">'+nomeMese+'</span>' +
     '<button class="as-btn ghost" id="recupero-mese-succ">›</button></div>' +
-    '<div class="as-row" style="align-items:center;gap:8px;margin-bottom:8px;">' + statoRoss + ' <button class="as-btn ghost" id="recupero-ross-verifica" style="font-size:12px;">🔁 Verifica ora su ROSS1000</button></div>' +
-    '<div id="recupero-ross-esito" class="as-sub" style="margin-bottom:8px;"></div>' +
     '<button class="as-btn secondary" id="recupero-bulk-btn" style="margin-bottom:8px;">Recupera tutte le mancanti di questo mese</button>' +
     '<div id="recupero-bulk-result" class="as-sub" style="margin-bottom:8px;"></div>' +
-    '<div id="recupero-lista"><p class="as-sub"><span class="as-spin"></span> caricamento prenotazioni…</p></div>';
+    '<div id="recupero-lista"><p class="as-sub"><span class="as-spin"></span> caricamento prenotazioni…</p></div>' +
+    '<div class="as-row" style="align-items:center;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--border);">' + statoRoss + ' <button class="as-btn ghost" id="recupero-ross-verifica" style="font-size:12px;">🔁 Aggiorna con ROSS1000</button></div>' +
+    '<div id="recupero-ross-esito" class="as-sub" style="margin-top:6px;"></div>';
 
   document.getElementById('recupero-mese-prec').onclick = function(){
     recuperoMeseCorrente.mese--;
