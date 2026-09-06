@@ -4490,9 +4490,13 @@ function renderListaRecupero(prenotazioni, oggiISO){
     var nomeOspite = b['guest-name'] || 'sconosciuto';
     var nomeApp = b.apartment ? b.apartment.name : '';
     var html = '<div class="as-card" style="padding:12px;">';
-    html += '<div>' + (collegamento ? '🟢 ' : '🔴 ') + '<strong>' + escapeHtml(nomeOspite) + '</strong></div>';
+    var pallino = !collegamento ? '🔴 ' : (collegamento.dove === 'duplicato' ? '⚠️ ' : '🟢 ');
+    html += '<div>' + pallino + '<strong>' + escapeHtml(nomeOspite) + '</strong></div>';
     html += '<div class="as-sub" style="margin:2px 0 8px;">' + toItDate(b.arrival) + ' → ' + toItDate(b.departure) + ' · ' + escapeHtml(nomeApp) + '</div>';
-    if (collegamento){
+    if (collegamento && collegamento.dove === 'duplicato'){
+      html += '<p style="margin:0;color:var(--danger);">Presente sia in Ospiti (non ancora inviata) sia in Archivio (già inviata) — probabile doppione. Controlla ed elimina la scheda attiva in Ospiti prima di inviarla per errore una seconda volta.</p>';
+      html += '<button class="as-btn secondary" data-recupero-vai-ospiti="'+collegamento.id+'" style="margin-top:8px;">Vai alla scheda in Ospiti</button>';
+    } else if (collegamento){
       html += '<p class="as-sub" style="margin:0;">Scheda già presente (' + (collegamento.dove === 'archivio' ? 'in Archivio' : 'in Ospiti') + ').</p>';
     } else if (schedaFuoriTempoMassimo(b, oggiISO)){
       html += '<button class="as-btn secondary" data-recupero-crea="'+b.id+'" data-recupero-booking="'+encodeURIComponent(JSON.stringify(b))+'">📦 Segna come già inviata (altri canali) e archivia</button>';
@@ -4508,6 +4512,14 @@ function renderListaRecupero(prenotazioni, oggiISO){
 function collegaAzioniRecupero(container){
   container.querySelectorAll('[data-recupero-crea]').forEach(function(btn){
     btn.onclick = function(){ recuperaSchedaSingola(JSON.parse(decodeURIComponent(btn.getAttribute('data-recupero-booking'))), btn); };
+  });
+  container.querySelectorAll('[data-recupero-vai-ospiti]').forEach(function(btn){
+    btn.onclick = function(){
+      var id = btn.getAttribute('data-recupero-vai-ospiti');
+      var btnQuestura = document.getElementById('ts-btn-questura');
+      if (btnQuestura) btnQuestura.click();
+      setTimeout(function(){ scrollCardIntoView(id); }, 150);
+    };
   });
 }
 
@@ -4547,10 +4559,11 @@ async function renderArchivioRecuperoSchede(el){
     prenotazioni.sort(function(x, y){ return String(x.arrival).localeCompare(String(y.arrival)); });
     var oggiISO = todayISO();
 
-    var inArchivioN = 0, inLavorazioneN = 0, oltreTerminiN = 0, entroTerminiN = 0;
+    var inArchivioN = 0, inLavorazioneN = 0, oltreTerminiN = 0, entroTerminiN = 0, doppioniN = 0;
     prenotazioni.forEach(function(b){
       var collegamento = trovaCollegamentoOspite(String(b.id));
-      if (collegamento && collegamento.dove === 'archivio') inArchivioN++;
+      if (collegamento && collegamento.dove === 'duplicato') doppioniN++;
+      else if (collegamento && collegamento.dove === 'archivio') inArchivioN++;
       else if (collegamento) inLavorazioneN++;
       else if (schedaFuoriTempoMassimo(b, oggiISO)) oltreTerminiN++;
       else entroTerminiN++;
@@ -4561,15 +4574,16 @@ async function renderArchivioRecuperoSchede(el){
       '<p style="margin:4px 0;">📦 <strong>'+inArchivioN+'</strong> in Archivio</p>' +
       '<p style="margin:4px 0;">📝 <strong>'+inLavorazioneN+'</strong> ancora in lavorazione (Ospiti)</p>' +
       (entroTerminiN ? '<p style="margin:4px 0;">🕓 <strong>'+entroTerminiN+'</strong> senza scheda ma ancora nei termini</p>' : '') +
+      (doppioniN ? '<p style="margin:8px 0 0;color:var(--danger);">⚠️ <strong>'+doppioniN+'</strong> doppione/i: presenti sia in Ospiti che in Archivio — rischio di doppio invio</p>' : '') +
       (oltreTerminiN
         ? '<p style="margin:8px 0 0;color:var(--danger);">⚠️ <strong>'+oltreTerminiN+'</strong> in ritardo, oltre i termini per l\'invio Questura</p>'
         : '<p class="as-ok" style="margin:8px 0 0;">Nessun ritardo.</p>') +
-      '<button class="as-btn ghost" id="recupero-mostra-dettaglio" style="margin-top:10px;font-size:12.5px;">'+(oltreTerminiN ? 'Vedi il dettaglio' : 'Vedi il dettaglio comunque')+'</button>' +
+      '<button class="as-btn ghost" id="recupero-mostra-dettaglio" style="margin-top:10px;font-size:12.5px;">'+((oltreTerminiN||doppioniN) ? 'Vedi il dettaglio' : 'Vedi il dettaglio comunque')+'</button>' +
       '</div>';
 
     function mostraDettaglio(){
       dettaglio.innerHTML =
-        '<p class="as-sub">🟢 scheda già presente · 🔴 mancante, oltre i termini per l\'invio Questura (24h dall\'arrivo, 6h se il soggiorno dura meno di 24h)</p>' +
+        '<p class="as-sub">🟢 scheda già presente · ⚠️ doppione (Ospiti + Archivio) · 🔴 mancante, oltre i termini per l\'invio Questura (24h dall\'arrivo, 6h se il soggiorno dura meno di 24h)</p>' +
         '<button class="as-btn secondary" id="recupero-bulk-btn" style="margin:8px 0;">Recupera tutte le mancanti di questo mese</button>' +
         '<div id="recupero-bulk-result" class="as-sub" style="margin-bottom:8px;"></div>' +
         '<div id="recupero-lista">' + renderListaRecupero(prenotazioni, oggiISO) + '</div>';
@@ -4582,7 +4596,7 @@ async function renderArchivioRecuperoSchede(el){
       mostraDettaglio();
       this.style.display = 'none';
     };
-    if (oltreTerminiN) mostraDettaglio(); // qualcosa richiede attenzione: mostra subito il dettaglio
+    if (oltreTerminiN || doppioniN) mostraDettaglio(); // qualcosa richiede attenzione: mostra subito il dettaglio
   } catch(e){
     riepilogo.innerHTML = '<div class="as-err">Impossibile caricare le prenotazioni: ' + e.message + '</div>';
   }
@@ -4769,9 +4783,10 @@ function trovaCollegamentoOspite(bookingId){
   var live = state.guests.find(function(g){
     return g.smoobuBookingId === String(bookingId) && (g.ruolo === 'singolo' || g.ruolo === 'capofamiglia' || g.ruolo === 'capogruppo');
   });
-  if (live) return { id: live.id, dove: 'ospiti' };
   var invio = state.invii.find(function(iv){ return iv.ospiti && iv.ospiti[0] && iv.ospiti[0].smoobuBookingId === String(bookingId); });
+  if (live && invio) return { id: live.id, dove: 'duplicato', idArchivio: invio.ospiti[0].id };
   if (invio) return { id: invio.ospiti[0].id, dove: 'archivio' };
+  if (live) return { id: live.id, dove: 'ospiti' };
   return null;
 }
 
