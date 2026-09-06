@@ -4222,6 +4222,12 @@ function renderBackend(){
       '</div>' +
       '<div class="as-field"><label>Mappatura alloggio → codice unità (un\'unità per riga: nome;codice)</label>' +
       '<textarea rows="6" id="cfg-SOGGIORNIAMO_MAPPATURA" placeholder="Carlo Alberto;1281.119.212&#10;Vittorio;1281.119.213"></textarea></div>' +
+      '<p class="as-sub" style="margin-top:14px;"><strong>Piemonte Dati Turismo (ROSS 1000)</strong></p>' +
+      '<p class="as-sub">Per verificare in automatico, all\'apertura dell\'app, quali ospiti risultano già registrati su ROSS 1000 (usato in Archivio → Recupero schede).</p>' +
+      '<div class="as-row">' +
+        '<div class="as-field"><label>Username</label><input id="cfg-ROSS_UTENTE"></div>' +
+        '<div class="as-field"><label>Password</label><input id="cfg-ROSS_PASSWORD" type="password"></div>' +
+      '</div>' +
       '<button class="as-btn secondary" id="cfg-save">Salva impostazioni</button>' +
       '<div id="cfg-result" style="margin-top:10px;"></div>';
     document.getElementById('tab-backend').appendChild(settingsBox);
@@ -4232,7 +4238,7 @@ function renderBackend(){
       { chiave: 'oraria', etichetta: 'Costo orario "Varie" (€/ora)', placeholder: '15.00' }
     ], caricaConfigPulizie, function(){ pulizieConfigCache = null; });
 
-    var cfgKeys = ['SMOOBU_API_KEY','SMOOBU_API_SECRET','ISTAT_UTENTE','ISTAT_PASSWORD','ISTAT_CODICE_STRUTTURA','ISTAT_CAMERE_DISPONIBILI','ISTAT_LETTI_DISPONIBILI','FIC_ACCESS_TOKEN','FIC_COMPANY_ID','FIC_VAT_ID','TASSA_SOGGIORNO_ETA_ESENZIONE','TASSA_SOGGIORNO_MAX_NOTTI','TASSA_SOGGIORNO_VAT_ID','SOGGIORNIAMO_UTENTE','SOGGIORNIAMO_PASSWORD','SOGGIORNIAMO_MAPPATURA'];
+    var cfgKeys = ['SMOOBU_API_KEY','SMOOBU_API_SECRET','ISTAT_UTENTE','ISTAT_PASSWORD','ISTAT_CODICE_STRUTTURA','ISTAT_CAMERE_DISPONIBILI','ISTAT_LETTI_DISPONIBILI','FIC_ACCESS_TOKEN','FIC_COMPANY_ID','FIC_VAT_ID','TASSA_SOGGIORNO_ETA_ESENZIONE','TASSA_SOGGIORNO_MAX_NOTTI','TASSA_SOGGIORNO_VAT_ID','SOGGIORNIAMO_UTENTE','SOGGIORNIAMO_PASSWORD','SOGGIORNIAMO_MAPPATURA','ROSS_UTENTE','ROSS_PASSWORD'];
     fetch(backendUrl('/api/settings'), { headers: backendHeaders() }).then(function(r){ return r.json(); }).then(function(data){
       cfgKeys.forEach(function(k){ var el2 = document.getElementById('cfg-'+k); if (el2 && data[k] && el2.tagName !== 'SELECT') el2.value = data[k]; });
       if (data.FIC_ACCESS_TOKEN && data.FIC_COMPANY_ID){
@@ -4561,6 +4567,36 @@ function ultimoGiornoMese(anno, mese){
   return d.toISOString().slice(0, 10);
 }
 
+// Cache in-memory (per sessione app) dei risultati della verifica ROSS1000 per mese "MM/YYYY"
+var ross1000Cache = {};
+function meseAnnoStr(anno, mese){ return String(mese + 1).padStart(2, '0') + '/' + anno; }
+
+async function avviaVerificaRoss1000(meseAnno, forza){
+  if (!state.backend.url) return;
+  try {
+    var resp = await fetch(backendUrl('/api/ross1000/verifica?meseAnno=' + encodeURIComponent(meseAnno) + (forza ? '&forza=1' : '')), { headers: backendHeaders() });
+    var data = await resp.json();
+    if (!resp.ok) { ross1000Cache[meseAnno] = { errore: data.error || 'errore' }; return; }
+    ross1000Cache[meseAnno] = { ospiti: data.ospiti || [], aggiornatoIl: data.aggiornatoIl, daCache: data.daCache };
+  } catch(e){
+    ross1000Cache[meseAnno] = { errore: e.message };
+  }
+  if (typeof archivioSubtabAttivo !== 'undefined' && archivioSubtabAttivo === 'recupero') renderArchivio();
+}
+
+// Cerca un ospite (per cognome) tra quelli già trovati su ROSS1000 per quel mese.
+// Ritorna l'oggetto trovato, o null se non c'è (o non è ancora stata fatta la verifica).
+function trovatoSuRoss1000(b, meseAnno){
+  var voce = ross1000Cache[meseAnno];
+  if (!voce || !voce.ospiti) return null;
+  var nomeCompleto = normalizzaNome(b['guest-name'] || '');
+  if (!nomeCompleto) return null;
+  return voce.ospiti.find(function(o){
+    var cognome = normalizzaNome(o.cognome);
+    return cognome && nomeCompleto.indexOf(cognome) !== -1;
+  }) || null;
+}
+
 function schedaFuoriTempoMassimo(b, oggiISO){
   var arr = new Date(b.arrival + 'T00:00:00');
   var dep = new Date(b.departure + 'T00:00:00');
@@ -4611,17 +4647,20 @@ async function recuperaTutteMese(prenotazioni, oggiISO, btn){
   renderArchivio();
 }
 
-function renderListaRecupero(prenotazioni, oggiISO){
+function renderListaRecupero(prenotazioni, oggiISO, meseAnno){
   if (!prenotazioni.length) return '<p class="as-sub">Nessuna prenotazione in questo mese.</p>';
   return prenotazioni.map(function(b){
     var collegamento = trovaCollegamentoOspite(String(b.id));
+    var suRoss = !collegamento ? trovatoSuRoss1000(b, meseAnno) : null;
     var nomeOspite = b['guest-name'] || 'sconosciuto';
     var nomeApp = b.apartment ? b.apartment.name : '';
     var html = '<div class="as-card" style="padding:12px;">';
-    html += '<div>' + (collegamento ? '🟢 ' : '🔴 ') + '<strong>' + escapeHtml(nomeOspite) + '</strong></div>';
+    html += '<div>' + (collegamento ? '🟢 ' : (suRoss ? '🔵 ' : '🔴 ')) + '<strong>' + escapeHtml(nomeOspite) + '</strong></div>';
     html += '<div class="as-sub" style="margin:2px 0 8px;">' + toItDate(b.arrival) + ' → ' + toItDate(b.departure) + ' · ' + escapeHtml(nomeApp) + '</div>';
     if (collegamento){
       html += '<p class="as-sub" style="margin:0;">Scheda già presente (' + (collegamento.dove === 'archivio' ? 'in Archivio' : 'in Ospiti') + ').</p>';
+    } else if (suRoss){
+      html += '<p class="as-sub" style="margin:0;">Trovato su ROSS1000 (' + escapeHtml(suRoss.cognome) + ' ' + escapeHtml(suRoss.nome) + ', arrivo ' + escapeHtml(suRoss.arrivo) + ') — risulta già registrato per ISTAT, ma non è nell\'archivio di quest\'app.</p>';
     } else if (schedaFuoriTempoMassimo(b, oggiISO)){
       html += '<button class="as-btn secondary" data-recupero-crea="'+b.id+'" data-recupero-booking="'+encodeURIComponent(JSON.stringify(b))+'">📦 Segna come già inviata (altri canali) e archivia</button>';
       html += '<div style="margin-top:6px;"></div>';
@@ -4641,11 +4680,20 @@ function collegaAzioniRecupero(container){
 
 async function renderArchivioRecuperoSchede(el){
   var nomeMese = new Date(recuperoMeseCorrente.anno, recuperoMeseCorrente.mese, 1).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
-  el.innerHTML = '<p class="as-sub" style="margin-top:-6px;">🟢 scheda già presente · 🔴 mancante, oltre i termini per l\'invio Questura (24h dall\'arrivo, 6h se il soggiorno dura meno di 24h)</p>' +
+  var meseAnno = meseAnnoStr(recuperoMeseCorrente.anno, recuperoMeseCorrente.mese);
+  var vociRoss = ross1000Cache[meseAnno];
+  var statoRoss;
+  if (!vociRoss) statoRoss = '<span class="as-sub">verifica ROSS1000 non ancora eseguita per questo mese</span>';
+  else if (vociRoss.errore) statoRoss = '<span class="as-err" style="font-size:12.5px;">ROSS1000: ' + escapeHtml(vociRoss.errore) + '</span>';
+  else statoRoss = '<span class="as-sub">ROSS1000 verificato ' + (vociRoss.aggiornatoIl ? 'alle ' + new Date(vociRoss.aggiornatoIl).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}) : '') + (vociRoss.daCache ? ' (da cache)' : '') + '</span>';
+
+  el.innerHTML = '<p class="as-sub" style="margin-top:-6px;">🟢 scheda già presente in app · 🔵 trovato su ROSS1000 ma non in app · 🔴 mancante, oltre i termini per l\'invio Questura (24h dall\'arrivo, 6h se il soggiorno dura meno di 24h)</p>' +
     '<p class="as-sub" id="recupero-contatori" style="margin-top:2px;font-weight:600;"></p>' +
     '<div class="as-row" style="margin:12px 0;"><button class="as-btn ghost" id="recupero-mese-prec">‹</button>' +
     '<span style="padding:8px 4px;font-weight:600;text-transform:capitalize;">'+nomeMese+'</span>' +
     '<button class="as-btn ghost" id="recupero-mese-succ">›</button></div>' +
+    '<div class="as-row" style="align-items:center;gap:8px;margin-bottom:8px;">' + statoRoss + ' <button class="as-btn ghost" id="recupero-ross-verifica" style="font-size:12px;">🔁 Verifica ora su ROSS1000</button></div>' +
+    '<div id="recupero-ross-esito" class="as-sub" style="margin-bottom:8px;"></div>' +
     '<button class="as-btn secondary" id="recupero-bulk-btn" style="margin-bottom:8px;">Recupera tutte le mancanti di questo mese</button>' +
     '<div id="recupero-bulk-result" class="as-sub" style="margin-bottom:8px;"></div>' +
     '<div id="recupero-lista"><p class="as-sub"><span class="as-spin"></span> caricamento prenotazioni…</p></div>';
@@ -4658,6 +4706,17 @@ async function renderArchivioRecuperoSchede(el){
   document.getElementById('recupero-mese-succ').onclick = function(){
     recuperoMeseCorrente.mese++;
     if (recuperoMeseCorrente.mese > 11){ recuperoMeseCorrente.mese = 0; recuperoMeseCorrente.anno++; }
+    renderArchivio();
+  };
+  document.getElementById('recupero-ross-verifica').onclick = async function(btn2){
+    var btn = document.getElementById('recupero-ross-verifica');
+    var out = document.getElementById('recupero-ross-esito');
+    btn.disabled = true;
+    out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>login e ricerca su ROSS1000 in corso… (può richiedere qualche secondo)</span>';
+    await avviaVerificaRoss1000(meseAnno, true);
+    var v = ross1000Cache[meseAnno];
+    out.innerHTML = (v && v.errore) ? ('<div class="as-err">' + escapeHtml(v.errore) + '</div>') : '<p class="as-ok">Verifica completata.</p>';
+    btn.disabled = false;
     renderArchivio();
   };
 
@@ -4676,10 +4735,11 @@ async function renderArchivioRecuperoSchede(el){
     prenotazioni.sort(function(x, y){ return String(x.arrival).localeCompare(String(y.arrival)); });
     var oggiISO = todayISO();
     var esistenti = prenotazioni.filter(function(b){ return !!trovaCollegamentoOspite(String(b.id)); }).length;
-    var daRecuperare = prenotazioni.filter(function(b){ return !trovaCollegamentoOspite(String(b.id)) && schedaFuoriTempoMassimo(b, oggiISO); }).length;
+    var soloSuRoss = prenotazioni.filter(function(b){ return !trovaCollegamentoOspite(String(b.id)) && !!trovatoSuRoss1000(b, meseAnno); }).length;
+    var daRecuperare = prenotazioni.filter(function(b){ return !trovaCollegamentoOspite(String(b.id)) && !trovatoSuRoss1000(b, meseAnno) && schedaFuoriTempoMassimo(b, oggiISO); }).length;
     var contatoriEl = document.getElementById('recupero-contatori');
-    if (contatoriEl) contatoriEl.textContent = prenotazioni.length + ' schede totali questo mese — ' + esistenti + ' già presenti · ' + daRecuperare + ' da recuperare';
-    lista.innerHTML = renderListaRecupero(prenotazioni, oggiISO);
+    if (contatoriEl) contatoriEl.textContent = prenotazioni.length + ' schede totali questo mese — ' + esistenti + ' già presenti · ' + soloSuRoss + ' su ROSS1000 ma non in app · ' + daRecuperare + ' da recuperare';
+    lista.innerHTML = renderListaRecupero(prenotazioni, oggiISO, meseAnno);
     collegaAzioniRecupero(lista);
     var bulkBtn = document.getElementById('recupero-bulk-btn');
     if (bulkBtn) bulkBtn.onclick = function(){ recuperaTutteMese(prenotazioni, oggiISO, bulkBtn); };
@@ -5109,7 +5169,11 @@ document.getElementById('imp-sblocca').onclick = function(){
   }
 };
 
-loadState().then(render);
+loadState().then(function(){
+  render();
+  var oggi = new Date();
+  avviaVerificaRoss1000(meseAnnoStr(oggi.getFullYear(), oggi.getMonth()));
+});
 
 })();
 
