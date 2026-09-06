@@ -3664,6 +3664,7 @@ function renderArchivio(){
     '<div class="as-tab" data-archsubtab="istat-ok">ISTAT e Questura OK</div>' +
     '<div class="as-tab" data-archsubtab="fatture-emesse">Fatture emesse</div>' +
     '<div class="as-tab" data-archsubtab="recupero">Recupero schede</div>' +
+    '<div class="as-tab" data-archsubtab="pulizie">Pulizie</div>' +
     '</div><div id="arch-content"></div>';
 
   el.innerHTML = html;
@@ -3681,6 +3682,7 @@ function renderArchivio(){
   if (archivioSubtabAttivo === 'istat-ok') renderArchivioIstatOk(contentEl);
   else if (archivioSubtabAttivo === 'fatture-emesse') renderArchivioFattureEmesse(contentEl);
   else if (archivioSubtabAttivo === 'recupero') renderArchivioRecuperoSchede(contentEl);
+  else if (archivioSubtabAttivo === 'pulizie') renderArchivioPulizie(contentEl);
   else renderArchivioDocumenti(contentEl);
 
   collegaRicercaArchivio();
@@ -4258,6 +4260,7 @@ var adminUnlocked = false;
 /* ---------- Tab Fatture (terza sezione di primo livello) ---------- */
 var fattureMeseCorrente = { anno: 2026, mese: 7 }; // agosto 2026 (mese indicizzato da 0) — primo mese da tracciare
 var recuperoMeseCorrente = { anno: 2026, mese: 7 }; // stesso punto di partenza, agosto 2026
+var pulizieMeseCorrente = { anno: 2026, mese: 7 }; // stesso punto di partenza, agosto 2026
 var STATI_SDI_INVIATI = ['sent','pending','processing','accepted','no_response','manual_accepted'];
 var STATI_SDI_PROBLEMA = ['error','discarded','not_delivered','rejected','manual_rejected'];
 
@@ -4391,6 +4394,70 @@ async function renderArchivioRecuperoSchede(el){
     collegaAzioniRecupero(lista);
     var bulkBtn = document.getElementById('recupero-bulk-btn');
     if (bulkBtn) bulkBtn.onclick = function(){ recuperaTutteMese(prenotazioni, oggiISO, bulkBtn); };
+  } catch(e){
+    lista.innerHTML = '<div class="as-err">Impossibile caricare le prenotazioni: ' + e.message + '</div>';
+  }
+}
+
+async function renderArchivioPulizie(el){
+  var nomeMese = new Date(pulizieMeseCorrente.anno, pulizieMeseCorrente.mese, 1).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+  el.innerHTML =
+    '<p class="as-sub" style="margin-top:-6px;">Un check-out = un alloggio da pulire in quel giorno. Elenco basato sulle prenotazioni Smoobu, non solo su quelle già trasformate in scheda.</p>' +
+    '<div class="as-row" style="margin:12px 0;"><button class="as-btn ghost" id="pulizie-mese-prec">‹</button>' +
+    '<span style="padding:8px 4px;font-weight:600;text-transform:capitalize;">'+nomeMese+'</span>' +
+    '<button class="as-btn ghost" id="pulizie-mese-succ">›</button></div>' +
+    '<div id="pulizie-lista"><p class="as-sub"><span class="as-spin"></span> caricamento prenotazioni…</p></div>';
+
+  document.getElementById('pulizie-mese-prec').onclick = function(){
+    pulizieMeseCorrente.mese--;
+    if (pulizieMeseCorrente.mese < 0){ pulizieMeseCorrente.mese = 11; pulizieMeseCorrente.anno--; }
+    renderArchivio();
+  };
+  document.getElementById('pulizie-mese-succ').onclick = function(){
+    pulizieMeseCorrente.mese++;
+    if (pulizieMeseCorrente.mese > 11){ pulizieMeseCorrente.mese = 0; pulizieMeseCorrente.anno++; }
+    renderArchivio();
+  };
+
+  var lista = document.getElementById('pulizie-lista');
+  if (!state.backend.url){
+    lista.innerHTML = '<p class="as-sub">Configura prima il backend in Impostazioni → Backend.</p>';
+    return;
+  }
+  try {
+    var da = primoGiornoMese(pulizieMeseCorrente.anno, pulizieMeseCorrente.mese);
+    var aData = ultimoGiornoMese(pulizieMeseCorrente.anno, pulizieMeseCorrente.mese);
+    var resp = await fetch(backendUrl('/api/smoobu/reservations?departureFrom=' + da + '&departureTo=' + aData), { headers: backendHeaders() });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'errore nel caricamento');
+    var prenotazioni = (data.bookings || []).filter(function(b){ return b.type !== 'blocked-booking' && b.type !== 'cancellation'; });
+
+    var perGiorno = {};
+    prenotazioni.forEach(function(b){
+      if (!b.departure) return;
+      var giorno = String(b.departure).slice(0, 10);
+      if (giorno < da || giorno > aData) return; // per sicurezza, nel caso l'API restituisse un range più ampio
+      if (!perGiorno[giorno]) perGiorno[giorno] = [];
+      perGiorno[giorno].push((b.apartment && b.apartment.name) ? b.apartment.name : '(alloggio sconosciuto)');
+    });
+
+    var giorni = Object.keys(perGiorno).sort();
+    if (!giorni.length){
+      lista.innerHTML = '<p class="as-sub">Nessun check-out in questo mese.</p>';
+      return;
+    }
+    var totale = 0;
+    var html = '<div class="as-card">';
+    giorni.forEach(function(g){
+      var alloggi = perGiorno[g];
+      totale += alloggi.length;
+      html += '<div style="border-bottom:1px solid var(--border);padding:8px 0;">' +
+        '<strong>' + toItDate(g) + '</strong> — ' + alloggi.length + ' alloggio/i: ' + alloggi.map(escapeHtml).join(', ') +
+        '</div>';
+    });
+    html += '<p style="margin-top:10px;font-weight:600;">Totale alloggi puliti nel mese: ' + totale + '</p>';
+    html += '</div>';
+    lista.innerHTML = html;
   } catch(e){
     lista.innerHTML = '<div class="as-err">Impossibile caricare le prenotazioni: ' + e.message + '</div>';
   }
