@@ -3813,9 +3813,27 @@ function renderArchivioIstatOk(el){
       var testoBadge = iv.manuale ? '📦 ISTAT e Questura completi (altri canali)' : '✅ ISTAT completo (arrivo + partenza)';
       var dettagliOspiti = iv.ospiti.map(function(o){
         var ruoloTesto = (o.ruolo === 'familiare' || o.ruolo === 'membro') ? 'membro' : 'capogruppo';
+        var campi = [
+          ['Sesso', o.sesso === 'F' ? 'Femmina' : (o.sesso === 'M' ? 'Maschio' : '')],
+          ['Data di nascita', o.dataNascita ? toItDate(o.dataNascita) : ''],
+          [o.nascitaEstero ? 'Stato di nascita' : 'Comune di nascita', o.nascitaEstero ? o.statoNascitaNome : o.comuneNascitaNome],
+          ['Cittadinanza', o.cittadinanzaNome],
+          [o.residenzaEstero ? 'Stato di residenza' : 'Comune di residenza', o.residenzaEstero ? o.statoResidenzaNome : o.comuneResidenzaNome],
+          ['Indirizzo di residenza', o.indirizzoResidenza],
+          ['Tipo documento', o.tipoDocumentoNome],
+          ['Numero documento', o.numeroDocumento],
+          ['Scadenza documento', o.dataScadenzaDocumento ? toItDate(o.dataScadenzaDocumento) : ''],
+          [o.rilascioEstero ? 'Luogo rilascio (stato)' : 'Luogo rilascio (comune)', o.luogoRilascioNome]
+        ];
+        var campiHtml = campi.map(function(c){
+          return '<div style="padding:2px 0;"><span class="as-sub" style="margin:0;">'+escapeHtml(c[0])+':</span> '+(c[1] ? escapeHtml(c[1]) : '<span class="as-sub">(non compilato)</span>')+'</div>';
+        }).join('');
         return '<div style="padding:4px 0;border-top:1px solid var(--border);">' +
           '<strong>'+escapeHtml((o.cognome+' '+o.nome).trim())+'</strong> ('+ruoloTesto+')<br>' +
           '<span class="as-sub" style="margin:0;">Data arrivo: '+(o.dataArrivo ? toItDate(o.dataArrivo) : '(non compilata)')+' · Permanenza: '+(o.permanenza||'—')+' notti</span><br>' +
+          '<details style="margin-top:4px;"><summary style="cursor:pointer;color:var(--brass);font-size:11.5px;">▸ Vedi tutti i dati salvati</summary>' +
+          '<div style="margin-top:4px;padding-top:4px;border-top:1px dashed var(--border);">' + campiHtml + '</div>' +
+          '</details>' +
           '<button class="as-btn ghost" data-modifica-arrivo-archivio="'+escapeHtml(iv.id)+'|'+escapeHtml(o.id)+'" style="margin-top:4px;font-size:11.5px;padding:3px 8px;">✏️ Correggi data/permanenza</button>' +
           '</div>';
       }).join('');
