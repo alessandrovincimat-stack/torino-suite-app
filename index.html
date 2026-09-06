@@ -4576,7 +4576,7 @@ async function avviaVerificaRoss1000(meseAnno, forza){
   try {
     var resp = await fetch(backendUrl('/api/ross1000/verifica?meseAnno=' + encodeURIComponent(meseAnno) + (forza ? '&forza=1' : '')), { headers: backendHeaders() });
     var data = await resp.json();
-    if (!resp.ok) { ross1000Cache[meseAnno] = { errore: data.error || 'errore' }; return; }
+    if (!resp.ok) { ross1000Cache[meseAnno] = { errore: data.error || 'errore', screenshotBase64: data.screenshotBase64 }; return; }
     ross1000Cache[meseAnno] = { ospiti: data.ospiti || [], aggiornatoIl: data.aggiornatoIl, daCache: data.daCache };
   } catch(e){
     ross1000Cache[meseAnno] = { errore: e.message };
@@ -4684,7 +4684,8 @@ async function renderArchivioRecuperoSchede(el){
   var vociRoss = ross1000Cache[meseAnno];
   var statoRoss;
   if (!vociRoss) statoRoss = '<span class="as-sub">verifica ROSS1000 non ancora eseguita per questo mese</span>';
-  else if (vociRoss.errore) statoRoss = '<span class="as-err" style="font-size:12.5px;">ROSS1000: ' + escapeHtml(vociRoss.errore) + '</span>';
+  else if (vociRoss.errore) statoRoss = '<span class="as-err" style="font-size:12.5px;">ROSS1000: ' + escapeHtml(vociRoss.errore) + '</span>' +
+    (vociRoss.screenshotBase64 ? '<br><img src="data:image/png;base64,' + vociRoss.screenshotBase64 + '" style="max-width:100%;border:1px solid var(--border);margin-top:6px;border-radius:6px;">' : '');
   else statoRoss = '<span class="as-sub">ROSS1000 verificato ' + (vociRoss.aggiornatoIl ? 'alle ' + new Date(vociRoss.aggiornatoIl).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}) : '') + (vociRoss.daCache ? ' (da cache)' : '') + '</span>';
 
   el.innerHTML = '<p class="as-sub" style="margin-top:-6px;">🟢 scheda già presente in app · 🔵 trovato su ROSS1000 ma non in app · 🔴 mancante, oltre i termini per l\'invio Questura (24h dall\'arrivo, 6h se il soggiorno dura meno di 24h)</p>' +
@@ -4715,7 +4716,9 @@ async function renderArchivioRecuperoSchede(el){
     out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>login e ricerca su ROSS1000 in corso… (può richiedere qualche secondo)</span>';
     await avviaVerificaRoss1000(meseAnno, true);
     var v = ross1000Cache[meseAnno];
-    out.innerHTML = (v && v.errore) ? ('<div class="as-err">' + escapeHtml(v.errore) + '</div>') : '<p class="as-ok">Verifica completata.</p>';
+    out.innerHTML = (v && v.errore)
+      ? ('<div class="as-err">' + escapeHtml(v.errore) + '</div>' + (v.screenshotBase64 ? '<img src="data:image/png;base64,' + v.screenshotBase64 + '" style="max-width:100%;border:1px solid var(--border);margin-top:6px;border-radius:6px;">' : ''))
+      : '<p class="as-ok">Verifica completata.</p>';
     btn.disabled = false;
     renderArchivio();
   };
