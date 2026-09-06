@@ -166,13 +166,8 @@
   <p class="as-title">Torino Suite · Schedine Alloggiati</p>
   <p class="as-sub">Foto del documento → dati estratti → file per Alloggiati Web (Questura)</p>
 
-  <div class="as-tabs">
-    <div class="as-tab active" data-tab="oggi">Oggi</div>
-    <div class="as-tab" data-tab="ospiti">Ospiti</div>
-  </div>
-
   <div id="tab-oggi"></div>
-  <div id="tab-ospiti" class="as-hidden"></div>
+  <div id="tab-ospiti"></div>
 </div>
 </div>
 </div>
@@ -1973,110 +1968,40 @@ async function renderOggi(){
     } catch(eSmoobu){}
   }
 
-  var idPrenotazioniViste = {};
-  prenotazioniArrivo.concat(prenotazioniPartenza).forEach(function(b){ idPrenotazioniViste[String(b.id)] = true; });
-
-  function schedaPerBooking(bookingId){
-    return state.guests.find(function(g){
-      return g.smoobuBookingId === String(bookingId) && (g.ruolo === 'singolo' || g.ruolo === 'capofamiglia' || g.ruolo === 'capogruppo');
-    }) || null;
-  }
-
-  function rigaDaBooking(b){
-    var scheda = schedaPerBooking(b.id);
-    var nome = escapeHtml(b['guest-name'] || 'sconosciuto');
-    var app = b.apartment ? escapeHtml(b.apartment.name) : '';
-    if (scheda){
-      return '<div data-oggi-vai="' + scheda.id + '" style="padding:10px 0;border-top:1px solid var(--border);cursor:pointer;">' +
-        '<strong>' + nome + '</strong>' + (app ? ' — ' + app : '') + '</div>';
-    }
-    return '<div data-oggi-crea-smoobu="' + encodeURIComponent(JSON.stringify(b)) + '" style="padding:10px 0;border-top:1px solid var(--border);cursor:pointer;">' +
-      '<strong>' + nome + '</strong>' + (app ? ' — ' + app : '') + ' <span style="color:var(--muted);font-size:12px;">— nessuna scheda ancora, tocca per crearla</span></div>';
-  }
-
   var gruppi = [];
   state.guests.forEach(function(g){
     var isDependent = g.ruolo === 'familiare' || g.ruolo === 'membro';
     if (isDependent) return;
-    if (smoobuOk && g.smoobuBookingId && idPrenotazioniViste[g.smoobuBookingId]) return; // già rappresentato dal dato Smoobu qui sopra
     var notti = parseInt(g.permanenza, 10) || 0;
     var partenza = null;
     if (g.dataArrivo){
       var d = new Date(g.dataArrivo);
       if (!isNaN(d)){ d.setDate(d.getDate() + notti); partenza = d.toISOString().slice(0, 10); }
     }
-    var app = state.tables.appartamenti.find(function(a){ return a.id === g.idAppartamento; });
-    var membri = orderedGuestsFor(g.id);
-    var nomeVis = membri.length > 1
-      ? 'Gruppo di ' + membri.length + ' — ' + (g.cognome || '(senza cognome)')
-      : ((g.cognome || '') + ' ' + (g.nome || '')).trim() || '(senza nome)';
-    gruppi.push({
-      id: g.id, nome: nomeVis, appartamento: app ? app.nome : '',
-      dataArrivo: g.dataArrivo, dataPartenza: partenza,
-      problemi: validateGuest(g)
-    });
+    gruppi.push({ id: g.id, dataArrivo: g.dataArrivo, dataPartenza: partenza });
   });
 
-  var arriviOggiManuali = gruppi.filter(function(x){ return x.dataArrivo === oggiISO; });
-  var arriviDomaniManuali = gruppi.filter(function(x){ return x.dataArrivo === domaniISO; });
-  var partenzeOggiManuali = gruppi.filter(function(x){ return x.dataPartenza === oggiISO; });
-  var partenzeDomaniManuali = gruppi.filter(function(x){ return x.dataPartenza === domaniISO; });
-  var schedeUrgenti = gruppi.filter(function(x){ return x.dataArrivo && x.dataArrivo <= oggiISO; });
+  var arriviOggiN = prenotazioniArrivo.filter(function(b){ return b.arrival === oggiISO; }).length + gruppi.filter(function(x){ return x.dataArrivo === oggiISO; }).length;
+  var arriviDomaniN = prenotazioniArrivo.filter(function(b){ return b.arrival === domaniISO; }).length + gruppi.filter(function(x){ return x.dataArrivo === domaniISO; }).length;
+  var partenzeOggiN = prenotazioniPartenza.filter(function(b){ return b.departure === oggiISO; }).length + gruppi.filter(function(x){ return x.dataPartenza === oggiISO; }).length;
+  var partenzeDomaniN = prenotazioniPartenza.filter(function(b){ return b.departure === domaniISO; }).length + gruppi.filter(function(x){ return x.dataPartenza === domaniISO; }).length;
+  var schedeUrgentiN = gruppi.filter(function(x){ return x.dataArrivo && x.dataArrivo <= oggiISO; }).length;
 
   var scadenza = calcolaProssimaScadenzaSoggiornamo();
 
-  function elenco(lista, vuoto){
-    if (!lista.length) return '<p class="as-sub">' + vuoto + '</p>';
-    return lista.map(function(x){
-      var badge = x.problemi.length ? ' <span style="color:var(--danger);font-size:12px;">⚠️ dati incompleti</span>' : '';
-      return '<div data-oggi-vai="' + x.id + '" style="padding:10px 0;border-top:1px solid var(--border);cursor:pointer;">' +
-        '<strong>' + x.nome + '</strong>' + (x.appartamento ? ' — ' + x.appartamento : '') + badge +
-        '</div>';
-    }).join('');
-  }
-
-  function sezioneCompleta(prenotazioniSmoobuFiltrate, listaManuale, vuoto){
-    var righeSmoobu = prenotazioniSmoobuFiltrate.map(rigaDaBooking).join('');
-    var righeManuali = listaManuale.length ? elenco(listaManuale, '') : '';
-    var righe = righeSmoobu + righeManuali;
-    return righe || '<p class="as-sub">' + vuoto + '</p>';
-  }
-
-  var arriviOggiSmoobu = prenotazioniArrivo.filter(function(b){ return b.arrival === oggiISO; });
-  var arriviDomaniSmoobu = prenotazioniArrivo.filter(function(b){ return b.arrival === domaniISO; });
-  var partenzeOggiSmoobu = prenotazioniPartenza.filter(function(b){ return b.departure === oggiISO; });
-  var partenzeDomaniSmoobu = prenotazioniPartenza.filter(function(b){ return b.departure === domaniISO; });
-
   var html = '';
-  html += '<div class="as-card"><p class="as-title" style="font-size:16px;">Arrivi oggi</p>' + sezioneCompleta(arriviOggiSmoobu, arriviOggiManuali, 'Nessun arrivo previsto oggi.') + '</div>';
-  html += '<div class="as-card"><p class="as-title" style="font-size:16px;">Arrivi domani</p>' + sezioneCompleta(arriviDomaniSmoobu, arriviDomaniManuali, 'Nessun arrivo previsto domani.') + '</div>';
-  html += '<div class="as-card"><p class="as-title" style="font-size:16px;">Partenze oggi</p>' + sezioneCompleta(partenzeOggiSmoobu, partenzeOggiManuali, 'Nessuna partenza prevista oggi.') + '</div>';
-  html += '<div class="as-card"><p class="as-title" style="font-size:16px;">Partenze domani</p>' + sezioneCompleta(partenzeDomaniSmoobu, partenzeDomaniManuali, 'Nessuna partenza prevista domani.') + '</div>';
-  html += '<div class="as-card"><p class="as-title" style="font-size:16px;">Schede Questura da inviare</p>';
-  html += schedeUrgenti.length
-    ? '<p style="color:var(--danger);">⚠️ ' + schedeUrgenti.length + ' scheda/e con arrivo già avvenuto non ancora inviata/e.</p>' + elenco(schedeUrgenti, '')
-    : '<p class="as-ok">Tutto in regola: nessuna scheda arretrata.</p>';
-  html += '</div>';
+  html += '<div class="as-card"><p class="as-title" style="font-size:16px;">Oggi</p>' +
+    '<p class="as-sub" style="margin:4px 0;">Arrivi: <strong>' + arriviOggiN + '</strong> oggi · <strong>' + arriviDomaniN + '</strong> domani</p>' +
+    '<p class="as-sub" style="margin:4px 0;">Partenze: <strong>' + partenzeOggiN + '</strong> oggi · <strong>' + partenzeDomaniN + '</strong> domani</p>' +
+    (smoobuOk ? '' : '<p class="as-warn" style="margin:4px 0;">Dati Smoobu non disponibili al momento — conteggi arrivi/partenze parziali.</p>') +
+    (schedeUrgentiN
+      ? '<p style="color:var(--danger);margin:8px 0 0;">⚠️ ' + schedeUrgentiN + ' scheda/e con arrivo già avvenuto non ancora inviata/e — vedi sotto in "Prossimi arrivi".</p>'
+      : '<p class="as-ok" style="margin:8px 0 0;">Nessuna scheda in ritardo.</p>') +
+    '</div>';
   html += '<div class="as-card"><p class="as-title" style="font-size:16px;">Tassa di soggiorno</p>' +
     '<p class="as-sub">Prossima dichiarazione Soggiornamo: <strong>' + scadenza.label + '</strong> (tra ' + scadenza.giorni + ' giorni).</p></div>';
 
   el.innerHTML = html;
-
-  el.querySelectorAll('[data-oggi-vai]').forEach(function(riga){
-    riga.onclick = function(){
-      var id = riga.getAttribute('data-oggi-vai');
-      switchTab('ospiti');
-      setTimeout(function(){ scrollCardIntoView(id); }, 50);
-    };
-  });
-  el.querySelectorAll('[data-oggi-crea-smoobu]').forEach(function(riga){
-    riga.onclick = function(){
-      var b = JSON.parse(decodeURIComponent(riga.getAttribute('data-oggi-crea-smoobu')));
-      var g = creaSchedaDaPrenotazioneSmoobu(b);
-      switchTab('ospiti');
-      setTimeout(function(){ scrollCardIntoView(g.id); }, 100);
-    };
-  });
 
   if (state.backend.url){
     var fattureBox = document.createElement('div');
@@ -2146,6 +2071,12 @@ function renderOspiti(){
   html += '<div class="as-card"><button class="as-btn ghost" id="as-add-manual" style="width:100%;">+ Aggiungi ospite</button></div>';
 
   var guestsSenzaPrenotazione = state.backend.url ? state.guests.filter(function(g){ return !g.smoobuBookingId; }) : state.guests;
+  guestsSenzaPrenotazione = guestsSenzaPrenotazione.slice().sort(function(a, b){
+    return String(a.dataArrivo || '9999').localeCompare(String(b.dataArrivo || '9999'));
+  });
+  if (guestsSenzaPrenotazione.length){
+    html += '<p class="as-title" style="font-size:15px;margin-top:16px;">Altri ospiti (senza prenotazione Smoobu)</p>';
+  }
   guestsSenzaPrenotazione.forEach(function(g){ html += buildGuestCardHtml(g); });
 
   html += '<datalist id="dl-comuni">' + state.tables.comuni.map(function(c){return '<option value="'+c.nome+'">';}).join('') + '</datalist>';
@@ -2267,7 +2198,7 @@ function renderSmoobuBox(box, bookings){
     var appMatch = state.tables.appartamenti.find(function(a){ return a.smoobuId && b.apartment && String(a.smoobuId) === String(b.apartment.id); });
     return { b: b, nomeCompleto: nomeCompleto, collegate: collegate, invioCollegato: invioCollegato, appMatch: appMatch };
   });
-  box.innerHTML = '<p class="as-title" style="font-size:15px;">Prossimi arrivi (Smoobu)</p>' +
+  box.innerHTML = '<p class="as-title" style="font-size:15px;">Prossimi arrivi e schedine (7 giorni)</p>' +
     righe.map(function(r){
       var b = r.b;
       var stato;
@@ -5020,16 +4951,8 @@ window.renderFattureTab = renderFattureTab;
 var currentSubtab = 'backend';
 
 function switchTab(name){
-  document.querySelectorAll('.as-tab[data-tab]').forEach(function(t){ t.classList.remove('active'); });
-  var btn = document.querySelector('.as-tab[data-tab="'+name+'"]');
-  if (btn) btn.classList.add('active');
-
-  ['oggi','ospiti'].forEach(function(n){
-    var el = document.getElementById('tab-'+n);
-    if (el) el.classList.toggle('as-hidden', n !== name);
-  });
-
-  if (name === 'oggi') renderOggi();
+  // Oggi e Ospiti sono ora un'unica vista sempre visibile: questa funzione non deve
+  // più nascondere/mostrare nulla, resta solo per compatibilità con gli scroll-to esistenti.
 }
 
 document.querySelectorAll('.as-tab[data-tab]').forEach(function(tab){
