@@ -2636,22 +2636,47 @@ function orderedGuestsFor(headId){
   return out;
 }
 
+// Trova, in uno storico ordinato per 'dal' crescente, la tariffa valida a una certa data
+// (l'ultima il cui 'dal' è <= dataISO; se la data è precedente a tutte le voci, usa comunque la più vecchia)
+function tariffaAllaData(storico, dataISO){
+  if (!storico || !storico.length) return null;
+  var valida = storico[0];
+  for (var i = 0; i < storico.length; i++){
+    if (storico[i].dal <= dataISO) valida = storico[i]; else break;
+  }
+  return valida;
+}
+
 var tassaConfigCache = null;
 async function caricaConfigTassa(){
   if (tassaConfigCache) return tassaConfigCache;
   try {
     var resp = await fetch(backendUrl('/api/settings'), { headers: backendHeaders() });
     var data = await resp.json();
+    var storico;
+    try { storico = data.TASSA_SOGGIORNO_STORIA ? JSON.parse(data.TASSA_SOGGIORNO_STORIA) : null; } catch(eParse){ storico = null; }
+    if (!storico || !storico.length){
+      // retrocompatibilità: se non esiste ancora uno storico, ne creiamo uno con il valore singolo già configurato
+      storico = [{ dal: '2000-01-01', importo: parseFloat(String(data.TASSA_SOGGIORNO_IMPORTO || '').replace(',', '.')) || 0 }];
+    }
+    storico.sort(function(a,b){ return (a.dal||'').localeCompare(b.dal||''); });
     tassaConfigCache = {
-      importo: parseFloat(String(data.TASSA_SOGGIORNO_IMPORTO || '').replace(',', '.')) || 0,
+      storico: storico,
+      importo: storico[storico.length-1].importo, // tariffa più recente, usata quando non serve una data specifica
       eta: data.TASSA_SOGGIORNO_ETA_ESENZIONE !== '' ? parseInt(data.TASSA_SOGGIORNO_ETA_ESENZIONE, 10) : 0,
       maxNotti: parseInt(data.TASSA_SOGGIORNO_MAX_NOTTI, 10) || 0,
       vatId: data.TASSA_SOGGIORNO_VAT_ID || ''
     };
   } catch(e){
-    tassaConfigCache = { importo: 0, eta: 0, maxNotti: 0, vatId: '' };
+    tassaConfigCache = { storico: [{ dal: '2000-01-01', importo: 0 }], importo: 0, eta: 0, maxNotti: 0, vatId: '' };
   }
   return tassaConfigCache;
+}
+// Restituisce la tariffa (+ eta/maxNotti/vatId, che non hanno storico) valida per una specifica data (es. arrivo del soggiorno)
+async function tariffaTassaAllaData(dataISO){
+  var cfgT = await caricaConfigTassa();
+  var voce = tariffaAllaData(cfgT.storico, dataISO) || { importo: 0 };
+  return { importo: voce.importo, eta: cfgT.eta, maxNotti: cfgT.maxNotti, vatId: cfgT.vatId };
 }
 
 var pulizieConfigCache = null;
@@ -2660,15 +2685,99 @@ async function caricaConfigPulizie(){
   try {
     var respP = await fetch(backendUrl('/api/settings'), { headers: backendHeaders() });
     var dataP = await respP.json();
-    pulizieConfigCache = {
-      ordinaria: parseFloat(String(dataP.PULIZIA_ORDINARIA_IMPORTO || '').replace(',', '.')) || 0,
-      straordinaria: parseFloat(String(dataP.PULIZIA_STRAORDINARIA_IMPORTO || '').replace(',', '.')) || 0,
-      oraria: parseFloat(String(dataP.PULIZIA_ORARIA_IMPORTO || '').replace(',', '.')) || 0
-    };
+    var storicoP;
+    try { storicoP = dataP.PULIZIA_STORIA ? JSON.parse(dataP.PULIZIA_STORIA) : null; } catch(eParse){ storicoP = null; }
+    if (!storicoP || !storicoP.length){
+      storicoP = [{
+        dal: '2000-01-01',
+        ordinaria: parseFloat(String(dataP.PULIZIA_ORDINARIA_IMPORTO || '').replace(',', '.')) || 0,
+        straordinaria: parseFloat(String(dataP.PULIZIA_STRAORDINARIA_IMPORTO || '').replace(',', '.')) || 0,
+        oraria: parseFloat(String(dataP.PULIZIA_ORARIA_IMPORTO || '').replace(',', '.')) || 0
+      }];
+    }
+    storicoP.sort(function(a,b){ return (a.dal||'').localeCompare(b.dal||''); });
+    pulizieConfigCache = { storico: storicoP };
   } catch(e){
-    pulizieConfigCache = { ordinaria: 0, straordinaria: 0, oraria: 0 };
+    pulizieConfigCache = { storico: [{ dal: '2000-01-01', ordinaria: 0, straordinaria: 0, oraria: 0 }] };
   }
   return pulizieConfigCache;
+}
+async function tariffaPulizieAllaData(dataISO){
+  var cfgP = await caricaConfigPulizie();
+  return tariffaAllaData(cfgP.storico, dataISO) || { ordinaria: 0, straordinaria: 0, oraria: 0 };
+}
+
+// Editor riutilizzabile per uno storico tariffe (data di decorrenza + uno o più valori), usato sia per la
+// tassa di soggiorno che per le pulizie. campi: [{ chiave, etichetta, placeholder }]
+async function renderStoricoTariffe(containerId, settingKey, campi, caricaFn, invalidaCacheFn){
+  var wrap = document.getElementById(containerId);
+  if (!wrap) return;
+  wrap.innerHTML = '<p class="as-sub"><span class="as-spin"></span> caricamento tariffe…</p>';
+  var cfgAttuale = await caricaFn();
+  var storico = (cfgAttuale.storico || []).slice().sort(function(a,b){ return (a.dal||'').localeCompare(b.dal||''); });
+
+  async function salva(){
+    var payload = {};
+    payload[settingKey] = JSON.stringify(storico);
+    try {
+      await fetch(backendUrl('/api/settings'), {
+        method: 'POST',
+        headers: backendHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(payload)
+      });
+    } catch(e){}
+    invalidaCacheFn();
+    disegna();
+  }
+
+  function disegna(){
+    var html = '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:8px;">' +
+      '<tr style="text-align:left;color:var(--text-muted);"><th style="padding:4px 6px 4px 0;">Valida dal</th>' +
+      campi.map(function(c){ return '<th style="padding:4px 6px;">'+c.etichetta+'</th>'; }).join('') +
+      '<th></th></tr>';
+    storico.forEach(function(voce, idx){
+      html += '<tr style="border-top:1px solid var(--border);"><td style="padding:5px 6px 5px 0;">'+toItDate(voce.dal)+'</td>' +
+        campi.map(function(c){ return '<td style="padding:5px 6px;">€'+(voce[c.chiave]||0).toFixed(2).replace('.',',')+'</td>'; }).join('') +
+        '<td style="padding:5px 0;">' + (storico.length > 1 ? '<a href="#" data-storico-rimuovi="'+idx+'" style="color:var(--danger);text-decoration:none;">×</a>' : '') + '</td>' +
+        '</tr>';
+    });
+    html += '</table>';
+    html += '<details><summary style="cursor:pointer;color:var(--brass);font-size:12.5px;">▸ Aggiungi una nuova tariffa (valida da una data in poi)</summary>' +
+      '<div style="margin-top:8px;">' +
+      '<div class="as-field"><label>Valida dal</label><input type="date" id="'+containerId+'-nuova-data"></div>' +
+      campi.map(function(c){ return '<div class="as-field"><label>'+c.etichetta+'</label><input id="'+containerId+'-nuova-'+c.chiave+'" placeholder="'+c.placeholder+'"></div>'; }).join('') +
+      '<button class="as-btn ghost" id="'+containerId+'-nuova-add" type="button">Aggiungi</button>' +
+      '</div></details>';
+    wrap.innerHTML = html;
+
+    wrap.querySelectorAll('[data-storico-rimuovi]').forEach(function(a){
+      a.onclick = function(ev){
+        ev.preventDefault();
+        if (storico.length <= 1) return; // non si può rimuovere l'ultima voce rimasta
+        var i = parseInt(a.getAttribute('data-storico-rimuovi'), 10);
+        storico.splice(i, 1);
+        salva();
+      };
+    });
+    document.getElementById(containerId+'-nuova-add').onclick = function(){
+      var dataV = document.getElementById(containerId+'-nuova-data').value;
+      if (!dataV){ alert('Indica la data di decorrenza.'); return; }
+      var nuovaVoce = { dal: dataV };
+      var tuttiValidi = true;
+      campi.forEach(function(c){
+        var v = parseFloat((document.getElementById(containerId+'-nuova-'+c.chiave).value||'').replace(',', '.'));
+        if (isNaN(v)) tuttiValidi = false;
+        nuovaVoce[c.chiave] = isNaN(v) ? 0 : v;
+      });
+      if (!tuttiValidi){ alert('Indica tutti i valori.'); return; }
+      storico = storico.filter(function(v){ return v.dal !== dataV; }); // sostituisce un'eventuale voce già presente per la stessa data
+      storico.push(nuovaVoce);
+      storico.sort(function(a,b){ return (a.dal||'').localeCompare(b.dal||''); });
+      salva();
+    };
+  }
+
+  disegna();
 }
 
 function calcolaEta(dataNascita, dataRif){
@@ -2940,7 +3049,7 @@ async function calcolaTassaSoggiorno(headId){
   if (okCheck) okCheck.checked = false;
   var datiGruppo = trovaGruppoFatturazione(headId);
   if (!tassaInput || !datiGruppo) return;
-  var cfgTassa = await caricaConfigTassa();
+  var cfgTassa = await tariffaTassaAllaData(datiGruppo.dataArrivo);
   if (!cfgTassa.importo){
     if (noteEl) noteEl.innerHTML = '<span style="color:var(--muted);">Nessuna tariffa configurata (Admin → Backend → Tassa di soggiorno).</span>';
     tassaInput.value = '0';
@@ -3033,6 +3142,7 @@ async function calcolaRiepilogoTassa(anno, trimestre){
     if (isNaN(d) || d.getFullYear() !== anno) return;
     var idx = mesi.indexOf(d.getMonth());
     if (idx === -1) return;
+    var tariffaGruppo = tariffaAllaData(cfgTassa.storico, gr.dataArrivo) || { importo: 0 };
     var notti = parseInt(gr.permanenza, 10) || 0;
     var nottiTassate = cfgTassa.maxNotti ? Math.min(notti, cfgTassa.maxNotti) : notti;
     var tassabili = 0, esenti = 0, mancanti = 0;
@@ -3044,7 +3154,7 @@ async function calcolaRiepilogoTassa(anno, trimestre){
     righe[idx].ospiti += tassabili;
     righe[idx].esenti += esenti;
     righe[idx].pernottamenti += nottiTassate * tassabili;
-    righe[idx].importo += nottiTassate * tassabili * cfgTassa.importo;
+    righe[idx].importo += nottiTassate * tassabili * tariffaGruppo.importo;
     righe[idx].mancantiDati += mancanti;
   });
   return righe;
@@ -3074,6 +3184,7 @@ async function calcolaDettaglioTassa(anno, trimestre){
     if (idx === -1) return;
     var mese = mesi[idx];
 
+    var tariffaGruppo = tariffaAllaData(cfgTassa.storico, gr.dataArrivo) || { importo: 0 };
     var notti = parseInt(gr.permanenza, 10) || 0;
     var nottiTassate = cfgTassa.maxNotti ? Math.min(notti, cfgTassa.maxNotti) : notti;
     var nottiEccedenti = cfgTassa.maxNotti && notti > cfgTassa.maxNotti ? (notti - cfgTassa.maxNotti) : 0;
@@ -3093,16 +3204,19 @@ async function calcolaDettaglioTassa(anno, trimestre){
 
     function aggiungi(tipologia, ospiti, pernottamenti){
       if (!ospiti || !pernottamenti) return;
-      if (!bucket[tipologia]) bucket[tipologia] = { ospiti: 0, pernottamenti: 0, mancantiDati: 0, prenotazioni: [] };
+      var importoRiga = tipologia === 'minori' ? 0 : pernottamenti * tariffaGruppo.importo;
+      if (!bucket[tipologia]) bucket[tipologia] = { ospiti: 0, pernottamenti: 0, mancantiDati: 0, importo: 0, prenotazioni: [] };
       bucket[tipologia].ospiti += ospiti;
       bucket[tipologia].pernottamenti += pernottamenti;
       bucket[tipologia].mancantiDati += mancanti;
+      bucket[tipologia].importo += importoRiga;
       bucket[tipologia].prenotazioni.push({
         ospiteNome: nomeOspite,
         dataArrivo: gr.dataArrivo,
         ospiti: ospiti,
         pernottamenti: pernottamenti,
-        mancantiDati: mancanti
+        mancantiDati: mancanti,
+        importo: importoRiga
       });
     }
     aggiungi('paganti', tassabili, nottiTassate * tassabili);
@@ -3124,7 +3238,7 @@ async function calcolaDettaglioTassa(anno, trimestre){
           tipologiaTesto: TIPOLOGIA_TESTO_CLIENT[tipologia],
           ospiti: v.ospiti,
           pernottamenti: v.pernottamenti,
-          importo: tipologia === 'minori' ? 0 : v.pernottamenti * cfgTassa.importo,
+          importo: v.importo,
           mancantiDati: v.mancantiDati,
           prenotazioni: v.prenotazioni
         });
@@ -3958,16 +4072,14 @@ function renderBackend(){
       '<div class="as-field"><label>Aliquota IVA predefinita (soggiorno)</label><select id="cfg-FIC_VAT_ID"><option value="">— scegli dopo aver salvato token e ID azienda —</option></select></div>' +
       '<p class="as-sub" style="margin-top:14px;"><strong>Tassa di soggiorno</strong></p>' +
       '<div class="as-row">' +
-        '<div class="as-field"><label>Importo a persona/notte (€)</label><input id="cfg-TASSA_SOGGIORNO_IMPORTO" placeholder="3.80"></div>' +
         '<div class="as-field"><label>Età esenzione (anni)</label><input id="cfg-TASSA_SOGGIORNO_ETA_ESENZIONE" placeholder="12"></div>' +
+        '<div class="as-field"><label>Notti massime tassabili</label><input id="cfg-TASSA_SOGGIORNO_MAX_NOTTI" placeholder="7"></div>' +
       '</div>' +
-      '<div class="as-field"><label>Notti massime tassabili</label><input id="cfg-TASSA_SOGGIORNO_MAX_NOTTI" placeholder="7"></div>' +
       '<div class="as-field"><label>Aliquota IVA tassa di soggiorno (di solito "Escluso")</label><select id="cfg-TASSA_SOGGIORNO_VAT_ID"><option value="">— scegli dopo aver salvato token e ID azienda —</option></select></div>' +
+      '<div id="storico-tassa-wrap" style="margin-bottom:14px;"></div>' +
       '<p class="as-sub" style="margin-top:14px;"><strong>Pulizie</strong></p>' +
-      '<p class="as-sub">Tariffe usate nel report Pulizie (Archivio → Pulizie). Modificabili in qualsiasi momento se cambiano.</p>' +
-      '<div class="as-field"><label>Pulizia ordinaria per alloggio al check-out (€)</label><input id="cfg-PULIZIA_ORDINARIA_IMPORTO" placeholder="es. 30.00"></div>' +
-      '<div class="as-field"><label>Pulizia straordinaria per alloggio (€)</label><input id="cfg-PULIZIA_STRAORDINARIA_IMPORTO" placeholder="es. 50.00"></div>' +
-      '<div class="as-field"><label>Costo orario "Varie" (€/ora)</label><input id="cfg-PULIZIA_ORARIA_IMPORTO" placeholder="es. 15.00"></div>' +
+      '<p class="as-sub">Tariffe usate nel report Pulizie (Archivio → Pulizie).</p>' +
+      '<div id="storico-pulizie-wrap" style="margin-bottom:14px;"></div>' +
       '<p class="as-sub" style="margin-top:14px;"><strong>Soggiorniamo (Città di Torino)</strong></p>' +
       '<p class="as-sub">Per la compilazione automatica della dichiarazione trimestrale della tassa di soggiorno (i risultati e l\'invio si trovano nella sezione "Tassa di soggiorno" in alto).</p>' +
       '<div class="as-row">' +
@@ -3979,8 +4091,14 @@ function renderBackend(){
       '<button class="as-btn secondary" id="cfg-save">Salva impostazioni</button>' +
       '<div id="cfg-result" style="margin-top:10px;"></div>';
     document.getElementById('tab-backend').appendChild(settingsBox);
+    renderStoricoTariffe('storico-tassa-wrap', 'TASSA_SOGGIORNO_STORIA', [{ chiave: 'importo', etichetta: 'Importo a persona/notte (€)', placeholder: '3.80' }], caricaConfigTassa, function(){ tassaConfigCache = null; });
+    renderStoricoTariffe('storico-pulizie-wrap', 'PULIZIA_STORIA', [
+      { chiave: 'ordinaria', etichetta: 'Ordinaria per alloggio (€)', placeholder: '30.00' },
+      { chiave: 'straordinaria', etichetta: 'Straordinaria per alloggio (€)', placeholder: '50.00' },
+      { chiave: 'oraria', etichetta: 'Costo orario "Varie" (€/ora)', placeholder: '15.00' }
+    ], caricaConfigPulizie, function(){ pulizieConfigCache = null; });
 
-    var cfgKeys = ['SMOOBU_API_KEY','SMOOBU_API_SECRET','ISTAT_UTENTE','ISTAT_PASSWORD','ISTAT_CODICE_STRUTTURA','ISTAT_CAMERE_DISPONIBILI','ISTAT_LETTI_DISPONIBILI','FIC_ACCESS_TOKEN','FIC_COMPANY_ID','FIC_VAT_ID','TASSA_SOGGIORNO_IMPORTO','TASSA_SOGGIORNO_ETA_ESENZIONE','TASSA_SOGGIORNO_MAX_NOTTI','TASSA_SOGGIORNO_VAT_ID','PULIZIA_ORDINARIA_IMPORTO','PULIZIA_STRAORDINARIA_IMPORTO','PULIZIA_ORARIA_IMPORTO','SOGGIORNIAMO_UTENTE','SOGGIORNIAMO_PASSWORD','SOGGIORNIAMO_MAPPATURA'];
+    var cfgKeys = ['SMOOBU_API_KEY','SMOOBU_API_SECRET','ISTAT_UTENTE','ISTAT_PASSWORD','ISTAT_CODICE_STRUTTURA','ISTAT_CAMERE_DISPONIBILI','ISTAT_LETTI_DISPONIBILI','FIC_ACCESS_TOKEN','FIC_COMPANY_ID','FIC_VAT_ID','TASSA_SOGGIORNO_ETA_ESENZIONE','TASSA_SOGGIORNO_MAX_NOTTI','TASSA_SOGGIORNO_VAT_ID','SOGGIORNIAMO_UTENTE','SOGGIORNIAMO_PASSWORD','SOGGIORNIAMO_MAPPATURA'];
     fetch(backendUrl('/api/settings'), { headers: backendHeaders() }).then(function(r){ return r.json(); }).then(function(data){
       cfgKeys.forEach(function(k){ var el2 = document.getElementById('cfg-'+k); if (el2 && data[k] && el2.tagName !== 'SELECT') el2.value = data[k]; });
       if (data.FIC_ACCESS_TOKEN && data.FIC_COMPANY_ID){
@@ -3994,10 +4112,6 @@ function renderBackend(){
       out2.innerHTML = '<span class="as-warn"><span class="as-spin"></span>salvataggio…</span>';
       var payload = {};
       cfgKeys.forEach(function(k){ var el3 = document.getElementById('cfg-'+k); payload[k] = (el3.value||'').trim(); });
-      if (payload.TASSA_SOGGIORNO_IMPORTO) payload.TASSA_SOGGIORNO_IMPORTO = payload.TASSA_SOGGIORNO_IMPORTO.replace(',', '.');
-      if (payload.PULIZIA_ORDINARIA_IMPORTO) payload.PULIZIA_ORDINARIA_IMPORTO = payload.PULIZIA_ORDINARIA_IMPORTO.replace(',', '.');
-      if (payload.PULIZIA_STRAORDINARIA_IMPORTO) payload.PULIZIA_STRAORDINARIA_IMPORTO = payload.PULIZIA_STRAORDINARIA_IMPORTO.replace(',', '.');
-      if (payload.PULIZIA_ORARIA_IMPORTO) payload.PULIZIA_ORARIA_IMPORTO = payload.PULIZIA_ORARIA_IMPORTO.replace(',', '.');
       try {
         var resp2 = await fetch(backendUrl('/api/settings'), {
           method: 'POST',
@@ -4504,7 +4618,7 @@ async function renderArchivioPulizie(el){
     return;
   }
   try {
-    var cfgPulizie = await caricaConfigPulizie();
+    var cfgPulizieStorico = (await caricaConfigPulizie()).storico;
     var da = primoGiornoMese(pulizieMeseCorrente.anno, pulizieMeseCorrente.mese);
     var aData = ultimoGiornoMese(pulizieMeseCorrente.anno, pulizieMeseCorrente.mese);
     var resp = await fetch(backendUrl('/api/smoobu/reservations?departureFrom=' + da + '&departureTo=' + aData), { headers: backendHeaders() });
@@ -4538,17 +4652,20 @@ async function renderArchivioPulizie(el){
     }
     var etichetteTipo = { ordinaria: 'ordinaria', straordinaria: 'straordinaria', varie: 'varie' };
     var contaOrdinarie = 0, contaStraordinarie = 0, oreVarie = 0;
+    var totOrdinarieEuro = 0, totStraordinarieEuro = 0, totOreEuro = 0;
+    var tariffeConfigurate = cfgPulizieStorico.some(function(t){ return t.ordinaria || t.straordinaria || t.oraria; });
     var html = '<div class="as-card">';
     giorni.forEach(function(g){
       var voci = perGiorno[g];
+      var tariffaGiorno = tariffaAllaData(cfgPulizieStorico, g) || { ordinaria: 0, straordinaria: 0, oraria: 0 };
       var contateGiorno = voci.filter(function(v){ return !v.escluso; }).length;
       html += '<div style="border-bottom:1px solid var(--border);padding:8px 0;">' +
         '<strong>' + toItDate(g) + '</strong> — ' + contateGiorno + ' intervento/i<br>' +
         voci.map(function(v){
           if (!v.escluso){
-            if (v.tipo === 'straordinaria') contaStraordinarie++;
-            else if (v.tipo === 'varie') oreVarie += (v.oreLavorate || 0);
-            else contaOrdinarie++;
+            if (v.tipo === 'straordinaria'){ contaStraordinarie++; totStraordinarieEuro += tariffaGiorno.straordinaria; }
+            else if (v.tipo === 'varie'){ var ore = v.oreLavorate || 0; oreVarie += ore; totOreEuro += ore * tariffaGiorno.oraria; }
+            else { contaOrdinarie++; totOrdinarieEuro += tariffaGiorno.ordinaria; }
           }
           if (v.manuale){
             var descrizione = v.tipo === 'varie'
@@ -4571,12 +4688,12 @@ async function renderArchivioPulizie(el){
         '</div>';
     });
 
-    var totaleEuro = contaOrdinarie * cfgPulizie.ordinaria + contaStraordinarie * cfgPulizie.straordinaria + oreVarie * cfgPulizie.oraria;
+    var totaleEuro = totOrdinarieEuro + totStraordinarieEuro + totOreEuro;
     html += '<div style="margin-top:10px;font-weight:600;">' +
-      '<p style="margin:2px 0;">Pulizie ordinarie: ' + contaOrdinarie + (cfgPulizie.ordinaria ? ' × €' + cfgPulizie.ordinaria.toFixed(2).replace('.',',') + ' = €' + (contaOrdinarie*cfgPulizie.ordinaria).toFixed(2).replace('.',',') : '') + '</p>' +
-      '<p style="margin:2px 0;">Pulizie straordinarie: ' + contaStraordinarie + (cfgPulizie.straordinaria ? ' × €' + cfgPulizie.straordinaria.toFixed(2).replace('.',',') + ' = €' + (contaStraordinarie*cfgPulizie.straordinaria).toFixed(2).replace('.',',') : '') + '</p>' +
-      '<p style="margin:2px 0;">Ore varie: ' + oreVarie + (cfgPulizie.oraria ? ' × €' + cfgPulizie.oraria.toFixed(2).replace('.',',') + ' = €' + (oreVarie*cfgPulizie.oraria).toFixed(2).replace('.',',') : '') + '</p>' +
-      (cfgPulizie.ordinaria || cfgPulizie.straordinaria || cfgPulizie.oraria
+      '<p style="margin:2px 0;">Pulizie ordinarie: ' + contaOrdinarie + (tariffeConfigurate ? ' = €' + totOrdinarieEuro.toFixed(2).replace('.',',') : '') + '</p>' +
+      '<p style="margin:2px 0;">Pulizie straordinarie: ' + contaStraordinarie + (tariffeConfigurate ? ' = €' + totStraordinarieEuro.toFixed(2).replace('.',',') : '') + '</p>' +
+      '<p style="margin:2px 0;">Ore varie: ' + oreVarie + (tariffeConfigurate ? ' = €' + totOreEuro.toFixed(2).replace('.',',') : '') + '</p>' +
+      (tariffeConfigurate
         ? '<p style="margin-top:6px;">Totale: €' + totaleEuro.toFixed(2).replace('.',',') + '</p>'
         : '<p class="as-sub" style="margin-top:6px;font-weight:normal;">Configura le tariffe in Impostazioni → Backend → Pulizie per vedere anche il totale in euro.</p>') +
       '</div>';
