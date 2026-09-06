@@ -168,6 +168,7 @@
 
   <div id="tab-oggi"></div>
   <div id="tab-ospiti"></div>
+  <div id="tab-stato-integrazioni"></div>
 </div>
 </div>
 </div>
@@ -2003,11 +2004,10 @@ async function renderOggi(){
 
   el.innerHTML = html;
 
-  if (state.backend.url){
-    var statusBox = document.createElement('div');
+  var statusBox = document.getElementById('tab-stato-integrazioni');
+  if (statusBox && state.backend.url){
     statusBox.className = 'as-card';
     statusBox.innerHTML = '<p class="as-title" style="font-size:16px;">Stato integrazioni</p><p class="as-sub"><span class="as-spin"></span> verifica in corso…</p>';
-    el.appendChild(statusBox);
     try {
       var respStato = await fetch(backendUrl('/api/settings'), { headers: backendHeaders() });
       var dataStato = await respStato.json();
