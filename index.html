@@ -4521,7 +4521,8 @@ function renderListaRecupero(prenotazioni, oggiISO){
       html += '<button class="as-btn secondary" data-recupero-crea="'+b.id+'" data-recupero-booking="'+encodeURIComponent(JSON.stringify(b))+'">📦 Segna come già inviata (altri canali) e archivia</button>';
       html += '<div style="margin-top:6px;"></div>';
     } else {
-      html += '<p class="as-sub" style="margin:0;">Ancora nei termini per l\'invio Questura: usa "Crea scheda" da Ospiti.</p>';
+      html += '<button class="as-btn secondary" data-recupero-crea-diretto="'+encodeURIComponent(JSON.stringify(b))+'">📝 Crea scheda</button>';
+      html += '<p class="as-sub" style="margin:6px 0 0;">Ancora nei termini per l\'invio Questura.</p>';
     }
     html += '</div>';
     return html;
@@ -4538,6 +4539,15 @@ function collegaAzioniRecupero(container){
       var btnQuestura = document.getElementById('ts-btn-questura');
       if (btnQuestura) btnQuestura.click();
       setTimeout(function(){ scrollCardIntoView(id); }, 150);
+    };
+  });
+  container.querySelectorAll('[data-recupero-crea-diretto]').forEach(function(btn){
+    btn.onclick = function(){
+      var b = JSON.parse(decodeURIComponent(btn.getAttribute('data-recupero-crea-diretto')));
+      var g = creaSchedaDaPrenotazioneSmoobu(b);
+      var btnQuestura = document.getElementById('ts-btn-questura');
+      if (btnQuestura) btnQuestura.click();
+      setTimeout(function(){ scrollCardIntoView(g.id); }, 150);
     };
   });
 }
