@@ -3926,11 +3926,19 @@ function renderArchivioIstatOk(el){
       var nomi = iv.ospiti.map(function(o){ return (o.cognome+' '+o.nome).trim(); }).join(', ');
       var classeBadge = iv.manuale ? 'as-info' : 'as-ok';
       var testoBadge = iv.manuale ? '📦 ISTAT e Questura completi (altri canali)' : '✅ ISTAT completo (arrivo + partenza)';
+      var dettagliOspiti = iv.ospiti.map(function(o){
+        var ruoloTesto = (o.ruolo === 'familiare' || o.ruolo === 'membro') ? 'membro' : 'capogruppo';
+        return '<div style="padding:4px 0;border-top:1px solid var(--border);">' +
+          '<strong>'+escapeHtml((o.cognome+' '+o.nome).trim())+'</strong> ('+ruoloTesto+')<br>' +
+          '<span class="as-sub" style="margin:0;">Data arrivo: '+(o.dataArrivo ? toItDate(o.dataArrivo) : '(non compilata)')+' · Permanenza: '+(o.permanenza||'—')+' notti</span>' +
+          '</div>';
+      }).join('');
       html += '<div data-search="'+escapeHtml(normalizzaNome(nomi))+'" style="border-bottom:1px solid var(--border);padding:8px 0;">' +
         '<div>' + g.toLocaleDateString('it-IT') + ' — ' + (iv.appartamentoNome||'nessun appartamento') + ' (' + iv.nRighe + ' schedine)</div>' +
         '<div class="as-sub" style="margin:0;">' + nomi + '</div>' +
         (dateUniche.indexOf(dataISO)===-1 ? '<button class="as-btn ghost" data-ricevuta="'+dataISO+'" style="margin-top:6px;">Scarica ricevuta del '+g.toLocaleDateString('it-IT')+'</button>' : '') +
         '<span class="'+classeBadge+'" style="margin-left:8px;">'+testoBadge+'</span>' +
+        '<details style="margin-top:6px;"><summary style="cursor:pointer;color:var(--brass);font-size:12.5px;">▸ Vedi dettagli ospiti</summary>' + dettagliOspiti + '</details>' +
         '</div>';
       if (dateUniche.indexOf(dataISO)===-1) dateUniche.push(dataISO);
     });
