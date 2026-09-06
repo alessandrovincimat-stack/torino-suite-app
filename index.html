@@ -977,10 +977,63 @@ async function loadState(){
     if (b && b.value) state.backend = JSON.parse(b.value);
   } catch(e){}
 
+  // Reset una tantum (corretto): pulisce sia il server sia la copia locale, altrimenti la
+  // migrazione qui sotto ripristinerebbe automaticamente i vecchi dati locali sul server vuoto.
+  try {
+    var paramsUrl = new URLSearchParams(window.location.search);
+    if (paramsUrl.get('resetdati') === 'CONFERMA2'){
+      var chiaviDaAzzerare = ['as-guests','as-invii','as-archivio','as-istat-ultima-data','as-fatture'];
+      for (var czi=0; czi<chiaviDaAzzerare.length; czi++){
+        var k2 = chiaviDaAzzerare[czi];
+        if (state.backend.url){
+          try {
+            var arcDaCancellare = await remoteStorage.get(k2);
+            if (k2 === 'as-archivio' && arcDaCancellare && arcDaCancellare.value){
+              var elencoArcRem = JSON.parse(arcDaCancellare.value);
+              for (var ari=0; ari<elencoArcRem.length; ari++){
+                if (elencoArcRem[ari].fotoKey){ try { await remoteStorage.delete(elencoArcRem[ari].fotoKey); } catch(ef1){} }
+              }
+            }
+          } catch(eg1){}
+          try { await remoteStorage.delete(k2); } catch(ed1){}
+        }
+        try {
+          var localeDaCancellare = await window.storage.get(k2, false);
+          if (k2 === 'as-archivio' && localeDaCancellare && localeDaCancellare.value){
+            var elencoArcLoc = JSON.parse(localeDaCancellare.value);
+            for (var alj=0; alj<elencoArcLoc.length; alj++){
+              if (elencoArcLoc[alj].fotoKey){ try { await window.storage.delete(elencoArcLoc[alj].fotoKey, false); } catch(ef2){} }
+            }
+          }
+        } catch(eg2){}
+        try { await window.storage.delete(k2, false); } catch(ed2){}
+      }
+      try {
+        var elencoFotoLoc = await window.storage.list('as-doc-', false);
+        if (elencoFotoLoc && elencoFotoLoc.keys){
+          for (var fli=0; fli<elencoFotoLoc.keys.length; fli++){
+            try { await window.storage.delete(elencoFotoLoc.keys[fli], false); } catch(ef3){}
+          }
+        }
+      } catch(eList){}
+      try { window.history.replaceState({}, '', window.location.pathname); } catch(eUrl){}
+      // Disabilita permanentemente sul server la migrazione automatica qui sotto: altrimenti
+      // basterebbe aprire l'app da un QUALSIASI altro dispositivo con ancora dati locali vecchi
+      // per farli ripristinare di nuovo sul server appena azzerato.
+      if (state.backend.url){
+        try { await remoteStorage.set('as-migrazione-disabilitata', 'true'); } catch(eFlag){}
+      }
+      alert('Dati ospiti, archivio e fatture azzerati (server e copia locale su questo dispositivo). La migrazione automatica da altri dispositivi è stata disattivata. La pagina si ricarica adesso.');
+      window.location.reload();
+      return;
+    }
+  } catch(eReset){}
+
   if (state.backend.url){
     try {
       var giaSulServer = await remoteStorage.get('as-guests');
-      if (!giaSulServer){
+      var migrazioneDisabilitata = await remoteStorage.get('as-migrazione-disabilitata');
+      if (!giaSulServer && !(migrazioneDisabilitata && migrazioneDisabilitata.value === 'true')){
         var chiaviDaMigrare = ['as-guests','as-tables','as-archivio','as-invii','as-istat-ultima-data'];
         for (var mi=0; mi<chiaviDaMigrare.length; mi++){
           var k = chiaviDaMigrare[mi];
