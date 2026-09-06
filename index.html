@@ -2967,14 +2967,23 @@ function normalizzaNome(s){
 
 function gruppiPerRiepilogoTassa(){
   var gruppi = [];
+  var smoobuIdGiaVisti = {};
   state.guests.forEach(function(g){
     var isDependent = g.ruolo === 'familiare' || g.ruolo === 'membro';
     if (isDependent) return;
+    if (g.smoobuBookingId) {
+      if (smoobuIdGiaVisti[g.smoobuBookingId]) return;
+      smoobuIdGiaVisti[g.smoobuBookingId] = true;
+    }
     gruppi.push({ dataArrivo: g.dataArrivo, permanenza: g.permanenza, membri: orderedGuestsFor(g.id) });
   });
   (state.invii || []).forEach(function(entry){
     if (!entry.ospiti || !entry.ospiti.length) return;
     var head = entry.ospiti[0];
+    if (head.smoobuBookingId) {
+      if (smoobuIdGiaVisti[head.smoobuBookingId]) return;
+      smoobuIdGiaVisti[head.smoobuBookingId] = true;
+    }
     gruppi.push({ dataArrivo: head.dataArrivo, permanenza: head.permanenza, membri: entry.ospiti });
   });
   return gruppi;
@@ -4022,7 +4031,11 @@ async function renderTassaTab(){
 
       sogSessionId = data.sessionId;
       var html = '';
-      if (data.mancantiDati) html += '<div class="as-err">⚠️ '+data.mancantiDati+' ospite/i senza data di nascita nel periodo: verifica che le righe "Minori" siano corrette prima di trasmettere.</div>';
+      if (data.mancantiDati){
+        html += '<div class="as-err">⚠️ '+data.mancantiDati+' ospite/i senza data di nascita nel periodo: verifica che le righe "Minori" siano corrette prima di trasmettere.' +
+          (data.nomiMancantiDati && data.nomiMancantiDati.length ? '<ul style="margin:6px 0 0 18px;">' + data.nomiMancantiDati.map(function(n){ return '<li>'+escapeHtml(n)+'</li>'; }).join('') + '</ul>' : '') +
+          '</div>';
+      }
       if (data.righeFallite && data.righeFallite.length){
         html += '<div class="as-err" style="margin-top:6px;">⚠️ '+data.righeFallite.length+' riga/e NON inserite correttamente sul portale:<ul style="margin:4px 0 0 18px;">' +
           data.righeFallite.map(function(f){ return '<li>'+f.riga.appartamentoNome+' — '+f.riga.tipologiaTesto+' ('+f.riga.meseNome+'): '+f.errore+'</li>'; }).join('') +
