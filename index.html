@@ -51,6 +51,7 @@
   .as-warn { font-size:12px; color:#e0a04a; margin-top:4px; }
   .as-err { font-size:12px; color:var(--danger); margin-top:4px; }
   .as-ok { font-size:12px; color:var(--ok); }
+  .as-info { font-size:12px; color:var(--info); }
   .as-links { display:flex; gap:10px; flex-wrap:wrap; }
   .as-link-card { flex:1; min-width:200px; border:1px solid var(--border); border-radius:8px; padding:14px; text-decoration:none; color:var(--text); display:block; }
   .as-link-card:hover { border-color:var(--brass); }
@@ -135,6 +136,7 @@
   .as-warn { font-size:12px; color:#e0a04a; margin-top:4px; }
   .as-err { font-size:12px; color:var(--danger); margin-top:4px; }
   .as-ok { font-size:12px; color:var(--ok); }
+  .as-info { font-size:12px; color:var(--info); }
   .as-links { display:flex; gap:10px; flex-wrap:wrap; }
   .as-link-card { flex:1; min-width:200px; border:1px solid var(--border); border-radius:8px; padding:14px; text-decoration:none; color:var(--text); display:block; }
   .as-link-card:hover { border-color:var(--brass); }
@@ -299,6 +301,7 @@ ${Wp}
   --text-muted: #9c9686;
   --danger: #b25a45;
   --ok: #8aae6f;
+  --info: #6fa8c9;
 }
 
 .app-root {
@@ -974,32 +977,6 @@ async function loadState(){
     if (b && b.value) state.backend = JSON.parse(b.value);
   } catch(e){}
 
-  // Reset una tantum di ospiti/archivio/fatture, attivabile solo visitando l'app con ?resetdati=CONFERMA
-  try {
-    var paramsUrl = new URLSearchParams(window.location.search);
-    if (paramsUrl.get('resetdati') === 'CONFERMA' && state.backend.url){
-      try {
-        var arcDaCancellare = await remoteStorage.get('as-archivio');
-        if (arcDaCancellare && arcDaCancellare.value){
-          var elencoArcDaCancellare = JSON.parse(arcDaCancellare.value);
-          for (var adi=0; adi<elencoArcDaCancellare.length; adi++){
-            if (elencoArcDaCancellare[adi].fotoKey){
-              try { await remoteStorage.delete(elencoArcDaCancellare[adi].fotoKey); } catch(eFoto){}
-            }
-          }
-        }
-      } catch(eArcList){}
-      var chiaviDaAzzerare = ['as-guests','as-invii','as-archivio','as-istat-ultima-data','as-fatture'];
-      for (var czi=0; czi<chiaviDaAzzerare.length; czi++){
-        try { await remoteStorage.delete(chiaviDaAzzerare[czi]); } catch(eDelK){}
-      }
-      try { window.history.replaceState({}, '', window.location.pathname); } catch(eUrl){}
-      alert('Dati ospiti, archivio e fatture azzerati. La pagina si ricarica adesso.');
-      window.location.reload();
-      return;
-    }
-  } catch(eReset){}
-
   if (state.backend.url){
     try {
       var giaSulServer = await remoteStorage.get('as-guests');
@@ -1635,7 +1612,7 @@ function attachGuestHandlers(root){
       if (!head || !head.cognome){ alert('Compila almeno il cognome prima di archiviare.'); return; }
       var ok = confirm('Questo sposta la scheda di ' + head.cognome + ' ' + head.nome + ' in Archivio segnandola come già completata (Questura e ISTAT), SENZA inviare nulla da qui. Usalo solo se hai già trasmesso tutto tramite altri canali (es. direttamente sul portale ufficiale). Continuare?');
       if (!ok) return;
-      await archiveInvio(groupOrdered, head.idAppartamento, groupOrdered.length, true, true);
+      await archiveInvio(groupOrdered, head.idAppartamento, groupOrdered.length, true, true, true);
       render();
     };
   });
@@ -2260,10 +2237,11 @@ function renderSmoobuBox(box, bookings){
       var b = r.b;
       var stato;
       if (r.invioCollegato){
+        var classeStato = r.invioCollegato.manuale ? 'as-info' : 'as-ok';
         var nomiInviati = r.invioCollegato.ospiti.filter(function(o){return o.smoobuBookingId===String(b.id);}).map(function(o){return (o.cognome+' '+o.nome).trim();}).join(', ');
-        stato = '<p class="as-ok" style="margin:4px 0 0;">Già inviata alla Questura (' + nomiInviati + ')</p>';
+        stato = '<p class="'+classeStato+'" style="margin:4px 0 0;">Già inviata alla Questura (' + nomiInviati + ')' + (r.invioCollegato.manuale ? ' — altri canali' : '') + '</p>';
         stato += r.invioCollegato.arrivoSegnalato
-          ? '<p class="as-ok" style="margin:4px 0 0;">Arrivo + partenza presunta segnalati (ISTAT)</p>'
+          ? '<p class="'+classeStato+'" style="margin:4px 0 0;">Arrivo + partenza presunta segnalati (ISTAT)' + (r.invioCollegato.manuale ? ' — altri canali' : '') + '</p>'
           : '<button class="as-btn secondary" data-arrivo="'+r.invioCollegato.id+'" style="margin-top:6px;">Segnala arrivo (ISTAT)</button><div style="margin-top:6px;"></div>';
         if (r.invioCollegato.arrivoSegnalato && !r.invioCollegato.partenzaSegnalata){
           stato += '<button class="as-btn secondary" data-partenza="'+r.invioCollegato.id+'" style="margin-top:6px;" title="Serve solo se la prenotazione è cambiata rispetto a quanto già segnalato">Aggiorna partenza (ISTAT)</button><div style="margin-top:6px;"></div>';
@@ -3634,7 +3612,7 @@ async function sendToBackend(lines, real, idAppartamento, ordered, outEl){
   }
 }
 
-async function archiveInvio(ordered, idAppartamento, nRighe, arrivoIstatOk, partenzaIstatOk){
+async function archiveInvio(ordered, idAppartamento, nRighe, arrivoIstatOk, partenzaIstatOk, manuale){
   var appNome = (state.tables.appartamenti.find(function(a){ return a.id===idAppartamento; })||{}).nome || idAppartamento || '';
   var entry = {
     id: uid(),
@@ -3644,7 +3622,8 @@ async function archiveInvio(ordered, idAppartamento, nRighe, arrivoIstatOk, part
     nRighe: nRighe,
     ospiti: ordered.map(function(g){ return { id: g.id, cognome: g.cognome, nome: g.nome, ruolo: g.ruolo, groupOf: g.groupOf || '', dataArrivo: g.dataArrivo, permanenza: g.permanenza, dataNascita: g.dataNascita || '', sesso: g.sesso || '', nascitaEstero: !!g.nascitaEstero, comuneNascitaNome: g.comuneNascitaNome || '', statoNascitaNome: g.statoNascitaNome || '', residenzaEstero: !!g.residenzaEstero, comuneResidenzaNome: g.comuneResidenzaNome || '', statoResidenzaNome: g.statoResidenzaNome || '', indirizzoResidenza: g.indirizzoResidenza || '', cittadinanzaNome: g.cittadinanzaNome || '', tipoDocumentoNome: g.tipoDocumentoNome || '', numeroDocumento: g.numeroDocumento || '', rilascioEstero: !!g.rilascioEstero, luogoRilascioNome: g.luogoRilascioNome || '', dataScadenzaDocumento: g.dataScadenzaDocumento || '', smoobuBookingId: g.smoobuBookingId || '' }; }),
     arrivoSegnalato: !!arrivoIstatOk,
-    partenzaSegnalata: !!partenzaIstatOk
+    partenzaSegnalata: !!partenzaIstatOk,
+    manuale: !!manuale
   };
   state.invii.push(entry);
   var sentIds = ordered.map(function(g){ return g.id; });
@@ -3878,11 +3857,13 @@ function renderArchivioIstatOk(el){
       var g = new Date(iv.dataInvio);
       var dataISO = iv.dataInvio.slice(0,10);
       var nomi = iv.ospiti.map(function(o){ return (o.cognome+' '+o.nome).trim(); }).join(', ');
+      var classeBadge = iv.manuale ? 'as-info' : 'as-ok';
+      var testoBadge = iv.manuale ? '📦 ISTAT e Questura completi (altri canali)' : '✅ ISTAT completo (arrivo + partenza)';
       html += '<div data-search="'+escapeHtml(normalizzaNome(nomi))+'" style="border-bottom:1px solid var(--border);padding:8px 0;">' +
         '<div>' + g.toLocaleDateString('it-IT') + ' — ' + (iv.appartamentoNome||'nessun appartamento') + ' (' + iv.nRighe + ' schedine)</div>' +
         '<div class="as-sub" style="margin:0;">' + nomi + '</div>' +
         (dateUniche.indexOf(dataISO)===-1 ? '<button class="as-btn ghost" data-ricevuta="'+dataISO+'" style="margin-top:6px;">Scarica ricevuta del '+g.toLocaleDateString('it-IT')+'</button>' : '') +
-        '<span class="as-ok" style="margin-left:8px;">✅ ISTAT completo (arrivo + partenza)</span>' +
+        '<span class="'+classeBadge+'" style="margin-left:8px;">'+testoBadge+'</span>' +
         '</div>';
       if (dateUniche.indexOf(dataISO)===-1) dateUniche.push(dataISO);
     });
@@ -4475,7 +4456,7 @@ async function recuperaSchedaSingola(b, btn){
     if (!collegamento){
       var g = creaSchedaDaPrenotazioneSmoobu(b);
       var membri = orderedGuestsFor(g.id);
-      await archiveInvio(membri, g.idAppartamento, membri.length, true, true);
+      await archiveInvio(membri, g.idAppartamento, membri.length, true, true, true);
     }
     if (out) out.innerHTML = '<p class="as-ok">Archiviata come inviata da altri canali.</p>';
     btn.style.display = 'none';
@@ -4497,7 +4478,7 @@ async function recuperaTutteMese(prenotazioni, oggiISO, btn){
     try {
       var g = creaSchedaDaPrenotazioneSmoobu(daFare[i]);
       var membri = orderedGuestsFor(g.id);
-      await archiveInvio(membri, g.idAppartamento, membri.length, true, true);
+      await archiveInvio(membri, g.idAppartamento, membri.length, true, true, true);
     } catch(e){}
   }
   btn.disabled = false;
