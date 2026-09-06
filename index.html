@@ -4578,8 +4578,26 @@ async function renderArchivioRecuperoSchede(el){
       (oltreTerminiN
         ? '<p style="margin:8px 0 0;color:var(--danger);">⚠️ <strong>'+oltreTerminiN+'</strong> in ritardo, oltre i termini per l\'invio Questura</p>'
         : '<p class="as-ok" style="margin:8px 0 0;">Nessun ritardo.</p>') +
+      (doppioniN ? '<button class="as-btn secondary" id="recupero-pulisci-doppioni" style="margin-top:8px;">🧹 Rimuovi i '+doppioniN+' doppione/i (tiene solo l\'Archivio)</button><div id="recupero-pulisci-esito" class="as-sub" style="margin-top:6px;"></div>' : '') +
       '<button class="as-btn ghost" id="recupero-mostra-dettaglio" style="margin-top:10px;font-size:12.5px;">'+((oltreTerminiN||doppioniN) ? 'Vedi il dettaglio' : 'Vedi il dettaglio comunque')+'</button>' +
       '</div>';
+
+    if (doppioniN){
+      document.getElementById('recupero-pulisci-doppioni').onclick = async function(){
+        var out = document.getElementById('recupero-pulisci-esito');
+        var idsDaRimuovere = prenotazioni
+          .map(function(b){ return trovaCollegamentoOspite(String(b.id)); })
+          .filter(function(c){ return c && c.dove === 'duplicato'; })
+          .map(function(c){ return c.id; });
+        if (!confirm('Rimuovere ' + idsDaRimuovere.length + ' scheda/e attiva/e duplicata/e in Ospiti? Resta intatto tutto ciò che è già in Archivio.')) return;
+        state.guests = state.guests.filter(function(g){ return idsDaRimuovere.indexOf(g.id) === -1; });
+        await saveGuests();
+        out.textContent = idsDaRimuovere.length + ' doppione/i rimosso/i.';
+        renderArchivio();
+        renderOggi();
+        renderOspiti();
+      };
+    }
 
     function mostraDettaglio(){
       dettaglio.innerHTML =
