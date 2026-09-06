@@ -74,6 +74,7 @@
 </style>
 </head>
 <body>
+<div id="pull-refresh-indicator" style="position:fixed;top:0;left:0;right:0;text-align:center;padding:10px 8px;font-size:13px;color:var(--brass);background:var(--bg);transform:translateY(-100%);z-index:99999;border-bottom:1px solid var(--border);">↓ Trascina per aggiornare</div>
 <div class="ts-switcher" id="ts-switcher"><button class="ts-switch-btn" id="ts-btn-porte">Gestione porte</button><button class="ts-switch-btn ts-active" id="ts-btn-questura">Questura e ISTAT</button><button class="ts-switch-btn" id="ts-btn-archivio">Archivio</button><button class="ts-switch-btn" id="ts-btn-fatture">Fatture</button><button class="ts-switch-btn" id="ts-btn-tassa">Tassa di soggiorno</button><button class="ts-switch-btn" id="ts-btn-impostazioni" style="font-size:16px;">🔒</button></div><div id="porte-section">
 <div id="root"></div>
 </div>
@@ -5110,6 +5111,61 @@ document.getElementById('imp-sblocca').onclick = function(){
 };
 
 loadState().then(render);
+
+(function(){
+  var indicator = document.getElementById('pull-refresh-indicator');
+  if (!indicator) return;
+  var startY = null;
+  var pulling = false;
+  var refreshing = false;
+  var ultimoDelta = 0;
+  var SOGLIA = 70;
+
+  function inCima(){
+    return (window.scrollY || document.documentElement.scrollTop || 0) <= 0;
+  }
+  function imposta(pos, transizione){
+    indicator.style.transition = transizione ? 'transform .2s ease-out' : 'none';
+    indicator.style.transform = 'translateY(' + pos + '%)';
+  }
+
+  document.addEventListener('touchstart', function(e){
+    if (refreshing || e.touches.length !== 1 || !inCima()){ startY = null; pulling = false; return; }
+    startY = e.touches[0].clientY;
+    pulling = true;
+  }, { passive: true });
+
+  document.addEventListener('touchmove', function(e){
+    if (!pulling || startY === null || refreshing) return;
+    var delta = e.touches[0].clientY - startY;
+    if (delta <= 0 || !inCima()){ pulling = false; imposta(-100, true); return; }
+    ultimoDelta = delta;
+    var ratio = Math.min(delta / SOGLIA, 1);
+    indicator.textContent = ratio >= 1 ? '↑ Rilascia per aggiornare' : '↓ Trascina per aggiornare';
+    imposta(-100 + ratio * 100, false);
+  }, { passive: true });
+
+  document.addEventListener('touchend', function(){
+    if (!pulling) return;
+    pulling = false;
+    if (ultimoDelta >= SOGLIA){
+      refreshing = true;
+      indicator.textContent = '⏳ Aggiornamento…';
+      imposta(0, true);
+      loadState().then(function(){
+        render();
+        indicator.textContent = '✅ Aggiornato';
+        setTimeout(function(){ imposta(-100, true); refreshing = false; }, 600);
+      }).catch(function(){
+        indicator.textContent = '⚠️ Errore aggiornamento';
+        setTimeout(function(){ imposta(-100, true); refreshing = false; }, 1200);
+      });
+    } else {
+      imposta(-100, true);
+    }
+    ultimoDelta = 0;
+  }, { passive: true });
+})();
 
 })();
 
