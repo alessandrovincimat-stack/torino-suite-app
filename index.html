@@ -4546,9 +4546,10 @@ function render(){
 var adminUnlocked = false;
 
 /* ---------- Tab Fatture (terza sezione di primo livello) ---------- */
-var fattureMeseCorrente = { anno: 2026, mese: 7 }; // agosto 2026 (mese indicizzato da 0) — primo mese da tracciare
-var recuperoMeseCorrente = { anno: 2026, mese: 7 }; // stesso punto di partenza, agosto 2026
-var pulizieMeseCorrente = { anno: 2026, mese: 7 }; // stesso punto di partenza, agosto 2026
+var oggiPerDefaultMese = new Date();
+var fattureMeseCorrente = { anno: oggiPerDefaultMese.getFullYear(), mese: oggiPerDefaultMese.getMonth() };
+var recuperoMeseCorrente = { anno: oggiPerDefaultMese.getFullYear(), mese: oggiPerDefaultMese.getMonth() };
+var pulizieMeseCorrente = { anno: oggiPerDefaultMese.getFullYear(), mese: oggiPerDefaultMese.getMonth() };
 var STATI_SDI_INVIATI = ['sent','pending','processing','accepted','no_response','manual_accepted'];
 var STATI_SDI_PROBLEMA = ['error','discarded','not_delivered','rejected','manual_rejected'];
 
