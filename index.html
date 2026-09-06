@@ -977,6 +977,63 @@ async function loadState(){
     if (b && b.value) state.backend = JSON.parse(b.value);
   } catch(e){}
 
+  // Reset una tantum CON DIAGNOSTICA: se il backend non risulta configurato in questo momento,
+  // avvisa con un errore invece di mostrare un falso successo senza cancellare nulla sul server.
+  try {
+    var paramsUrl = new URLSearchParams(window.location.search);
+    if (paramsUrl.get('resetdati') === 'CONFERMA3'){
+      if (!state.backend.url){
+        alert('ERRORE: il backend non risulta configurato in questo momento (state.backend.url è vuoto). Nessuna cancellazione è stata effettuata sul server. Riprova, e se persiste segnalalo.');
+        try { window.history.replaceState({}, '', window.location.pathname); } catch(eUrl0){}
+        return;
+      }
+      var chiaviDaAzzerare = ['as-guests','as-invii','as-archivio','as-istat-ultima-data','as-fatture'];
+      var erroriReset = [];
+      for (var czi=0; czi<chiaviDaAzzerare.length; czi++){
+        var k2 = chiaviDaAzzerare[czi];
+        try {
+          var arcDaCancellare = await remoteStorage.get(k2);
+          if (k2 === 'as-archivio' && arcDaCancellare && arcDaCancellare.value){
+            var elencoArcRem = JSON.parse(arcDaCancellare.value);
+            for (var ari=0; ari<elencoArcRem.length; ari++){
+              if (elencoArcRem[ari].fotoKey){ try { await remoteStorage.delete(elencoArcRem[ari].fotoKey); } catch(ef1){ erroriReset.push('foto '+elencoArcRem[ari].fotoKey+': '+ef1.message); } }
+            }
+          }
+        } catch(eg1){ erroriReset.push('lettura '+k2+': '+eg1.message); }
+        try { await remoteStorage.delete(k2); } catch(ed1){ erroriReset.push('cancellazione '+k2+': '+ed1.message); }
+      }
+      try {
+        var localeDaCancellare2 = await window.storage.get('as-archivio', false);
+        if (localeDaCancellare2 && localeDaCancellare2.value){
+          var elencoArcLoc2 = JSON.parse(localeDaCancellare2.value);
+          for (var alk=0; alk<elencoArcLoc2.length; alk++){
+            if (elencoArcLoc2[alk].fotoKey){ try { await window.storage.delete(elencoArcLoc2[alk].fotoKey, false); } catch(ef2){} }
+          }
+        }
+      } catch(eg2){}
+      for (var czj=0; czj<chiaviDaAzzerare.length; czj++){
+        try { await window.storage.delete(chiaviDaAzzerare[czj], false); } catch(ed2){}
+      }
+      try { await remoteStorage.set('as-migrazione-disabilitata', 'true'); } catch(eFlag){}
+
+      // Verifica diagnostica: rileggo as-archivio e as-guests DAL SERVER dopo la cancellazione
+      var verificaArc, verificaGuests;
+      try { verificaArc = await remoteStorage.get('as-archivio'); } catch(ev1){ verificaArc = { errore: ev1.message }; }
+      try { verificaGuests = await remoteStorage.get('as-guests'); } catch(ev2){ verificaGuests = { errore: ev2.message }; }
+      try { window.history.replaceState({}, '', window.location.pathname); } catch(eUrl){}
+
+      var msg = 'Reset completato.\n';
+      msg += 'as-archivio sul server ora: ' + (verificaArc && verificaArc.value ? 'ANCORA PRESENTE (' + verificaArc.value.length + ' caratteri!)' : 'vuoto, ok') + '\n';
+      msg += 'as-guests sul server ora: ' + (verificaGuests && verificaGuests.value ? 'ANCORA PRESENTE!' : 'vuoto, ok') + '\n';
+      if (erroriReset.length) msg += 'Errori incontrati: ' + erroriReset.join(' | ');
+      alert(msg);
+      window.location.reload();
+      return;
+    }
+  } catch(eReset){
+    alert('ERRORE IMPREVISTO durante il reset: ' + eReset.message);
+  }
+
   if (state.backend.url){
     try {
       var giaSulServer = await remoteStorage.get('as-guests');
