@@ -981,7 +981,7 @@ async function loadState(){
   // avvisa con un errore invece di mostrare un falso successo senza cancellare nulla sul server.
   try {
     var paramsUrl = new URLSearchParams(window.location.search);
-    if (paramsUrl.get('resetdati') === 'CONFERMA5'){
+    if (paramsUrl.get('resetdati') === 'CONFERMA6'){
       if (!state.backend.url){
         alert('ERRORE: il backend non risulta configurato in questo momento (state.backend.url è vuoto). Nessuna cancellazione è stata effettuata sul server. Riprova, e se persiste segnalalo.');
         try { window.history.replaceState({}, '', window.location.pathname); } catch(eUrl0){}
@@ -1035,8 +1035,7 @@ async function loadState(){
       msg += 'as-guests sul server ora: ' + (verificaGuests && verificaGuests.value ? 'ANCORA PRESENTE!' : 'vuoto, ok') + '\n\n';
       msg += 'Dettaglio DELETE:\n' + dettaglioDelete.join('\n');
       if (erroriReset.length) msg += '\n\nAltri errori: ' + erroriReset.join(' | ');
-      alert(msg);
-      window.location.reload();
+      document.body.innerHTML = '<pre style="white-space:pre-wrap;word-break:break-word;font-family:monospace;font-size:14px;padding:20px;background:#111;color:#0f0;min-height:100vh;margin:0;">' + escapeHtml(msg) + '</pre><p style="position:fixed;bottom:0;left:0;right:0;padding:14px;background:#222;text-align:center;"><a href="' + window.location.pathname + '" style="color:#9cf;font-size:16px;">Tocca qui per continuare nell\'app</a></p>';
       return;
     }
   } catch(eReset){
@@ -1191,12 +1190,12 @@ function compressImage(file, maxWidth, quality){
 async function archiveDocument(file, guest){
   try {
     var isPdf = (file.type === 'application/pdf');
-    var LIMITE_SICURO = 1.4 * 1024 * 1024;
+    var LIMITE_SICURO = 18 * 1024 * 1024;
     var b64;
     if (isPdf) {
       b64 = await fileToBase64(file);
       if (b64.length > LIMITE_SICURO) {
-        alert('Questo PDF è troppo grande (oltre 1,4 MB) per essere archiviato tramite l\'app. I dati sono comunque stati estratti; carica il documento separatamente se serve conservarlo.');
+        alert('Questo PDF è troppo grande (oltre 18 MB) per essere archiviato tramite l\'app. I dati sono comunque stati estratti; carica il documento separatamente se serve conservarlo.');
         return;
       }
     } else {
