@@ -5027,11 +5027,11 @@ async function renderFattureTab(){
   try {
     var da = primoGiornoMese(fattureMeseCorrente.anno, fattureMeseCorrente.mese);
     var aData = ultimoGiornoMese(fattureMeseCorrente.anno, fattureMeseCorrente.mese);
-    var resp = await fetch(backendUrl('/api/smoobu/reservations?arrivalFrom=' + da + '&arrivalTo=' + aData), { headers: backendHeaders() });
+    var resp = await fetch(backendUrl('/api/smoobu/reservations?departureFrom=' + da + '&departureTo=' + aData), { headers: backendHeaders() });
     var data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'errore nel caricamento');
     var prenotazioni = (data.bookings || []).filter(function(b){ return b.type !== 'blocked-booking' && b.type !== 'cancellation'; });
-    prenotazioni.sort(function(x, y){ return String(x.arrival).localeCompare(String(y.arrival)); });
+    prenotazioni.sort(function(x, y){ return String(x.departure).localeCompare(String(y.departure)); });
     var conteggio = contaStatiFatture(prenotazioni);
     var contatoriEl = document.getElementById('fatt-contatori');
     if (contatoriEl) contatoriEl.textContent = conteggio.pendente + ' da fare · ' + conteggio.emessa + ' emesse · ' + conteggio.inviata + ' inviate';
