@@ -73,7 +73,7 @@
 </style>
 </head>
 <body>
-<div class="ts-switcher" id="ts-switcher"><button class="ts-switch-btn" id="ts-btn-porte">Gestione porte</button><button class="ts-switch-btn ts-active" id="ts-btn-questura">Questura e ISTAT</button><button class="ts-switch-btn" id="ts-btn-fatture">Fatture</button><button class="ts-switch-btn" id="ts-btn-tassa">Tassa di soggiorno</button><button class="ts-switch-btn" id="ts-btn-impostazioni" style="font-size:16px;">🔒</button></div><div id="porte-section">
+<div class="ts-switcher" id="ts-switcher"><button class="ts-switch-btn" id="ts-btn-porte">Gestione porte</button><button class="ts-switch-btn ts-active" id="ts-btn-questura">Questura e ISTAT</button><button class="ts-switch-btn" id="ts-btn-archivio">Archivio</button><button class="ts-switch-btn" id="ts-btn-fatture">Fatture</button><button class="ts-switch-btn" id="ts-btn-tassa">Tassa di soggiorno</button><button class="ts-switch-btn" id="ts-btn-impostazioni" style="font-size:16px;">🔒</button></div><div id="porte-section">
 <div id="root"></div>
 </div>
 <div id="fatture-section" style="display:none;">
@@ -166,14 +166,15 @@
   <div class="as-tabs">
     <div class="as-tab active" data-tab="oggi">Oggi</div>
     <div class="as-tab" data-tab="ospiti">Ospiti</div>
-    <div class="as-tab" data-tab="archivio">Archivio documenti</div>
   </div>
 
   <div id="tab-oggi"></div>
   <div id="tab-ospiti" class="as-hidden"></div>
-  <div id="tab-archivio" class="as-hidden"></div>
 </div>
 </div>
+</div>
+<div id="archivio-section" style="display:none;">
+<div id="tab-archivio" style="max-width:960px;margin:0 auto;font-family:'Helvetica Neue',Arial,sans-serif;color:var(--text);background:var(--bg);padding:22px 20px 40px;"></div>
 </div>
 
 <script>
@@ -3832,6 +3833,7 @@ function renderArchivio(){
 
   collegaRicercaArchivio();
 }
+window.renderArchivio = renderArchivio;
 
 function invioCompletato(iv){
   return !!(iv.arrivoSegnalato && iv.partenzaSegnalata);
@@ -4915,13 +4917,12 @@ function switchTab(name){
   var btn = document.querySelector('.as-tab[data-tab="'+name+'"]');
   if (btn) btn.classList.add('active');
 
-  ['oggi','ospiti','archivio'].forEach(function(n){
+  ['oggi','ospiti'].forEach(function(n){
     var el = document.getElementById('tab-'+n);
     if (el) el.classList.toggle('as-hidden', n !== name);
   });
 
   if (name === 'oggi') renderOggi();
-  else if (name === 'archivio') renderArchivio();
 }
 
 document.querySelectorAll('.as-tab[data-tab]').forEach(function(tab){
@@ -4985,11 +4986,13 @@ loadState().then(render);
   var switcher = document.getElementById('ts-switcher');
   var porteSection = document.getElementById('porte-section');
   var questuraSection = document.getElementById('questura-section');
+  var archivioSection = document.getElementById('archivio-section');
   var fattureSection = document.getElementById('fatture-section');
   var tassaSection = document.getElementById('tassa-section');
   var impostazioniSection = document.getElementById('impostazioni-section');
   var btnPorte = document.getElementById('ts-btn-porte');
   var btnQuestura = document.getElementById('ts-btn-questura');
+  var btnArchivio = document.getElementById('ts-btn-archivio');
   var btnFatture = document.getElementById('ts-btn-fatture');
   var btnTassa = document.getElementById('ts-btn-tassa');
   var btnImpostazioni = document.getElementById('ts-btn-impostazioni');
@@ -4997,6 +5000,7 @@ loadState().then(render);
   var sezioni = [
     { div: porteSection, btn: btnPorte },
     { div: questuraSection, btn: btnQuestura },
+    { div: archivioSection, btn: btnArchivio },
     { div: fattureSection, btn: btnFatture },
     { div: tassaSection, btn: btnTassa },
     { div: impostazioniSection, btn: btnImpostazioni }
@@ -5007,18 +5011,21 @@ loadState().then(render);
       s.div.style.display = (i === indice) ? 'block' : 'none';
       s.btn.classList.toggle('ts-active', i === indice);
     });
-    if (indice === 2 && typeof renderFattureTab === 'function') renderFattureTab();
-    if (indice === 3 && typeof renderTassaTab === 'function') renderTassaTab();
-    if (indice === 4 && typeof renderImpostazioniTab === 'function') renderImpostazioniTab();
+    if (indice === 2 && typeof renderArchivio === 'function') renderArchivio();
+    if (indice === 3 && typeof renderFattureTab === 'function') renderFattureTab();
+    if (indice === 4 && typeof renderTassaTab === 'function') renderTassaTab();
+    if (indice === 5 && typeof renderImpostazioniTab === 'function') renderImpostazioniTab();
   }
   function showPorte(){ mostra(0); }
   function showQuestura(){ mostra(1); }
-  function showFatture(){ mostra(2); }
-  function showTassa(){ mostra(3); }
-  function showImpostazioni(){ mostra(4); }
+  function showArchivio(){ mostra(2); }
+  function showFatture(){ mostra(3); }
+  function showTassa(){ mostra(4); }
+  function showImpostazioni(){ mostra(5); }
 
   btnPorte.onclick = showPorte;
   btnQuestura.onclick = showQuestura;
+  btnArchivio.onclick = showArchivio;
   btnFatture.onclick = showFatture;
   btnTassa.onclick = showTassa;
   btnImpostazioni.onclick = showImpostazioni;
