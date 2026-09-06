@@ -973,6 +973,33 @@ async function loadState(){
     var b = await window.storage.get('as-backend', false);
     if (b && b.value) state.backend = JSON.parse(b.value);
   } catch(e){}
+
+  // Reset una tantum di ospiti/archivio/fatture, attivabile solo visitando l'app con ?resetdati=CONFERMA
+  try {
+    var paramsUrl = new URLSearchParams(window.location.search);
+    if (paramsUrl.get('resetdati') === 'CONFERMA' && state.backend.url){
+      try {
+        var arcDaCancellare = await remoteStorage.get('as-archivio');
+        if (arcDaCancellare && arcDaCancellare.value){
+          var elencoArcDaCancellare = JSON.parse(arcDaCancellare.value);
+          for (var adi=0; adi<elencoArcDaCancellare.length; adi++){
+            if (elencoArcDaCancellare[adi].fotoKey){
+              try { await remoteStorage.delete(elencoArcDaCancellare[adi].fotoKey); } catch(eFoto){}
+            }
+          }
+        }
+      } catch(eArcList){}
+      var chiaviDaAzzerare = ['as-guests','as-invii','as-archivio','as-istat-ultima-data','as-fatture'];
+      for (var czi=0; czi<chiaviDaAzzerare.length; czi++){
+        try { await remoteStorage.delete(chiaviDaAzzerare[czi]); } catch(eDelK){}
+      }
+      try { window.history.replaceState({}, '', window.location.pathname); } catch(eUrl){}
+      alert('Dati ospiti, archivio e fatture azzerati. La pagina si ricarica adesso.');
+      window.location.reload();
+      return;
+    }
+  } catch(eReset){}
+
   if (state.backend.url){
     try {
       var giaSulServer = await remoteStorage.get('as-guests');
@@ -2007,7 +2034,7 @@ async function renderOggi(){
     el.appendChild(prenotazioniBox);
     try {
       var tra5 = new Date(); tra5.setDate(tra5.getDate() + 5);
-      var respPren = await fetch(backendUrl('/api/smoobu/reservations?from=' + oggiISO + '&to=' + tra5.toISOString().slice(0,10)), { headers: backendHeaders() });
+      var respPren = await fetch(backendUrl('/api/smoobu/reservations?arrivalFrom=' + oggiISO + '&arrivalTo=' + tra5.toISOString().slice(0,10)), { headers: backendHeaders() });
       var dataPren = await respPren.json();
       if (!respPren.ok) throw new Error(dataPren.error || 'errore');
       var prenotazioniSenzaScheda = (dataPren.bookings || []).filter(function(b){
@@ -2047,7 +2074,7 @@ async function renderOggi(){
     el.appendChild(fattureBox);
     try {
       var da7 = new Date(); da7.setDate(da7.getDate() - 7);
-      var respFatt = await fetch(backendUrl('/api/smoobu/reservations?from=' + da7.toISOString().slice(0,10) + '&to=' + oggiISO), { headers: backendHeaders() });
+      var respFatt = await fetch(backendUrl('/api/smoobu/reservations?departureFrom=' + da7.toISOString().slice(0,10) + '&departureTo=' + oggiISO), { headers: backendHeaders() });
       var dataFatt = await respFatt.json();
       if (!respFatt.ok) throw new Error(dataFatt.error || 'errore');
       var partitiSenzaFattura = (dataFatt.bookings || []).filter(function(b){
@@ -2305,7 +2332,7 @@ async function caricaArriviSmoobu(forceRefresh){
     var to = tra7.toISOString().slice(0,10);
     var controller = new AbortController();
     var timeoutId = setTimeout(function(){ controller.abort(); }, 15000);
-    var resp = await fetch(backendUrl('/api/smoobu/reservations?from='+from+'&to='+to), { headers: backendHeaders(), signal: controller.signal });
+    var resp = await fetch(backendUrl('/api/smoobu/reservations?arrivalFrom='+from+'&arrivalTo='+to), { headers: backendHeaders(), signal: controller.signal });
     clearTimeout(timeoutId);
     var data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'errore Smoobu');
@@ -4536,7 +4563,7 @@ async function renderArchivioRecuperoSchede(el){
   try {
     var da = primoGiornoMese(recuperoMeseCorrente.anno, recuperoMeseCorrente.mese);
     var aData = ultimoGiornoMese(recuperoMeseCorrente.anno, recuperoMeseCorrente.mese);
-    var resp = await fetch(backendUrl('/api/smoobu/reservations?from=' + da + '&to=' + aData), { headers: backendHeaders() });
+    var resp = await fetch(backendUrl('/api/smoobu/reservations?arrivalFrom=' + da + '&arrivalTo=' + aData), { headers: backendHeaders() });
     var data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'errore nel caricamento');
     var prenotazioni = (data.bookings || []).filter(function(b){ return b.type !== 'blocked-booking' && b.type !== 'cancellation'; });
@@ -4894,7 +4921,7 @@ async function renderFattureTab(){
   try {
     var da = primoGiornoMese(fattureMeseCorrente.anno, fattureMeseCorrente.mese);
     var aData = ultimoGiornoMese(fattureMeseCorrente.anno, fattureMeseCorrente.mese);
-    var resp = await fetch(backendUrl('/api/smoobu/reservations?from=' + da + '&to=' + aData), { headers: backendHeaders() });
+    var resp = await fetch(backendUrl('/api/smoobu/reservations?arrivalFrom=' + da + '&arrivalTo=' + aData), { headers: backendHeaders() });
     var data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'errore nel caricamento');
     var prenotazioni = (data.bookings || []).filter(function(b){ return b.type !== 'blocked-booking' && b.type !== 'cancellation'; });
