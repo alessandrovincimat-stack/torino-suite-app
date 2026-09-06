@@ -981,7 +981,7 @@ async function loadState(){
   // avvisa con un errore invece di mostrare un falso successo senza cancellare nulla sul server.
   try {
     var paramsUrl = new URLSearchParams(window.location.search);
-    if (paramsUrl.get('resetdati') === 'CONFERMA3'){
+    if (paramsUrl.get('resetdati') === 'CONFERMA4'){
       if (!state.backend.url){
         alert('ERRORE: il backend non risulta configurato in questo momento (state.backend.url è vuoto). Nessuna cancellazione è stata effettuata sul server. Riprova, e se persiste segnalalo.');
         try { window.history.replaceState({}, '', window.location.pathname); } catch(eUrl0){}
@@ -1232,7 +1232,7 @@ var remoteStorage = {
   async get(key){
     if (!state.backend.url) return null;
     try {
-      var r = await fetch(backendUrl('/api/store?key='+encodeURIComponent(key)), { headers: backendHeaders() });
+      var r = await fetch(backendUrl('/api/store?key='+encodeURIComponent(key)), { headers: backendHeaders(), cache: 'no-store' });
       if (!r.ok) return null;
       var d = await r.json();
       return (d && d.value != null) ? { key: key, value: d.value } : null;
@@ -1244,7 +1244,8 @@ var remoteStorage = {
       var r = await fetch(backendUrl('/api/store'), {
         method: 'POST',
         headers: backendHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ key: key, value: value })
+        body: JSON.stringify({ key: key, value: value }),
+        cache: 'no-store'
       });
       return r.ok ? { key: key, value: value } : null;
     } catch(e){ return null; }
@@ -1252,7 +1253,7 @@ var remoteStorage = {
   async delete(key){
     if (!state.backend.url) return null;
     try {
-      var r = await fetch(backendUrl('/api/store?key='+encodeURIComponent(key)), { method: 'DELETE', headers: backendHeaders() });
+      var r = await fetch(backendUrl('/api/store?key='+encodeURIComponent(key)), { method: 'DELETE', headers: backendHeaders(), cache: 'no-store' });
       return r.ok ? { key: key, deleted: true } : null;
     } catch(e){ return null; }
   }
