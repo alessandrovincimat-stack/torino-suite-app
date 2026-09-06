@@ -3800,7 +3800,7 @@ function renderArchivio(){
     '<div class="as-tab" data-archsubtab="documenti">Documenti</div>' +
     '<div class="as-tab" data-archsubtab="istat-ok">ISTAT e Questura OK</div>' +
     '<div class="as-tab" data-archsubtab="fatture-emesse">Fatture emesse</div>' +
-    '<div class="as-tab" data-archsubtab="recupero">Recupero schede</div>' +
+    '<div class="as-tab" data-archsubtab="recupero">Elenco di controllo</div>' +
     '<div class="as-tab" data-archsubtab="pulizie">Pulizie</div>' +
     '</div><div id="arch-content"></div>';
 
@@ -4546,14 +4546,12 @@ function collegaAzioniRecupero(container){
 
 async function renderArchivioRecuperoSchede(el){
   var nomeMese = new Date(recuperoMeseCorrente.anno, recuperoMeseCorrente.mese, 1).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
-  el.innerHTML = '<p class="as-sub" style="margin-top:-6px;">🟢 scheda già presente · 🔴 mancante, oltre i termini per l\'invio Questura (24h dall\'arrivo, 6h se il soggiorno dura meno di 24h)</p>' +
-    '<p class="as-sub" id="recupero-contatori" style="margin-top:2px;font-weight:600;"></p>' +
+  el.innerHTML = '<p class="as-sub" style="margin-top:-6px;">Riepilogo mensile: quante prenotazioni sono già in Archivio, quante ancora in lavorazione, quante in ritardo. Un controllo periodico, non serve consultarlo ogni giorno.</p>' +
     '<div class="as-row" style="margin:12px 0;"><button class="as-btn ghost" id="recupero-mese-prec">‹</button>' +
     '<span style="padding:8px 4px;font-weight:600;text-transform:capitalize;">'+nomeMese+'</span>' +
     '<button class="as-btn ghost" id="recupero-mese-succ">›</button></div>' +
-    '<button class="as-btn secondary" id="recupero-bulk-btn" style="margin-bottom:8px;">Recupera tutte le mancanti di questo mese</button>' +
-    '<div id="recupero-bulk-result" class="as-sub" style="margin-bottom:8px;"></div>' +
-    '<div id="recupero-lista"><p class="as-sub"><span class="as-spin"></span> caricamento prenotazioni…</p></div>';
+    '<div id="recupero-riepilogo"><p class="as-sub"><span class="as-spin"></span> caricamento prenotazioni…</p></div>' +
+    '<div id="recupero-dettaglio" style="margin-top:14px;"></div>';
 
   document.getElementById('recupero-mese-prec').onclick = function(){
     recuperoMeseCorrente.mese--;
@@ -4566,9 +4564,10 @@ async function renderArchivioRecuperoSchede(el){
     renderArchivio();
   };
 
-  var lista = document.getElementById('recupero-lista');
+  var riepilogo = document.getElementById('recupero-riepilogo');
+  var dettaglio = document.getElementById('recupero-dettaglio');
   if (!state.backend.url){
-    lista.innerHTML = '<p class="as-sub">Configura prima il backend in Impostazioni → Backend.</p>';
+    riepilogo.innerHTML = '<p class="as-sub">Configura prima il backend in Impostazioni → Backend.</p>';
     return;
   }
   try {
@@ -4580,16 +4579,45 @@ async function renderArchivioRecuperoSchede(el){
     var prenotazioni = (data.bookings || []).filter(function(b){ return b.type !== 'blocked-booking' && b.type !== 'cancellation'; });
     prenotazioni.sort(function(x, y){ return String(x.arrival).localeCompare(String(y.arrival)); });
     var oggiISO = todayISO();
-    var esistenti = prenotazioni.filter(function(b){ return !!trovaCollegamentoOspite(String(b.id)); }).length;
-    var daRecuperare = prenotazioni.filter(function(b){ return !trovaCollegamentoOspite(String(b.id)) && schedaFuoriTempoMassimo(b, oggiISO); }).length;
-    var contatoriEl = document.getElementById('recupero-contatori');
-    if (contatoriEl) contatoriEl.textContent = prenotazioni.length + ' schede totali questo mese — ' + esistenti + ' già presenti · ' + daRecuperare + ' da recuperare';
-    lista.innerHTML = renderListaRecupero(prenotazioni, oggiISO);
-    collegaAzioniRecupero(lista);
-    var bulkBtn = document.getElementById('recupero-bulk-btn');
-    if (bulkBtn) bulkBtn.onclick = function(){ recuperaTutteMese(prenotazioni, oggiISO, bulkBtn); };
+
+    var inArchivioN = 0, inLavorazioneN = 0, oltreTerminiN = 0, entroTerminiN = 0;
+    prenotazioni.forEach(function(b){
+      var collegamento = trovaCollegamentoOspite(String(b.id));
+      if (collegamento && collegamento.dove === 'archivio') inArchivioN++;
+      else if (collegamento) inLavorazioneN++;
+      else if (schedaFuoriTempoMassimo(b, oggiISO)) oltreTerminiN++;
+      else entroTerminiN++;
+    });
+
+    riepilogo.innerHTML =
+      '<div class="as-card"><p class="as-title" style="font-size:16px;">'+prenotazioni.length+' prenotazioni questo mese</p>' +
+      '<p style="margin:4px 0;">📦 <strong>'+inArchivioN+'</strong> in Archivio</p>' +
+      '<p style="margin:4px 0;">📝 <strong>'+inLavorazioneN+'</strong> ancora in lavorazione (Ospiti)</p>' +
+      (entroTerminiN ? '<p style="margin:4px 0;">🕓 <strong>'+entroTerminiN+'</strong> senza scheda ma ancora nei termini</p>' : '') +
+      (oltreTerminiN
+        ? '<p style="margin:8px 0 0;color:var(--danger);">⚠️ <strong>'+oltreTerminiN+'</strong> in ritardo, oltre i termini per l\'invio Questura</p>'
+        : '<p class="as-ok" style="margin:8px 0 0;">Nessun ritardo.</p>') +
+      '<button class="as-btn ghost" id="recupero-mostra-dettaglio" style="margin-top:10px;font-size:12.5px;">'+(oltreTerminiN ? 'Vedi il dettaglio' : 'Vedi il dettaglio comunque')+'</button>' +
+      '</div>';
+
+    function mostraDettaglio(){
+      dettaglio.innerHTML =
+        '<p class="as-sub">🟢 scheda già presente · 🔴 mancante, oltre i termini per l\'invio Questura (24h dall\'arrivo, 6h se il soggiorno dura meno di 24h)</p>' +
+        '<button class="as-btn secondary" id="recupero-bulk-btn" style="margin:8px 0;">Recupera tutte le mancanti di questo mese</button>' +
+        '<div id="recupero-bulk-result" class="as-sub" style="margin-bottom:8px;"></div>' +
+        '<div id="recupero-lista">' + renderListaRecupero(prenotazioni, oggiISO) + '</div>';
+      collegaAzioniRecupero(dettaglio);
+      var bulkBtn = document.getElementById('recupero-bulk-btn');
+      if (bulkBtn) bulkBtn.onclick = function(){ recuperaTutteMese(prenotazioni, oggiISO, bulkBtn); };
+    }
+
+    document.getElementById('recupero-mostra-dettaglio').onclick = function(){
+      mostraDettaglio();
+      this.style.display = 'none';
+    };
+    if (oltreTerminiN) mostraDettaglio(); // qualcosa richiede attenzione: mostra subito il dettaglio
   } catch(e){
-    lista.innerHTML = '<div class="as-err">Impossibile caricare le prenotazioni: ' + e.message + '</div>';
+    riepilogo.innerHTML = '<div class="as-err">Impossibile caricare le prenotazioni: ' + e.message + '</div>';
   }
 }
 
