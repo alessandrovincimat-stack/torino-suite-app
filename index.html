@@ -4422,12 +4422,10 @@ async function renderArchivioPulizie(el){
     '<button class="as-btn ghost" id="pulizie-mese-succ">›</button></div>' +
     '<div class="as-card" style="margin-bottom:10px;">' +
       '<p class="as-title" style="font-size:14px;">+ Aggiungi pulizia extra</p>' +
-      '<div class="as-row">' +
-        '<div class="as-field"><label>Data</label><input type="date" id="pulizie-extra-data"></div>' +
-        '<div class="as-field"><label>Alloggio</label><select id="pulizie-extra-alloggio"><option value="">(scegli)</option>' +
-          (state.tables.appartamenti||[]).map(function(a){ return '<option value="'+escapeHtml(a.nome)+'">'+escapeHtml(a.nome)+'</option>'; }).join('') +
-        '</select></div>' +
-      '</div>' +
+      '<div class="as-field"><label>Data</label><input type="date" id="pulizie-extra-data"></div>' +
+      '<div class="as-field"><label>Alloggio</label><select id="pulizie-extra-alloggio"><option value="">(scegli)</option>' +
+        (state.tables.appartamenti||[]).map(function(a){ return '<option value="'+escapeHtml(a.nome)+'">'+escapeHtml(a.nome)+'</option>'; }).join('') +
+      '</select></div>' +
       '<div class="as-field"><label>Nota (facoltativa)</label><input id="pulizie-extra-nota" placeholder="es. pulizia intermedia"></div>' +
       '<button class="as-btn secondary" id="pulizie-extra-add">Aggiungi</button>' +
     '</div>' +
@@ -4507,11 +4505,11 @@ async function renderArchivioPulizie(el){
           if (v.escluso){
             return '<span style="display:inline-block;margin:3px 6px 0 0;padding:2px 8px;border:1px solid var(--border);border-radius:12px;text-decoration:line-through;opacity:.6;">' +
               escapeHtml(v.appartamentoNome) +
-              ' <a href="#" data-pulizie-includi="'+v.bookingId+'" style="text-decoration:none;">(includi di nuovo)</a></span>';
+              ' <a href="#" data-pulizie-includi="'+v.bookingId+'" style="text-decoration:underline;color:var(--brass);">(includi di nuovo)</a></span>';
           }
           return '<span style="display:inline-block;margin:3px 6px 0 0;padding:2px 8px;border:1px solid var(--border);border-radius:12px;">' +
             escapeHtml(v.appartamentoNome) +
-            ' <a href="#" data-pulizie-escludi="'+v.bookingId+'" title="Non pulito (es. ospite non presentato)" style="color:var(--muted);text-decoration:none;">×</a></span>';
+            ' <a href="#" data-pulizie-escludi="'+v.bookingId+'" title="Non pulito (es. ospite non presentato)" style="color:var(--text-muted);text-decoration:underline;">×</a></span>';
         }).join('') +
         '</div>';
     });
