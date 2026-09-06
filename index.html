@@ -4008,6 +4008,7 @@ function renderBackend(){
         if (!resp2.ok) throw new Error(data2.error || 'errore salvataggio');
         out2.innerHTML = '<p class="as-ok">Impostazioni salvate sul server.</p>';
         tassaConfigCache = null;
+        pulizieConfigCache = null;
         if (payload.FIC_ACCESS_TOKEN && payload.FIC_COMPANY_ID){
           caricaAliquoteIva('cfg-FIC_VAT_ID', payload.FIC_VAT_ID);
           caricaAliquoteIva('cfg-TASSA_SOGGIORNO_VAT_ID', payload.TASSA_SOGGIORNO_VAT_ID);
