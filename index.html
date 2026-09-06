@@ -2073,46 +2073,6 @@ async function renderOggi(){
   });
 
   if (state.backend.url){
-    var prenotazioniBox = document.createElement('div');
-    prenotazioniBox.className = 'as-card';
-    prenotazioniBox.innerHTML = '<p class="as-title" style="font-size:16px;">Prenotazioni senza scheda</p><p class="as-sub"><span class="as-spin"></span> verifica in corso…</p>';
-    el.appendChild(prenotazioniBox);
-    try {
-      var tra5 = new Date(); tra5.setDate(tra5.getDate() + 5);
-      var respPren = await fetch(backendUrl('/api/smoobu/reservations?arrivalFrom=' + oggiISO + '&arrivalTo=' + tra5.toISOString().slice(0,10)), { headers: backendHeaders() });
-      var dataPren = await respPren.json();
-      if (!respPren.ok) throw new Error(dataPren.error || 'errore');
-      var prenotazioniSenzaScheda = (dataPren.bookings || []).filter(function(b){
-        if (b.type === 'blocked-booking' || b.type === 'cancellation') return false;
-        var collegata = state.guests.some(function(g){ return g.smoobuBookingId === String(b.id); }) ||
-          state.invii.some(function(iv){ return iv.ospiti && iv.ospiti.some(function(o){ return o.smoobuBookingId === String(b.id); }); });
-        return !collegata;
-      });
-      if (!prenotazioniSenzaScheda.length){
-        prenotazioniBox.innerHTML = '<p class="as-title" style="font-size:16px;">Prenotazioni senza scheda</p><p class="as-ok">Tutte le prenotazioni dei prossimi 5 giorni hanno già una scheda.</p>';
-      } else {
-        prenotazioniBox.innerHTML = '<p class="as-title" style="font-size:16px;">Prenotazioni senza scheda</p>' +
-          '<p style="color:var(--danger);">⚠️ ' + prenotazioniSenzaScheda.length + ' prenotazione/i nei prossimi 5 giorni senza ancora una scheda Questura.</p>' +
-          prenotazioniSenzaScheda.map(function(b){
-            return '<div data-oggi-crea-smoobu="'+encodeURIComponent(JSON.stringify(b))+'" style="padding:10px 0;border-top:1px solid var(--border);cursor:pointer;">' +
-              '<strong>'+(b['guest-name']||'sconosciuto')+'</strong> — ' + toItDate(b.arrival) + ' · ' + (b.apartment?b.apartment.name:'') +
-              '</div>';
-          }).join('');
-        prenotazioniBox.querySelectorAll('[data-oggi-crea-smoobu]').forEach(function(riga){
-          riga.onclick = function(){
-            var b = JSON.parse(decodeURIComponent(riga.getAttribute('data-oggi-crea-smoobu')));
-            var g = creaSchedaDaPrenotazioneSmoobu(b);
-            switchTab('ospiti');
-            setTimeout(function(){ scrollCardIntoView(g.id); }, 100);
-          };
-        });
-      }
-    } catch(ePren){
-      prenotazioniBox.innerHTML = '<p class="as-title" style="font-size:16px;">Prenotazioni senza scheda</p><div class="as-err">Impossibile verificare: '+ePren.message+'</div>';
-    }
-  }
-
-  if (state.backend.url){
     var fattureBox = document.createElement('div');
     fattureBox.className = 'as-card';
     fattureBox.innerHTML = '<p class="as-title" style="font-size:16px;">Fatture da fare</p><p class="as-sub"><span class="as-spin"></span> verifica in corso…</p>';
