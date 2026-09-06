@@ -3956,9 +3956,7 @@ function renderArchivioIstatOk(el){
         (iv.manuale ? '' :
           '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);">' +
           '<p class="as-sub" style="margin:0 0 6px;">Solo ISTAT (Piemonte Dati Turismo) — la Questura non è modificabile una volta inviata:</p>' +
-          '<button class="as-btn secondary" data-correggi-arrivo-istat="'+escapeHtml(iv.id)+'" style="margin-top:4px;">🔁 Correggi/reinvia arrivo ISTAT</button>' +
-          '<div style="margin-top:6px;"></div>' +
-          '<button class="as-btn secondary" data-correggi-partenza-istat="'+escapeHtml(iv.id)+'" style="margin-top:4px;">🔁 Correggi/reinvia partenza ISTAT</button>' +
+          '<button class="as-btn secondary" data-correggi-istat="'+escapeHtml(iv.id)+'" style="margin-top:4px;">🔁 Correggi/reinvia ISTAT (arrivo + partenza presunta)</button>' +
           '<div class="as-esito-istat" style="margin-top:6px;"></div>' +
           '</div>') +
         '</details>' +
@@ -3977,11 +3975,8 @@ function renderArchivioIstatOk(el){
       correggiDataArrivoArchivio(parts[0], parts[1]);
     };
   });
-  el.querySelectorAll('[data-correggi-arrivo-istat]').forEach(function(btn){
-    btn.onclick = function(){ segnalaArrivo(btn.getAttribute('data-correggi-arrivo-istat'), btn); };
-  });
-  el.querySelectorAll('[data-correggi-partenza-istat]').forEach(function(btn){
-    btn.onclick = function(){ segnalaPartenza(btn.getAttribute('data-correggi-partenza-istat'), btn); };
+  el.querySelectorAll('[data-correggi-istat]').forEach(function(btn){
+    btn.onclick = function(){ segnalaArrivo(btn.getAttribute('data-correggi-istat'), btn); };
   });
 }
 
