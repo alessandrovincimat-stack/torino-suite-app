@@ -3493,40 +3493,63 @@ function generaEInviaPanel(ordered, wrapEl){
     var appIds = Array.from(new Set(headsWithApp.map(function(g){ return g.idAppartamento || ''; })));
     var idAppartamento = appIds[0] || '';
     var appNome = (state.tables.appartamenti.find(function(a){ return a.id===idAppartamento; })||{}).nome;
-    var sendBox = document.createElement('div');
-    sendBox.style.marginTop = '14px';
     var appLine = idAppartamento
       ? '<p class="as-sub">Appartamento: <strong>'+(appNome||idAppartamento)+'</strong> (scelto nella scheda ospite)</p>'
       : '<p class="as-sub">Nessun appartamento selezionato negli ospiti — invio senza riferimento appartamento.</p>';
     if (appIds.length > 1) appLine += '<p class="as-warn">Attenzione: gli ospiti hanno appartamenti diversi tra loro; verrà usato solo "'+(appNome||idAppartamento)+'". Invia gli altri separatamente.</p>';
-    sendBox.innerHTML =
-      appLine +
-      '<div class="as-row">' +
-        '<button class="as-btn secondary" data-role="test">Valida con la Questura (senza inviare)</button>' +
-        '<button class="as-btn" data-role="send">Invia alla Questura</button>' +
-      '</div>' +
-      '<div class="as-send-result" style="margin-top:10px;"></div>';
-    wrapEl.appendChild(sendBox);
 
-    var resultEl = sendBox.querySelector('.as-send-result');
-    sendBox.querySelector('[data-role="test"]').onclick = function(){ sendToBackend(lines, false, idAppartamento, ordered, resultEl); };
-    sendBox.querySelector('[data-role="send"]').onclick = function(){
-      if (confirm('Confermi l\'invio ufficiale di ' + lines.length + ' schedine alla Questura? Non è reversibile.')) {
-        sendToBackend(lines, true, idAppartamento, ordered, resultEl);
-      }
-    };
+    var istatStato = { arrivoOk: false, partenzaOk: false };
 
     var istatBox = document.createElement('div');
-    istatBox.style.marginTop = '18px';
-    istatBox.style.borderTop = '1px solid var(--border)';
-    istatBox.style.paddingTop = '14px';
+    istatBox.style.marginTop = '14px';
     istatBox.innerHTML =
-      '<p class="as-sub"><strong>Piemonte Dati Turismo (ISTAT)</strong> — invia gli arrivi di oggi (' + toItDate(todayISO()) + ') insieme alla partenza presunta calcolata dalla permanenza indicata: con questo l\'obbligo è assolto. Serve un nuovo invio solo se la prenotazione cambia davvero (proroga o partenza anticipata).</p>' +
+      '<p class="as-sub"><strong>1) Piemonte Dati Turismo (ISTAT)</strong> — invia gli arrivi di oggi (' + toItDate(todayISO()) + ') insieme alla partenza presunta calcolata dalla permanenza indicata: con questo l\'obbligo è assolto. Serve un nuovo invio solo se la prenotazione cambia davvero (proroga o partenza anticipata).</p>' +
       '<button class="as-btn secondary" data-role="istat">Invia dati ISTAT (arrivi di oggi)</button>' +
       '<div class="as-istat-result" style="margin-top:10px;"></div>';
     wrapEl.appendChild(istatBox);
     var istatResultEl = istatBox.querySelector('.as-istat-result');
-    istatBox.querySelector('[data-role="istat"]').onclick = function(){ inviaIstat(ordered, istatResultEl); };
+
+    var sendBox = document.createElement('div');
+    sendBox.style.marginTop = '18px';
+    sendBox.style.borderTop = '1px solid var(--border)';
+    sendBox.style.paddingTop = '14px';
+    sendBox.innerHTML =
+      '<p class="as-sub"><strong>2) Questura</strong></p>' +
+      appLine +
+      '<p class="as-warn" data-role="istat-lock">Invia prima i dati ISTAT qui sopra: una volta inviata, la Questura non è più modificabile.</p>' +
+      '<div class="as-row">' +
+        '<button class="as-btn secondary" data-role="test">Valida con la Questura (senza inviare)</button>' +
+        '<button class="as-btn" data-role="send" disabled>Invia alla Questura</button>' +
+      '</div>' +
+      '<button class="as-btn ghost" data-role="salta-istat" style="margin-top:8px;font-size:12px;">ISTAT già inviato tramite altro canale / lo farò dopo — sblocca comunque</button>' +
+      '<div class="as-send-result" style="margin-top:10px;"></div>';
+    wrapEl.appendChild(sendBox);
+
+    var resultEl = sendBox.querySelector('.as-send-result');
+    var sendBtn = sendBox.querySelector('[data-role="send"]');
+    var lockNote = sendBox.querySelector('[data-role="istat-lock"]');
+
+    function sbloccaQuestura(){
+      sendBtn.disabled = false;
+      lockNote.style.display = 'none';
+    }
+
+    istatBox.querySelector('[data-role="istat"]').onclick = function(){
+      inviaIstat(ordered, istatResultEl, function(esito){
+        istatStato.arrivoOk = esito.arrivoOk;
+        istatStato.partenzaOk = esito.partenzaOk;
+        sbloccaQuestura();
+      });
+    };
+
+    sendBox.querySelector('[data-role="salta-istat"]').onclick = function(){ sbloccaQuestura(); };
+
+    sendBox.querySelector('[data-role="test"]').onclick = function(){ sendToBackend(lines, false, idAppartamento, ordered, resultEl, istatStato); };
+    sendBtn.onclick = function(){
+      if (confirm('Confermi l\'invio ufficiale di ' + lines.length + ' schedine alla Questura? Non è reversibile.')) {
+        sendToBackend(lines, true, idAppartamento, ordered, resultEl, istatStato);
+      }
+    };
   }
 }
 
@@ -3610,7 +3633,7 @@ async function inviaIstatArrivi(arriviOggi, allOrdered){
   return data;
 }
 
-async function inviaIstat(ordered, outEl){
+async function inviaIstat(ordered, outEl, onSuccess){
   var out = outEl;
   var oggiISO = todayISO();
   var arriviOggi = ordered.filter(function(g){ return g.dataArrivo === oggiISO; });
@@ -3628,12 +3651,13 @@ async function inviaIstat(ordered, outEl){
       msg += '<div class="as-err">⚠️ Partenza presunta non inviata per: ' + risultato.partenzeFallite.map(function(f){ return toItDate(f.data)+' ('+f.errore+')'; }).join(', ') + '. Riprova più tardi o usa "Segnala partenza" in Archivio.</div>';
     }
     out.innerHTML = msg;
+    if (onSuccess) onSuccess({ arrivoOk: true, partenzaOk: !!(risultato.partenzeInviate && (!risultato.partenzeFallite || !risultato.partenzeFallite.length)) });
   } catch(e){
     out.innerHTML = '<div class="as-err">'+e.message+'</div>';
   }
 }
 
-async function sendToBackend(lines, real, idAppartamento, ordered, outEl){
+async function sendToBackend(lines, real, idAppartamento, ordered, outEl, istatStato){
   var out = outEl;
   out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>'+(real?'invio':'validazione')+' in corso…</span>';
   try {
@@ -3650,21 +3674,10 @@ async function sendToBackend(lines, real, idAppartamento, ordered, outEl){
       html += '<div class="as-err">Errori per riga:<br>' + errori.map(function(e,i){return (i+1)+': '+e;}).join('<br>') + '</div>';
     } else if (real) {
       html += '<p class="as-ok">Inviato correttamente alla Questura.</p>';
-      var arrivoIstatOk = false, partenzaIstatOk = false;
-      if (state.backend.url){
-        try {
-          var risultatoIstat = await inviaIstatArrivi(ordered.filter(function(g){ return g.dataArrivo === todayISO(); }), ordered);
-          arrivoIstatOk = true;
-          partenzaIstatOk = !!(risultatoIstat.partenzeInviate && (!risultatoIstat.partenzeFallite || !risultatoIstat.partenzeFallite.length));
-          html += '<p class="as-ok">Inviato correttamente anche a Piemonte Dati Turismo (arrivo';
-          if (risultatoIstat.partenzeInviate) html += ' + partenza presunta';
-          html += ').</p>';
-          if (risultatoIstat.partenzeFallite && risultatoIstat.partenzeFallite.length){
-            html += '<div class="as-err">⚠️ Partenza presunta non inviata: ' + risultatoIstat.partenzeFallite.map(function(f){ return f.errore; }).join(', ') + '. Puoi rimediare da Archivio con "Segnala partenza".</div>';
-          }
-        } catch(e){
-          html += '<div class="as-err">Questura OK, ma invio ISTAT fallito: '+e.message+'. Puoi ripeterlo da "Genera file" o da Archivio.</div>';
-        }
+      var arrivoIstatOk = !!(istatStato && istatStato.arrivoOk);
+      var partenzaIstatOk = !!(istatStato && istatStato.partenzaOk);
+      if (!arrivoIstatOk){
+        html += '<p class="as-warn">⚠️ ISTAT non risulta inviato da questa scheda: se serve ancora, fallo da Archivio con "Correggi/reinvia arrivo ISTAT".</p>';
       }
       await archiveInvio(ordered, idAppartamento, lines.length, arrivoIstatOk, partenzaIstatOk);
       html += '<p class="as-sub">Ospiti spostati nell\'archivio invii.</p>';
