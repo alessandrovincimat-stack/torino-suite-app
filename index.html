@@ -3930,7 +3930,8 @@ function renderArchivioIstatOk(el){
         var ruoloTesto = (o.ruolo === 'familiare' || o.ruolo === 'membro') ? 'membro' : 'capogruppo';
         return '<div style="padding:4px 0;border-top:1px solid var(--border);">' +
           '<strong>'+escapeHtml((o.cognome+' '+o.nome).trim())+'</strong> ('+ruoloTesto+')<br>' +
-          '<span class="as-sub" style="margin:0;">Data arrivo: '+(o.dataArrivo ? toItDate(o.dataArrivo) : '(non compilata)')+' · Permanenza: '+(o.permanenza||'—')+' notti</span>' +
+          '<span class="as-sub" style="margin:0;">Data arrivo: '+(o.dataArrivo ? toItDate(o.dataArrivo) : '(non compilata)')+' · Permanenza: '+(o.permanenza||'—')+' notti</span><br>' +
+          '<button class="as-btn ghost" data-modifica-arrivo-archivio="'+escapeHtml(iv.id)+'|'+escapeHtml(o.id)+'" style="margin-top:4px;font-size:11.5px;padding:3px 8px;">✏️ Correggi data/permanenza</button>' +
           '</div>';
       }).join('');
       html += '<div data-search="'+escapeHtml(normalizzaNome(nomi))+'" style="border-bottom:1px solid var(--border);padding:8px 0;">' +
@@ -3948,6 +3949,31 @@ function renderArchivioIstatOk(el){
   el.querySelectorAll('[data-ricevuta]').forEach(function(btn){
     btn.onclick = function(){ scaricaRicevuta(btn.getAttribute('data-ricevuta'), btn); };
   });
+  el.querySelectorAll('[data-modifica-arrivo-archivio]').forEach(function(btn){
+    btn.onclick = function(){
+      var parts = btn.getAttribute('data-modifica-arrivo-archivio').split('|');
+      correggiDataArrivoArchivio(parts[0], parts[1]);
+    };
+  });
+}
+
+async function correggiDataArrivoArchivio(invioId, ospiteId){
+  var iv = state.invii.find(function(x){ return x.id === invioId; });
+  if (!iv) return;
+  var o = iv.ospiti.find(function(x){ return x.id === ospiteId; });
+  if (!o) return;
+  var nuovaData = prompt('Data arrivo corretta per ' + (o.cognome+' '+o.nome).trim() + ' (AAAA-MM-GG):', o.dataArrivo || '');
+  if (nuovaData === null) return;
+  var nuovaPermanenza = prompt('Permanenza (notti):', o.permanenza || '1');
+  if (nuovaPermanenza === null) return;
+  o.dataArrivo = nuovaData.trim();
+  o.permanenza = nuovaPermanenza.trim();
+  try {
+    await remoteStorage.set('as-invii', JSON.stringify(state.invii));
+    render();
+  } catch(e){
+    alert('Errore nel salvataggio: ' + e.message);
+  }
 }
 
 function renderArchivioFattureEmesse(el){
