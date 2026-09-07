@@ -1477,8 +1477,9 @@ function buildGuestCardHtml(g, extraPrimaDiGenera){
       '<input type="text" data-cerca-archivio="'+g.id+'" placeholder="Scrivi almeno 2 lettere del cognome…" autocomplete="off">' +
       '<div data-cerca-archivio-dropdown="'+g.id+'" style="display:none;position:absolute;z-index:20;left:0;right:0;background:#1c1a14;border:1px solid var(--border);border-radius:8px;max-height:220px;overflow-y:auto;margin-top:2px;"></div>' +
       '</div>';
-    html += '<label for="doc-input-'+g.id+'" class="as-photobox" style="margin-bottom:12px;font-size:13px;padding:12px;display:block;">📷 Carica/sostituisci foto documento (anche fronte e retro insieme)</label>' +
+    html += '<label for="doc-input-'+g.id+'" class="as-photobox" style="margin-bottom:6px;font-size:13px;padding:12px;display:block;">📷 Carica/sostituisci foto documento (anche fronte e retro insieme)</label>' +
             '<input type="file" accept="image/*,application/pdf" multiple id="doc-input-'+g.id+'" data-doc-input="'+g.id+'" style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;">';
+    html += '<button type="button" class="as-btn ghost" data-doc-incolla="'+g.id+'" style="margin-bottom:12px;font-size:12.5px;width:100%;">📋 Incolla foto copiata (da WhatsApp/email, senza salvarla prima)</button>';
   }
 
   html += '<div class="as-row">';
@@ -1654,6 +1655,40 @@ function attachGuestHandlers(root){
         files.forEach(function(file){ archiveDocument(file, g); });
       });
       e.target.value = '';
+    };
+  });
+  root.querySelectorAll('[data-doc-incolla]').forEach(function(btn){
+    btn.onclick = async function(){
+      var id = btn.getAttribute('data-doc-incolla');
+      var g = state.guests.find(function(x){ return x.id === id; });
+      if (!g) return;
+      if (!navigator.clipboard || !navigator.clipboard.read){
+        alert('Il tuo browser non supporta l\'incolla diretto delle immagini. Usa "Carica/sostituisci foto documento" e scegli il file salvato.');
+        return;
+      }
+      var testoOriginale = btn.textContent;
+      btn.textContent = 'Leggo gli appunti…';
+      try {
+        var items = await navigator.clipboard.read();
+        var files = [];
+        for (var i = 0; i < items.length; i++){
+          var tipoImmagine = items[i].types.find(function(t){ return t.indexOf('image/') === 0; });
+          if (!tipoImmagine) continue;
+          var blob = await items[i].getType(tipoImmagine);
+          var estensione = tipoImmagine.split('/')[1] || 'png';
+          files.push(new File([blob], 'incollata-'+Date.now()+'.'+estensione, { type: tipoImmagine }));
+        }
+        if (!files.length){
+          alert('Non ho trovato nessuna immagine negli appunti. Prima copia la foto del documento (tieni premuto sull\'immagine in WhatsApp/email e scegli "Copia"), poi torna qui e riprova.');
+          return;
+        }
+        await ocrDocument(files, g);
+        files.forEach(function(file){ archiveDocument(file, g); });
+      } catch(e){
+        alert('Non sono riuscito a leggere gli appunti (potrebbe servire dare il permesso al browser, o niente è stato copiato come immagine): ' + e.message);
+      } finally {
+        btn.textContent = testoOriginale;
+      }
     };
   });
   root.querySelectorAll('[data-gen-invia]').forEach(function(btn){
