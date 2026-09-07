@@ -3799,11 +3799,24 @@ function invioCompletato(iv){
 
 function renderArchivioIstatOk(el){
   var invOk = state.invii.filter(invioCompletato).sort(function(a,b){ return b.dataInvio.localeCompare(a.dataInvio); });
+  var NOMI_MANUALI_DA_TENERE = ['kesselring', 'casals', 'saeger', 'sabine'];
+  function manualeDaTenere(iv){
+    var testo = normalizzaNome(iv.ospiti.map(function(o){ return o.cognome+' '+o.nome; }).join(' '));
+    return NOMI_MANUALI_DA_TENERE.some(function(n){ return testo.indexOf(n) !== -1; });
+  }
+  var manualiDaRimuovere = invOk.filter(function(iv){ return iv.manuale && !manualeDaTenere(iv); });
   var html = '';
+  if (manualiDaRimuovere.length){
+    html += '<div class="as-card" style="border-color:var(--danger);">' +
+      '<p class="as-sub" style="margin:0 0 8px;">⚠️ '+manualiDaRimuovere.length+' archiviazioni manuali risultano diverse dalle 4 confermate (Kesselring, Casals, De Saeger, Sabine Paul) — probabilmente quelle finite qui per errore dal vecchio pulsante bulk.</p>' +
+      '<button class="as-btn secondary" id="pulisci-manuali-errate" style="color:var(--danger);">🧹 Rimuovi queste '+manualiDaRimuovere.length+' e tieni solo le 4 confermate</button>' +
+      '<div id="pulisci-manuali-esito" class="as-sub" style="margin-top:6px;"></div>' +
+      '</div>';
+  }
   if (!invOk.length){
-    html = '<div class="as-card"><p class="as-sub">Nessuna scheda con ISTAT completo ancora.</p></div>';
+    html += '<div class="as-card"><p class="as-sub">Nessuna scheda con ISTAT completo ancora.</p></div>';
   } else {
-    html = '<div class="as-card">';
+    html += '<div class="as-card">';
     var dateUniche = [];
     invOk.forEach(function(iv){
       var g = new Date(iv.dataInvio);
@@ -3860,6 +3873,17 @@ function renderArchivioIstatOk(el){
     html += '</div>';
   }
   el.innerHTML = html;
+  var pulisciBtn = document.getElementById('pulisci-manuali-errate');
+  if (pulisciBtn) pulisciBtn.onclick = async function(){
+    var out = document.getElementById('pulisci-manuali-esito');
+    var elenco = manualiDaRimuovere.map(function(iv){ return iv.ospiti.map(function(o){ return (o.cognome+' '+o.nome).trim(); }).join(', '); }).join('; ');
+    if (!confirm('Rimuovere queste '+manualiDaRimuovere.length+' archiviazioni manuali errate?\n\n'+elenco+'\n\nTorneranno "mancanti" (rosse) in Elenco di controllo.')) return;
+    var idsDaRimuovere = manualiDaRimuovere.map(function(iv){ return iv.id; });
+    state.invii = state.invii.filter(function(iv){ return idsDaRimuovere.indexOf(iv.id) === -1; });
+    try { await remoteStorage.set('as-invii', JSON.stringify(state.invii)); } catch(e){}
+    if (out) out.textContent = manualiDaRimuovere.length + ' rimosse.';
+    renderArchivio();
+  };
   el.querySelectorAll('[data-ricevuta]').forEach(function(btn){
     btn.onclick = function(){ scaricaRicevuta(btn.getAttribute('data-ricevuta'), btn); };
   });
