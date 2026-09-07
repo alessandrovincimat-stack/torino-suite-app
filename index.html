@@ -4584,6 +4584,7 @@ async function renderArchivioRecuperoSchede(el){
     var resp = await fetch(backendUrl('/api/smoobu/reservations?arrivalFrom=' + da + '&arrivalTo=' + aData), { headers: backendHeaders() });
     var data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'errore nel caricamento');
+    var grezzeN = (data.bookings || []).length;
     var prenotazioni = (data.bookings || []).filter(function(b){ return b.type !== 'blocked-booking' && b.type !== 'cancellation'; });
     prenotazioni.sort(function(x, y){ return String(x.arrival).localeCompare(String(y.arrival)); });
     var oggiISO = todayISO();
@@ -4600,6 +4601,7 @@ async function renderArchivioRecuperoSchede(el){
 
     riepilogo.innerHTML =
       '<div class="as-card"><p class="as-title" style="font-size:16px;">'+prenotazioni.length+' prenotazioni questo mese</p>' +
+      (grezzeN !== prenotazioni.length ? '<p class="as-sub" style="margin:0 0 6px;">(Smoobu ne ha restituite '+grezzeN+' in totale, '+(grezzeN-prenotazioni.length)+' escluse perché cancellate/bloccate)</p>' : '') +
       '<p style="margin:4px 0;">📦 <strong>'+inArchivioN+'</strong> in Archivio</p>' +
       '<p style="margin:4px 0;">📝 <strong>'+inLavorazioneN+'</strong> ancora in lavorazione (Ospiti)</p>' +
       (entroTerminiN ? '<p style="margin:4px 0;">🕓 <strong>'+entroTerminiN+'</strong> senza scheda ma ancora nei termini</p>' : '') +
