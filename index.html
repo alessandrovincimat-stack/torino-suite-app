@@ -4581,11 +4581,26 @@ async function renderArchivioRecuperoSchede(el){
   try {
     var da = primoGiornoMese(recuperoMeseCorrente.anno, recuperoMeseCorrente.mese);
     var aData = ultimoGiornoMese(recuperoMeseCorrente.anno, recuperoMeseCorrente.mese);
-    var resp = await fetch(backendUrl('/api/smoobu/reservations?arrivalFrom=' + da + '&arrivalTo=' + aData), { headers: backendHeaders() });
-    var data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || 'errore nel caricamento');
-    var grezzeN = (data.bookings || []).length;
-    var prenotazioni = (data.bookings || []).filter(function(b){ return b.type !== 'blocked-booking' && b.type !== 'cancellation'; });
+    // Interrogo Smoobu sia per arrivo che per partenza e unisco i risultati: il filtro per
+    // arrivo, su Smoobu, a volte non risponde in modo affidabile per i mesi passati, mentre
+    // quello per partenza si è dimostrato più solido (usato anche in Fatture). Il filtro
+    // finale per "arrivo in questo mese" lo faccio comunque io stesso qui sotto.
+    var finoAPartenza = new Date(aData + 'T00:00:00'); finoAPartenza.setDate(finoAPartenza.getDate() + 30);
+    var [respArr, respDep] = await Promise.all([
+      fetch(backendUrl('/api/smoobu/reservations?arrivalFrom=' + da + '&arrivalTo=' + aData), { headers: backendHeaders() }),
+      fetch(backendUrl('/api/smoobu/reservations?departureFrom=' + da + '&departureTo=' + finoAPartenza.toISOString().slice(0,10)), { headers: backendHeaders() })
+    ]);
+    var dataArr = await respArr.json();
+    var dataDep = await respDep.json();
+    if (!respArr.ok && !respDep.ok) throw new Error(dataArr.error || dataDep.error || 'errore nel caricamento');
+    var grezzeMap = {};
+    (dataArr.bookings || []).forEach(function(b){ grezzeMap[b.id] = b; });
+    (dataDep.bookings || []).forEach(function(b){ grezzeMap[b.id] = b; });
+    var grezze = Object.keys(grezzeMap).map(function(id){ return grezzeMap[id]; });
+    var grezzeN = grezze.length;
+    var prenotazioni = grezze.filter(function(b){
+      return b.type !== 'blocked-booking' && b.type !== 'cancellation' && b.arrival >= da && b.arrival <= aData;
+    });
     prenotazioni.sort(function(x, y){ return String(x.arrival).localeCompare(String(y.arrival)); });
     var oggiISO = todayISO();
 
