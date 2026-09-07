@@ -2940,7 +2940,10 @@ async function precompilaContattiFattura(id){
   var root = document;
   var emailInput = root.querySelector('[data-fattura-email="'+id+'"]');
   var telInput = root.querySelector('[data-fattura-telefono="'+id+'"]');
-  if (!emailInput && !telInput) return;
+  var indirizzoInput = root.querySelector('[data-fattura-indirizzo="'+id+'"]');
+  var capInput = root.querySelector('[data-fattura-cap="'+id+'"]');
+  var cittaInput = root.querySelector('[data-fattura-citta="'+id+'"]');
+  if (!emailInput && !telInput && !indirizzoInput) return;
   var datiGruppo = trovaGruppoFatturazione(id);
   if (!datiGruppo || !datiGruppo.smoobuBookingId) return;
   try {
@@ -2949,6 +2952,11 @@ async function precompilaContattiFattura(id){
     if (!resp.ok) return;
     if (emailInput && !emailInput.value.trim() && data.email) emailInput.value = data.email;
     if (telInput && !telInput.value.trim() && data.phone) telInput.value = data.phone;
+    // Indirizzo da Smoobu: solo come riserva, se non è già stato compilato dai dati di residenza dell'ospite.
+    var indirizzoSmoobu = data.address || {};
+    if (indirizzoInput && !indirizzoInput.value.trim() && indirizzoSmoobu.street) indirizzoInput.value = indirizzoSmoobu.street;
+    if (capInput && !capInput.value.trim() && indirizzoSmoobu.postalCode) capInput.value = indirizzoSmoobu.postalCode;
+    if (cittaInput && !cittaInput.value.trim() && indirizzoSmoobu.location) cittaInput.value = indirizzoSmoobu.location;
   } catch(e){}
 }
 
@@ -5075,7 +5083,30 @@ function aggiornaBarraFattureUnite(){
     wrap.innerHTML = buildFatturaFormMultiHtml(selezionate);
     attachGuestHandlers(wrap);
     collegaFormFatturaMulti(selezionate, wrap);
+    precompilaContattiFatturaMulti(selezionate[0], wrap);
   };
+}
+
+// Precompila email/telefono/indirizzo nel form di fattura unica usando i dati Smoobu
+// della prima prenotazione selezionata (un solo cliente per fattura unica).
+async function precompilaContattiFatturaMulti(primaBooking, wrap){
+  if (!primaBooking) return;
+  try {
+    var resp = await fetch(backendUrl('/api/smoobu/reservations/' + encodeURIComponent(primaBooking.id)), { headers: backendHeaders() });
+    var data = await resp.json();
+    if (!resp.ok) return;
+    var emailInput = wrap.querySelector('[data-fm-email]');
+    var telInput = wrap.querySelector('[data-fm-telefono]');
+    var indirizzoInput = wrap.querySelector('[data-fm-indirizzo]');
+    var capInput = wrap.querySelector('[data-fm-cap]');
+    var cittaInput = wrap.querySelector('[data-fm-citta]');
+    if (emailInput && !emailInput.value.trim() && data.email) emailInput.value = data.email;
+    if (telInput && !telInput.value.trim() && data.phone) telInput.value = data.phone;
+    var indirizzoSmoobu = data.address || {};
+    if (indirizzoInput && !indirizzoInput.value.trim() && indirizzoSmoobu.street) indirizzoInput.value = indirizzoSmoobu.street;
+    if (capInput && !capInput.value.trim() && indirizzoSmoobu.postalCode) capInput.value = indirizzoSmoobu.postalCode;
+    if (cittaInput && !cittaInput.value.trim() && indirizzoSmoobu.location) cittaInput.value = indirizzoSmoobu.location;
+  } catch(e){}
 }
 
 // Cerca prenotazioni per nome ospite in una finestra ampia (6 mesi indietro, 6 avanti),
