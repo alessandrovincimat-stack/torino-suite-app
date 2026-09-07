@@ -3798,14 +3798,23 @@ function invioCompletato(iv){
 }
 
 function renderArchivioIstatOk(el){
-  var invOk = state.invii.filter(invioCompletato).sort(function(a,b){ return b.dataInvio.localeCompare(a.dataInvio); });
+  var invOkTutti = state.invii.filter(invioCompletato).sort(function(a,b){ return b.dataInvio.localeCompare(a.dataInvio); });
   var NOMI_MANUALI_DA_TENERE = ['kesselring', 'casals', 'saeger', 'sabine'];
   function manualeDaTenere(iv){
     var testo = normalizzaNome(iv.ospiti.map(function(o){ return o.cognome+' '+o.nome; }).join(' '));
     return NOMI_MANUALI_DA_TENERE.some(function(n){ return testo.indexOf(n) !== -1; });
   }
-  var manualiDaRimuovere = invOk.filter(function(iv){ return iv.manuale && !manualeDaTenere(iv); });
-  var html = '';
+  var manualiDaRimuovere = invOkTutti.filter(function(iv){ return iv.manuale && !manualeDaTenere(iv); });
+
+  var nomeMese = new Date(istatOkMeseCorrente.anno, istatOkMeseCorrente.mese, 1).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+  var invOk = invOkTutti.filter(function(iv){
+    var d = new Date(iv.dataInvio);
+    return d.getFullYear() === istatOkMeseCorrente.anno && d.getMonth() === istatOkMeseCorrente.mese;
+  });
+
+  var html = '<div class="as-row" style="margin:0 0 12px;"><button class="as-btn ghost" id="istatok-mese-prec">‹</button>' +
+    '<span style="padding:8px 4px;font-weight:600;text-transform:capitalize;">'+nomeMese+'</span>' +
+    '<button class="as-btn ghost" id="istatok-mese-succ">›</button></div>';
   if (manualiDaRimuovere.length){
     html += '<div class="as-card" style="border-color:var(--danger);">' +
       '<p class="as-sub" style="margin:0 0 8px;">⚠️ '+manualiDaRimuovere.length+' archiviazioni manuali risultano diverse dalle 4 confermate (Kesselring, Casals, De Saeger, Sabine Paul) — probabilmente quelle finite qui per errore dal vecchio pulsante bulk.</p>' +
@@ -3814,7 +3823,7 @@ function renderArchivioIstatOk(el){
       '</div>';
   }
   if (!invOk.length){
-    html += '<div class="as-card"><p class="as-sub">Nessuna scheda con ISTAT completo ancora.</p></div>';
+    html += '<div class="as-card"><p class="as-sub">Nessuna scheda con ISTAT completo in questo mese.</p></div>';
   } else {
     html += '<div class="as-card">';
     var dateUniche = [];
@@ -3873,6 +3882,16 @@ function renderArchivioIstatOk(el){
     html += '</div>';
   }
   el.innerHTML = html;
+  document.getElementById('istatok-mese-prec').onclick = function(){
+    istatOkMeseCorrente.mese--;
+    if (istatOkMeseCorrente.mese < 0){ istatOkMeseCorrente.mese = 11; istatOkMeseCorrente.anno--; }
+    renderArchivio();
+  };
+  document.getElementById('istatok-mese-succ').onclick = function(){
+    istatOkMeseCorrente.mese++;
+    if (istatOkMeseCorrente.mese > 11){ istatOkMeseCorrente.mese = 0; istatOkMeseCorrente.anno++; }
+    renderArchivio();
+  };
   var pulisciBtn = document.getElementById('pulisci-manuali-errate');
   if (pulisciBtn) pulisciBtn.onclick = async function(){
     var out = document.getElementById('pulisci-manuali-esito');
@@ -4479,6 +4498,7 @@ var oggiPerDefaultMese = new Date();
 var fattureMeseCorrente = { anno: oggiPerDefaultMese.getFullYear(), mese: oggiPerDefaultMese.getMonth() };
 var recuperoMeseCorrente = { anno: oggiPerDefaultMese.getFullYear(), mese: oggiPerDefaultMese.getMonth() };
 var pulizieMeseCorrente = { anno: oggiPerDefaultMese.getFullYear(), mese: oggiPerDefaultMese.getMonth() };
+var istatOkMeseCorrente = { anno: oggiPerDefaultMese.getFullYear(), mese: oggiPerDefaultMese.getMonth() };
 var STATI_SDI_INVIATI = ['sent','pending','processing','accepted','no_response','manual_accepted'];
 var STATI_SDI_PROBLEMA = ['error','discarded','not_delivered','rejected','manual_rejected'];
 
