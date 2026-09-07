@@ -3973,11 +3973,15 @@ function renderArchivioFattureEmesse(el){
       '<div><strong>' + escapeHtml(nomeMostrato) + '</strong>' + (e.appartamentoNome ? ' — ' + escapeHtml(e.appartamentoNome) : '') + '</div>' +
       '<div class="as-sub" style="margin:2px 0;">' + (e.dataArrivo ? toItDate(e.dataArrivo) : '') + (e.dataPartenza ? ' → ' + toItDate(e.dataPartenza) : '') + '</div>' +
       '<div class="as-sub" style="margin:0;">' + (e.importata ? '📥 Fattura importata (collegata, non creata da qui)' : 'Fattura') + (e.ficDocumentNumber ? ' n. ' + escapeHtml(e.ficDocumentNumber) : '') + (e.dataFatturazione && !e.importata ? ' del ' + toItDate(e.dataFatturazione.slice(0,10)) : '') + ' — inviata allo SDI</div>' +
+      (e.ficDocumentId ? '<button class="as-btn ghost" data-fatt-verifica="'+v.id+'" style="margin-top:4px;font-size:12px;">Ricontrolla</button>' : '') +
       renderDettaglioFattura(e) +
       '</div>';
   });
   html += '</div>';
   el.innerHTML = html;
+  el.querySelectorAll('[data-fatt-verifica]').forEach(function(btn){
+    btn.onclick = function(){ verificaStatoSdi(btn.getAttribute('data-fatt-verifica')); };
+  });
 }
 
 function renderArchivioDocumenti(el){
@@ -4969,6 +4973,7 @@ async function verificaStatoSdi(bookingId){
       delete state.fatture[bookingId];
       await saveFatture();
       renderFattureTab();
+      renderArchivio();
       alert('Questa fattura non esiste più su Fatture in Cloud (probabilmente cancellata): la prenotazione è tornata "da fare".');
       return;
     }
@@ -4980,6 +4985,7 @@ async function verificaStatoSdi(bookingId){
     }
     await saveFatture();
     renderFattureTab();
+    renderArchivio();
   } catch(e){
     alert('Verifica non riuscita: ' + e.message);
     if (btn) btn.textContent = 'Verifica invio SDI';
