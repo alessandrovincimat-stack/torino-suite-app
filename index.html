@@ -4161,6 +4161,8 @@ function renderBackend(){
       '<div id="cfg-fic-aziende-result" style="margin-bottom:10px;"></div>' +
       '<div class="as-field"><label>ID Azienda (Company ID)</label><input id="cfg-FIC_COMPANY_ID"></div>' +
       '<div class="as-field"><label>Aliquota IVA predefinita (soggiorno)</label><select id="cfg-FIC_VAT_ID"><option value="">— scegli dopo aver salvato token e ID azienda —</option></select></div>' +
+      '<button class="as-btn ghost" id="cfg-fic-analizza" type="button" style="margin:6px 0 10px;">📊 Analizza le ultime 10 fatture emesse</button>' +
+      '<div id="cfg-fic-analizza-result" style="margin-bottom:10px;"></div>' +
       '<p class="as-sub" style="margin-top:14px;"><strong>Tassa di soggiorno</strong></p>' +
       '<div class="as-row">' +
         '<div class="as-field"><label>Età esenzione (anni)</label><input id="cfg-TASSA_SOGGIORNO_ETA_ESENZIONE" placeholder="12"></div>' +
@@ -4250,6 +4252,32 @@ function renderBackend(){
         });
       } catch(e){
         out3.innerHTML = '<div class="as-err">'+e.message+'</div>';
+      }
+    };
+
+    document.getElementById('cfg-fic-analizza').onclick = async function(){
+      var out4 = document.getElementById('cfg-fic-analizza-result');
+      out4.innerHTML = '<span class="as-warn"><span class="as-spin"></span>carico le ultime 10 fatture da Fatture in Cloud…</span>';
+      try {
+        var resp4 = await fetch(backendUrl('/api/fattura/recenti?n=10'), { headers: backendHeaders() });
+        var data4 = await resp4.json();
+        if (!resp4.ok) throw new Error(data4.error || 'errore');
+        var elenco = data4.elenco || [];
+        if (!elenco.length){ out4.innerHTML = '<p class="as-sub">Nessuna fattura trovata.</p>'; return; }
+        out4.innerHTML = '<div style="max-height:70vh;overflow-y:auto;">' + elenco.map(function(f, i){
+          var c = f.cliente || {};
+          return '<div class="as-card" style="padding:10px;margin-bottom:6px;font-size:12.5px;">' +
+            '<p style="margin:0 0 4px;font-weight:600;">'+(i+1)+') n. '+escapeHtml(f.number||'—')+' del '+escapeHtml(f.date||'—')+'</p>' +
+            '<p class="as-sub" style="margin:2px 0;">Cliente: '+escapeHtml(c.nome||'—')+(c.piva?' · P.IVA '+escapeHtml(c.piva):'')+(c.cf?' · CF '+escapeHtml(c.cf):'')+'</p>' +
+            '<p class="as-sub" style="margin:2px 0;">Indirizzo: '+escapeHtml([c.indirizzo,c.cap,c.citta,c.provincia,c.paese].filter(Boolean).join(', ')||'—')+'</p>' +
+            (c.ei_code || c.certified_email ? '<p class="as-sub" style="margin:2px 0;">SDI/PEC: '+escapeHtml(c.ei_code||'—')+(c.certified_email?' / '+escapeHtml(c.certified_email):'')+'</p>' : '') +
+            '<p class="as-sub" style="margin:2px 0;">Metodo pagamento: '+escapeHtml(f.paymentMethod||'—')+' · Stato SDI: '+escapeHtml(f.eiStatus||'—')+'</p>' +
+            '<p class="as-sub" style="margin:2px 0;">Righe: '+(f.righe||[]).map(function(r){ return escapeHtml(r.descrizione)+(r.importo!=null?' (€'+Number(r.importo).toFixed(2)+')':''); }).join(' · ')+'</p>' +
+            '<p style="margin:4px 0 0;font-weight:600;">Totale: € '+(f.importoTotale!=null?Number(f.importoTotale).toFixed(2):'—')+'</p>' +
+            '</div>';
+        }).join('') + '</div>';
+      } catch(e){
+        out4.innerHTML = '<div class="as-err">'+e.message+'</div>';
       }
     };
 
