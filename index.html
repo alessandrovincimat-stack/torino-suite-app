@@ -5022,14 +5022,22 @@ function fatturaCompletataSenzaProblemi(entry){
 
 var fattureSelezionate = {}; // bookingId -> booking, per la fattura unica su più prenotazioni
 
+var mostraEscluseFatture = false;
+
 function renderListaFatture(prenotazioni){
-  var daMostrare = prenotazioni.filter(function(b){ return !fatturaCompletataSenzaProblemi(state.fatture[String(b.id)]); });
-  if (!daMostrare.length){
+  var escluse = prenotazioni.filter(function(b){ return state.fatture[String(b.id)] && state.fatture[String(b.id)].stato === 'esclusa'; });
+  var daMostrare = prenotazioni.filter(function(b){
+    var entry = state.fatture[String(b.id)];
+    if (entry && entry.stato === 'esclusa') return false;
+    return !fatturaCompletataSenzaProblemi(entry);
+  });
+  var html = '';
+  if (!daMostrare.length && !escluse.length){
     return prenotazioni.length
       ? '<p class="as-sub">Nessuna fattura da fare in questo mese — quelle già inviate sono in Archivio → Fatture emesse.</p>'
       : '<p class="as-sub">Nessuna prenotazione in questo mese.</p>';
   }
-  return daMostrare.map(function(b){
+  html += daMostrare.map(function(b){
     var entry = state.fatture[String(b.id)];
     var stato = entry ? entry.stato : 'pendente';
     var nomeApp = b.apartment ? b.apartment.name : '';
@@ -5045,7 +5053,8 @@ function renderListaFatture(prenotazioni){
     htmlRiga += '<div class="as-sub" style="margin:2px 0 8px;">' + toItDate(b.arrival) + ' → ' + toItDate(b.departure) + ' · ' + nomeApp + '</div>';
     if (stato === 'pendente'){
       htmlRiga += '<button class="as-btn secondary" data-fatt-crea="'+b.id+'" data-fatt-booking="'+encodeURIComponent(JSON.stringify(b))+'">Crea fattura</button> ';
-      htmlRiga += '<button class="as-btn ghost" data-fatt-importa-apri="'+b.id+'" data-fatt-importa-booking="'+encodeURIComponent(JSON.stringify(b))+'" style="font-size:12px;">Ho già una fattura per questa (collegala)</button>';
+      htmlRiga += '<button class="as-btn ghost" data-fatt-importa-apri="'+b.id+'" data-fatt-importa-booking="'+encodeURIComponent(JSON.stringify(b))+'" style="font-size:12px;">Ho già una fattura per questa (collegala)</button> ';
+      htmlRiga += '<button class="as-btn ghost" data-fatt-escludi="'+b.id+'" data-fatt-escludi-booking="'+encodeURIComponent(JSON.stringify(b))+'" style="font-size:12px;">✕ Rimuovi dalla lista (non va fatturata)</button>';
       htmlRiga += '<div data-fatt-form-wrap="'+b.id+'" style="margin-top:8px;"></div>';
       htmlRiga += '<div data-fatt-importa-wrap="'+b.id+'" style="margin-top:8px;"></div>';
     } else if (stato === 'emessa'){
@@ -5063,6 +5072,22 @@ function renderListaFatture(prenotazioni){
     htmlRiga += '</div>';
     return htmlRiga;
   }).join('');
+
+  if (escluse.length){
+    html += '<button class="as-btn ghost" id="fatt-toggle-escluse" style="margin:10px 0;font-size:12.5px;">'+(mostraEscluseFatture?'Nascondi':'Mostra')+' le '+escluse.length+' rimosse dalla lista</button>';
+    if (mostraEscluseFatture){
+      html += escluse.map(function(b){
+        var nomeApp = b.apartment ? b.apartment.name : '';
+        var nomeOspite = b['guest-name'] || 'sconosciuto';
+        return '<div class="as-card" style="padding:12px;opacity:0.7;">' +
+          '<div>⚪ <strong>' + nomeOspite + '</strong></div>' +
+          '<div class="as-sub" style="margin:2px 0 8px;">' + toItDate(b.arrival) + ' → ' + toItDate(b.departure) + ' · ' + nomeApp + '</div>' +
+          '<button class="as-btn ghost" data-fatt-riattiva="'+b.id+'">Rimetti nella lista</button>' +
+          '</div>';
+      }).join('');
+    }
+  }
+  return html;
 }
 
 function renderDettaglioFattura(entry){
@@ -5385,10 +5410,30 @@ function collegaAzioniFatture(container){
       if (typeof aggiornaBarraFattureUnite === 'function') aggiornaBarraFattureUnite();
     };
   });
+  container.querySelectorAll('[data-fatt-escludi]').forEach(function(btn){
+    btn.onclick = async function(){
+      var id = btn.getAttribute('data-fatt-escludi');
+      var b = JSON.parse(decodeURIComponent(btn.getAttribute('data-fatt-escludi-booking')));
+      if (!confirm('Togliere '+(b['guest-name']||'questa prenotazione')+' dall\'elenco fatture da fare? Non riguarda l\'invio a Questura/ISTAT, solo la fatturazione.')) return;
+      state.fatture[id] = { stato: 'esclusa' };
+      await saveFatture();
+      renderFattureTab();
+    };
+  });
+  container.querySelectorAll('[data-fatt-riattiva]').forEach(function(btn){
+    btn.onclick = async function(){
+      var id = btn.getAttribute('data-fatt-riattiva');
+      delete state.fatture[id];
+      await saveFatture();
+      renderFattureTab();
+    };
+  });
+  var toggleEscluse = container.querySelector('#fatt-toggle-escluse');
+  if (toggleEscluse) toggleEscluse.onclick = function(){ mostraEscluseFatture = !mostraEscluseFatture; renderFattureTab(); };
 }
 
 function contaStatiFatture(prenotazioni){
-  var conteggio = { pendente: 0, emessa: 0, inviata: 0 };
+  var conteggio = { pendente: 0, emessa: 0, inviata: 0, esclusa: 0 };
   prenotazioni.forEach(function(b){
     var entry = state.fatture[String(b.id)];
     var stato = entry ? entry.stato : 'pendente';
@@ -5438,7 +5483,7 @@ async function renderFattureTab(){
     prenotazioni.sort(function(x, y){ return String(x.departure).localeCompare(String(y.departure)); });
     var conteggio = contaStatiFatture(prenotazioni);
     var contatoriEl = document.getElementById('fatt-contatori');
-    if (contatoriEl) contatoriEl.textContent = conteggio.pendente + ' da fare · ' + conteggio.emessa + ' emesse · ' + conteggio.inviata + ' inviate';
+    if (contatoriEl) contatoriEl.textContent = conteggio.pendente + ' da fare · ' + conteggio.emessa + ' emesse · ' + conteggio.inviata + ' inviate' + (conteggio.esclusa ? ' · ' + conteggio.esclusa + ' rimosse dalla lista' : '');
     lista.innerHTML = renderListaFatture(prenotazioni);
     collegaAzioniFatture(lista);
     aggiornaBarraFattureUnite();
