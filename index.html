@@ -3843,7 +3843,11 @@ function renderArchivioIstatOk(el){
         (dateUniche.indexOf(dataISO)===-1 ? '<button class="as-btn ghost" data-ricevuta="'+dataISO+'" style="margin-top:6px;">Scarica ricevuta del '+g.toLocaleDateString('it-IT')+'</button>' : '') +
         '<span class="'+classeBadge+'" style="margin-left:8px;">'+testoBadge+'</span>' +
         '<details style="margin-top:6px;"><summary style="cursor:pointer;color:var(--brass);font-size:12.5px;">▸ Vedi dettagli ospiti</summary>' + dettagliOspiti +
-        (iv.manuale ? '' :
+        (iv.manuale ? (
+          '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);">' +
+          '<button class="as-btn ghost" data-rimuovi-archiviazione="'+escapeHtml(iv.id)+'" style="color:var(--danger);">🗑️ Rimuovi questa archiviazione (torna in Elenco di controllo)</button>' +
+          '</div>'
+        ) :
           '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);">' +
           '<p class="as-sub" style="margin:0 0 6px;">Solo ISTAT (Piemonte Dati Turismo) — la Questura non è modificabile una volta inviata:</p>' +
           '<button class="as-btn secondary" data-correggi-istat="'+escapeHtml(iv.id)+'" style="margin-top:4px;">🔁 Correggi/reinvia ISTAT (arrivo + partenza presunta)</button>' +
@@ -3858,6 +3862,17 @@ function renderArchivioIstatOk(el){
   el.innerHTML = html;
   el.querySelectorAll('[data-ricevuta]').forEach(function(btn){
     btn.onclick = function(){ scaricaRicevuta(btn.getAttribute('data-ricevuta'), btn); };
+  });
+  el.querySelectorAll('[data-rimuovi-archiviazione]').forEach(function(btn){
+    btn.onclick = async function(){
+      var ivId = btn.getAttribute('data-rimuovi-archiviazione');
+      var iv = state.invii.find(function(x){ return x.id === ivId; });
+      var nomi = iv ? iv.ospiti.map(function(o){ return (o.cognome+' '+o.nome).trim(); }).join(', ') : '';
+      if (!confirm('Rimuovere l\'archiviazione di "'+nomi+'"? Tornerà a comparire come mancante (rosso) in Elenco di controllo, e potrai ricrearla o segnala di nuovo se serve.')) return;
+      state.invii = state.invii.filter(function(x){ return x.id !== ivId; });
+      try { await remoteStorage.set('as-invii', JSON.stringify(state.invii)); } catch(e){}
+      renderArchivio();
+    };
   });
   el.querySelectorAll('[data-modifica-arrivo-archivio]').forEach(function(btn){
     btn.onclick = function(){
@@ -4464,6 +4479,8 @@ function schedaFuoriTempoMassimo(b, oggiISO){
 }
 
 async function recuperaSchedaSingola(b, btn){
+  var ok = confirm('Confermi che la prenotazione di ' + (b['guest-name']||'questo ospite') + ' (' + toItDate(b.arrival) + ' → ' + toItDate(b.departure) + ') è stata davvero già inviata a Questura e ISTAT tramite un altro canale? Verrà segnata come completata senza inviare nulla da qui.');
+  if (!ok) return;
   var out = btn.nextElementSibling;
   if (out) out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>archiviazione…</span>';
   try {
@@ -4478,27 +4495,6 @@ async function recuperaSchedaSingola(b, btn){
   } catch(e){
     if (out) out.innerHTML = '<div class="as-err">'+e.message+'</div>';
   }
-}
-
-async function recuperaTutteMese(prenotazioni, oggiISO, btn){
-  var daFare = prenotazioni.filter(function(b){ return !trovaCollegamentoOspite(String(b.id)) && schedaFuoriTempoMassimo(b, oggiISO); });
-  var out = document.getElementById('recupero-bulk-result');
-  if (!daFare.length){
-    if (out) out.textContent = 'Nessuna scheda da recuperare in questo mese.';
-    return;
-  }
-  btn.disabled = true;
-  for (var i = 0; i < daFare.length; i++){
-    if (out) out.textContent = 'Recupero ' + (i+1) + ' di ' + daFare.length + '…';
-    try {
-      var g = creaSchedaDaPrenotazioneSmoobu(daFare[i]);
-      var membri = orderedGuestsFor(g.id);
-      await archiveInvio(membri, g.idAppartamento, membri.length, true, true, true);
-    } catch(e){}
-  }
-  btn.disabled = false;
-  if (out) out.textContent = daFare.length + ' scheda/e recuperate e archiviate.';
-  renderArchivio();
 }
 
 function renderListaRecupero(prenotazioni, oggiISO){
@@ -4648,12 +4644,8 @@ async function renderArchivioRecuperoSchede(el){
     function mostraDettaglio(){
       dettaglio.innerHTML =
         '<p class="as-sub">🟢 compilata e inviata dall\'app · 🔵 già presente ma segnata come inviata altrove (altri canali/verifica esterna, es. ROSS1000) · ⚠️ doppione (Ospiti + Archivio) · 🔴 mancante, oltre i termini per l\'invio Questura (24h dall\'arrivo, 6h se il soggiorno dura meno di 24h)</p>' +
-        '<button class="as-btn secondary" id="recupero-bulk-btn" style="margin:8px 0;">Recupera tutte le mancanti di questo mese</button>' +
-        '<div id="recupero-bulk-result" class="as-sub" style="margin-bottom:8px;"></div>' +
         '<div id="recupero-lista">' + renderListaRecupero(prenotazioni, oggiISO) + '</div>';
       collegaAzioniRecupero(dettaglio);
-      var bulkBtn = document.getElementById('recupero-bulk-btn');
-      if (bulkBtn) bulkBtn.onclick = function(){ recuperaTutteMese(prenotazioni, oggiISO, bulkBtn); };
     }
 
     document.getElementById('recupero-mostra-dettaglio').onclick = function(){
