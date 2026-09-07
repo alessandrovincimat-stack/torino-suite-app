@@ -3968,8 +3968,9 @@ function renderArchivioFattureEmesse(el){
   var html = '<div class="as-card">';
   voci.forEach(function(v){
     var e = v.entry;
-    html += '<div data-search="'+escapeHtml(normalizzaNome(e.nomeOspite||''))+'" style="border-bottom:1px solid var(--border);padding:8px 0;">' +
-      '<div><strong>' + escapeHtml(e.nomeOspite || 'sconosciuto') + '</strong>' + (e.appartamentoNome ? ' — ' + escapeHtml(e.appartamentoNome) : '') + '</div>' +
+    var nomeMostrato = e.nomeOspite || (e.dettagli && e.dettagli.cliente && e.dettagli.cliente.nome) || 'sconosciuto';
+    html += '<div data-search="'+escapeHtml(normalizzaNome(nomeMostrato))+'" style="border-bottom:1px solid var(--border);padding:8px 0;">' +
+      '<div><strong>' + escapeHtml(nomeMostrato) + '</strong>' + (e.appartamentoNome ? ' — ' + escapeHtml(e.appartamentoNome) : '') + '</div>' +
       '<div class="as-sub" style="margin:2px 0;">' + (e.dataArrivo ? toItDate(e.dataArrivo) : '') + (e.dataPartenza ? ' → ' + toItDate(e.dataPartenza) : '') + '</div>' +
       '<div class="as-sub" style="margin:0;">' + (e.importata ? '📥 Fattura importata (collegata, non creata da qui)' : 'Fattura') + (e.ficDocumentNumber ? ' n. ' + escapeHtml(e.ficDocumentNumber) : '') + (e.dataFatturazione && !e.importata ? ' del ' + toItDate(e.dataFatturazione.slice(0,10)) : '') + ' — inviata allo SDI</div>' +
       renderDettaglioFattura(e) +
@@ -5023,7 +5024,7 @@ function renderListaFatture(prenotazioni){
     htmlRiga += '<div class="as-sub" style="margin:2px 0 8px;">' + toItDate(b.arrival) + ' → ' + toItDate(b.departure) + ' · ' + nomeApp + '</div>';
     if (stato === 'pendente'){
       htmlRiga += '<button class="as-btn secondary" data-fatt-crea="'+b.id+'" data-fatt-booking="'+encodeURIComponent(JSON.stringify(b))+'">Crea fattura</button> ';
-      htmlRiga += '<button class="as-btn ghost" data-fatt-importa-apri="'+b.id+'" style="font-size:12px;">Ho già una fattura per questa (collegala)</button>';
+      htmlRiga += '<button class="as-btn ghost" data-fatt-importa-apri="'+b.id+'" data-fatt-importa-booking="'+encodeURIComponent(JSON.stringify(b))+'" style="font-size:12px;">Ho già una fattura per questa (collegala)</button>';
       htmlRiga += '<div data-fatt-form-wrap="'+b.id+'" style="margin-top:8px;"></div>';
       htmlRiga += '<div data-fatt-importa-wrap="'+b.id+'" style="margin-top:8px;"></div>';
     } else if (stato === 'emessa'){
@@ -5298,7 +5299,7 @@ function collegaFormFatturaMulti(prenotazioni, wrap){
   };
 }
 
-async function importaFatturaEsistente(bookingId, wrap){
+async function importaFatturaEsistente(bookingId, wrap, bookingObj){
   var idInput = wrap.querySelector('[data-fatt-importa-id]');
   var esitoEl = wrap.querySelector('[data-fatt-importa-esito]');
   var ficId = idInput.value.trim();
@@ -5316,6 +5317,10 @@ async function importaFatturaEsistente(bookingId, wrap){
       ficDocumentNumber: data.number || null,
       eiStatus: data.eiStatus || null,
       importata: true,
+      nomeOspite: (bookingObj && bookingObj['guest-name']) || null,
+      appartamentoNome: (bookingObj && bookingObj.apartment) ? bookingObj.apartment.name : null,
+      dataArrivo: (bookingObj && bookingObj.arrival) || null,
+      dataPartenza: (bookingObj && bookingObj.departure) || null,
       dettagli: { cliente: data.cliente, importoTotale: data.importoTotale, righe: data.righe, date: data.date }
     };
     await saveFatture();
@@ -5335,13 +5340,14 @@ function collegaAzioniFatture(container){
   container.querySelectorAll('[data-fatt-importa-apri]').forEach(function(btn){
     btn.onclick = function(){
       var bookingId = btn.getAttribute('data-fatt-importa-apri');
+      var bookingObj = JSON.parse(decodeURIComponent(btn.getAttribute('data-fatt-importa-booking')));
       var wrap = container.querySelector('[data-fatt-importa-wrap="'+bookingId+'"]');
       if (!wrap) return;
       wrap.innerHTML =
         '<div class="as-field"><label>ID del documento su Fatture in Cloud (visibile nell\'indirizzo quando lo apri lì)</label><input data-fatt-importa-id="'+bookingId+'" inputmode="numeric"></div>' +
         '<button class="as-btn secondary" data-fatt-importa-conferma="'+bookingId+'">Verifica e collega</button>' +
         '<div class="as-sub" data-fatt-importa-esito="'+bookingId+'" style="margin-top:6px;"></div>';
-      wrap.querySelector('[data-fatt-importa-conferma]').onclick = function(){ importaFatturaEsistente(bookingId, wrap); };
+      wrap.querySelector('[data-fatt-importa-conferma]').onclick = function(){ importaFatturaEsistente(bookingId, wrap, bookingObj); };
       btn.style.display = 'none';
     };
   });
