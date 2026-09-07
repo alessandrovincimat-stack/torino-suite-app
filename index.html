@@ -1339,11 +1339,13 @@ function fileToBase64(file){
   });
 }
 
+var ocrImmaginiCache = {}; // guest.id -> immagini già inviate, tenute solo in memoria (non salvate)
+
 async function ocrDocument(files, guest){
   guest.ocrPending = true; render();
   try {
     if (!state.backend.url) throw new Error("Configura prima l'indirizzo del backend nella scheda \"Backend\" (serve per leggere i documenti)");
-    var immagini = [];
+    var immaginiNuove = [];
     for (var i = 0; i < files.length; i++){
       var file = files[i];
       var isPdf = (file.type === 'application/pdf');
@@ -1357,12 +1359,18 @@ async function ocrDocument(files, guest){
         if (b64.length > 3 * 1024 * 1024) b64 = await compressImage(file, 1100, 0.72);
         mediaType = 'image/jpeg';
       }
-      immagini.push({ data: b64, mediaType: mediaType });
+      immaginiNuove.push({ data: b64, mediaType: mediaType });
     }
+    // Tengo insieme anche le immagini già inviate in precedenza per questo ospite (es. fronte
+    // caricato prima, retro incollato dopo): così il modello vede sempre fronte+retro insieme,
+    // anche se sono arrivati in momenti/azioni separate, fino al limite di 4 immagini.
+    // Solo in memoria per questa sessione: non finisce nei dati salvati dell'ospite.
+    var immaginiAccumulate = (ocrImmaginiCache[guest.id] || []).concat(immaginiNuove).slice(-4);
+    ocrImmaginiCache[guest.id] = immaginiAccumulate;
     var resp = await fetch(backendUrl('/api/ocr'), {
       method: "POST",
       headers: backendHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ images: immagini })
+      body: JSON.stringify({ images: immaginiAccumulate })
     });
     var parsed = await resp.json();
     if (!resp.ok) throw new Error(parsed.error || 'estrazione fallita sul backend');
