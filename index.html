@@ -3973,7 +3973,8 @@ function renderArchivioFattureEmesse(el){
       '<div><strong>' + escapeHtml(nomeMostrato) + '</strong>' + (e.appartamentoNome ? ' — ' + escapeHtml(e.appartamentoNome) : '') + '</div>' +
       '<div class="as-sub" style="margin:2px 0;">' + (e.dataArrivo ? toItDate(e.dataArrivo) : '') + (e.dataPartenza ? ' → ' + toItDate(e.dataPartenza) : '') + '</div>' +
       '<div class="as-sub" style="margin:0;">' + (e.importata ? '📥 Fattura importata (collegata, non creata da qui)' : 'Fattura') + (e.ficDocumentNumber ? ' n. ' + escapeHtml(e.ficDocumentNumber) : '') + (e.dataFatturazione && !e.importata ? ' del ' + toItDate(e.dataFatturazione.slice(0,10)) : '') + ' — inviata allo SDI</div>' +
-      (e.ficDocumentId ? '<button class="as-btn ghost" data-fatt-verifica="'+v.id+'" style="margin-top:4px;font-size:12px;">Ricontrolla</button>' : '') +
+      (e.ficDocumentId ? '<button class="as-btn ghost" data-fatt-verifica="'+v.id+'" style="margin-top:4px;font-size:12px;">Ricontrolla</button> ' : '') +
+      '<button class="as-btn ghost" data-fatt-rimuovi="'+v.id+'" style="margin-top:4px;font-size:12px;color:var(--danger);">🗑️ Rimuovi collegamento</button>' +
       renderDettaglioFattura(e) +
       '</div>';
   });
@@ -3981,6 +3982,9 @@ function renderArchivioFattureEmesse(el){
   el.innerHTML = html;
   el.querySelectorAll('[data-fatt-verifica]').forEach(function(btn){
     btn.onclick = function(){ verificaStatoSdi(btn.getAttribute('data-fatt-verifica')); };
+  });
+  el.querySelectorAll('[data-fatt-rimuovi]').forEach(function(btn){
+    btn.onclick = function(){ rimuoviCollegamentoFattura(btn.getAttribute('data-fatt-rimuovi')); };
   });
 }
 
@@ -4960,6 +4964,17 @@ async function vaiECreaFattura(b, btn){
   precompilaContattiFattura(id);
 }
 
+async function rimuoviCollegamentoFattura(bookingId){
+  var entry = state.fatture[bookingId];
+  if (!entry) return;
+  var descr = (entry.nomeOspite || (entry.dettagli && entry.dettagli.cliente && entry.dettagli.cliente.nome) || 'questa prenotazione') + (entry.ficDocumentNumber ? ' (fattura n. ' + entry.ficDocumentNumber + ')' : '');
+  if (!confirm('Rimuovere il collegamento con ' + descr + '? La prenotazione tornerà "da fare" — il documento su Fatture in Cloud NON viene toccato/cancellato, solo scollegato da qui.')) return;
+  delete state.fatture[bookingId];
+  await saveFatture();
+  renderFattureTab();
+  renderArchivio();
+}
+
 async function verificaStatoSdi(bookingId){
   var entry = state.fatture[bookingId];
   if (!entry || !entry.ficDocumentId) return;
@@ -5035,12 +5050,14 @@ function renderListaFatture(prenotazioni){
       htmlRiga += '<div data-fatt-importa-wrap="'+b.id+'" style="margin-top:8px;"></div>';
     } else if (stato === 'emessa'){
       htmlRiga += '<p class="as-sub" style="margin:0 0 6px;">' + (entry.importata ? '📥 Fattura importata (collegata, non creata da qui)' : 'Fattura') + (entry.ficDocumentNumber ? (' n. ' + entry.ficDocumentNumber) : '') + (entry.dataFatturazione && !entry.importata ? (' creata il ' + toItDate(entry.dataFatturazione.slice(0,10))) : '') + (entry.gruppoFatturaId ? ' — fattura unica con altre prenotazioni' : '') + '.</p>';
-      if (entry.ficDocumentId) htmlRiga += '<button class="as-btn ghost" data-fatt-verifica="'+b.id+'">Verifica invio SDI</button>';
+      if (entry.ficDocumentId) htmlRiga += '<button class="as-btn ghost" data-fatt-verifica="'+b.id+'">Verifica invio SDI</button> ';
+      htmlRiga += '<button class="as-btn ghost" data-fatt-rimuovi="'+b.id+'" style="color:var(--danger);">🗑️ Rimuovi collegamento</button>';
       htmlRiga += renderDettaglioFattura(entry);
     } else if (stato === 'inviata'){
       var problema = entry.eiStatus && STATI_SDI_PROBLEMA.indexOf(entry.eiStatus) !== -1;
       htmlRiga += '<p class="as-sub" style="margin:0 0 6px;">' + (entry.importata ? '📥 Fattura importata (collegata, non creata da qui)' : 'Fattura') + (entry.ficDocumentNumber ? (' n. ' + entry.ficDocumentNumber) : '') + (problema ? ' — ⚠️ problema nell\'invio SDI ('+entry.eiStatus+')' : ' — inviata allo SDI') + (entry.gruppoFatturaId ? ' — fattura unica con altre prenotazioni' : '') + '.</p>';
-      if (entry.ficDocumentId) htmlRiga += '<button class="as-btn ghost" data-fatt-verifica="'+b.id+'">Ricontrolla</button>';
+      if (entry.ficDocumentId) htmlRiga += '<button class="as-btn ghost" data-fatt-verifica="'+b.id+'">Ricontrolla</button> ';
+      htmlRiga += '<button class="as-btn ghost" data-fatt-rimuovi="'+b.id+'" style="color:var(--danger);">🗑️ Rimuovi collegamento</button>';
       htmlRiga += renderDettaglioFattura(entry);
     }
     htmlRiga += '</div>';
@@ -5342,6 +5359,9 @@ function collegaAzioniFatture(container){
   });
   container.querySelectorAll('[data-fatt-verifica]').forEach(function(btn){
     btn.onclick = function(){ verificaStatoSdi(btn.getAttribute('data-fatt-verifica')); };
+  });
+  container.querySelectorAll('[data-fatt-rimuovi]').forEach(function(btn){
+    btn.onclick = function(){ rimuoviCollegamentoFattura(btn.getAttribute('data-fatt-rimuovi')); };
   });
   container.querySelectorAll('[data-fatt-importa-apri]').forEach(function(btn){
     btn.onclick = function(){
