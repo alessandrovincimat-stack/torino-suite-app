@@ -3971,7 +3971,8 @@ function renderArchivioFattureEmesse(el){
     html += '<div data-search="'+escapeHtml(normalizzaNome(e.nomeOspite||''))+'" style="border-bottom:1px solid var(--border);padding:8px 0;">' +
       '<div><strong>' + escapeHtml(e.nomeOspite || 'sconosciuto') + '</strong>' + (e.appartamentoNome ? ' — ' + escapeHtml(e.appartamentoNome) : '') + '</div>' +
       '<div class="as-sub" style="margin:2px 0;">' + (e.dataArrivo ? toItDate(e.dataArrivo) : '') + (e.dataPartenza ? ' → ' + toItDate(e.dataPartenza) : '') + '</div>' +
-      '<div class="as-sub" style="margin:0;">Fattura' + (e.ficDocumentNumber ? ' n. ' + escapeHtml(e.ficDocumentNumber) : '') + (e.dataFatturazione ? ' del ' + toItDate(e.dataFatturazione.slice(0,10)) : '') + ' — inviata allo SDI</div>' +
+      '<div class="as-sub" style="margin:0;">' + (e.importata ? '📥 Fattura importata (collegata, non creata da qui)' : 'Fattura') + (e.ficDocumentNumber ? ' n. ' + escapeHtml(e.ficDocumentNumber) : '') + (e.dataFatturazione && !e.importata ? ' del ' + toItDate(e.dataFatturazione.slice(0,10)) : '') + ' — inviata allo SDI</div>' +
+      renderDettaglioFattura(e) +
       '</div>';
   });
   html += '</div>';
@@ -4944,6 +4945,7 @@ async function verificaStatoSdi(bookingId){
     }
     entry.eiStatus = data.eiStatus;
     entry.ultimoControllo = new Date().toISOString();
+    entry.dettagli = { cliente: data.cliente, importoTotale: data.importoTotale, righe: data.righe, date: data.date };
     if (STATI_SDI_INVIATI.indexOf(data.eiStatus) !== -1 || STATI_SDI_PROBLEMA.indexOf(data.eiStatus) !== -1){
       entry.stato = 'inviata';
     }
@@ -4992,19 +4994,38 @@ function renderListaFatture(prenotazioni){
     }
     htmlRiga += '<div class="as-sub" style="margin:2px 0 8px;">' + toItDate(b.arrival) + ' → ' + toItDate(b.departure) + ' · ' + nomeApp + '</div>';
     if (stato === 'pendente'){
-      htmlRiga += '<button class="as-btn secondary" data-fatt-crea="'+b.id+'" data-fatt-booking="'+encodeURIComponent(JSON.stringify(b))+'">Crea fattura</button>';
+      htmlRiga += '<button class="as-btn secondary" data-fatt-crea="'+b.id+'" data-fatt-booking="'+encodeURIComponent(JSON.stringify(b))+'">Crea fattura</button> ';
+      htmlRiga += '<button class="as-btn ghost" data-fatt-importa-apri="'+b.id+'" style="font-size:12px;">Ho già una fattura per questa (collegala)</button>';
       htmlRiga += '<div data-fatt-form-wrap="'+b.id+'" style="margin-top:8px;"></div>';
+      htmlRiga += '<div data-fatt-importa-wrap="'+b.id+'" style="margin-top:8px;"></div>';
     } else if (stato === 'emessa'){
-      htmlRiga += '<p class="as-sub" style="margin:0 0 6px;">Fattura' + (entry.ficDocumentNumber ? (' n. ' + entry.ficDocumentNumber) : '') + ' creata' + (entry.dataFatturazione ? (' il ' + toItDate(entry.dataFatturazione.slice(0,10))) : '') + (entry.gruppoFatturaId ? ' — fattura unica con altre prenotazioni' : '') + '.</p>';
+      htmlRiga += '<p class="as-sub" style="margin:0 0 6px;">' + (entry.importata ? '📥 Fattura importata (collegata, non creata da qui)' : 'Fattura') + (entry.ficDocumentNumber ? (' n. ' + entry.ficDocumentNumber) : '') + (entry.dataFatturazione && !entry.importata ? (' creata il ' + toItDate(entry.dataFatturazione.slice(0,10))) : '') + (entry.gruppoFatturaId ? ' — fattura unica con altre prenotazioni' : '') + '.</p>';
       if (entry.ficDocumentId) htmlRiga += '<button class="as-btn ghost" data-fatt-verifica="'+b.id+'">Verifica invio SDI</button>';
+      htmlRiga += renderDettaglioFattura(entry);
     } else if (stato === 'inviata'){
       var problema = entry.eiStatus && STATI_SDI_PROBLEMA.indexOf(entry.eiStatus) !== -1;
-      htmlRiga += '<p class="as-sub" style="margin:0 0 6px;">Fattura' + (entry.ficDocumentNumber ? (' n. ' + entry.ficDocumentNumber) : '') + (problema ? ' — ⚠️ problema nell\'invio SDI ('+entry.eiStatus+')' : ' — inviata allo SDI') + (entry.gruppoFatturaId ? ' — fattura unica con altre prenotazioni' : '') + '.</p>';
+      htmlRiga += '<p class="as-sub" style="margin:0 0 6px;">' + (entry.importata ? '📥 Fattura importata (collegata, non creata da qui)' : 'Fattura') + (entry.ficDocumentNumber ? (' n. ' + entry.ficDocumentNumber) : '') + (problema ? ' — ⚠️ problema nell\'invio SDI ('+entry.eiStatus+')' : ' — inviata allo SDI') + (entry.gruppoFatturaId ? ' — fattura unica con altre prenotazioni' : '') + '.</p>';
       if (entry.ficDocumentId) htmlRiga += '<button class="as-btn ghost" data-fatt-verifica="'+b.id+'">Ricontrolla</button>';
+      htmlRiga += renderDettaglioFattura(entry);
     }
     htmlRiga += '</div>';
     return htmlRiga;
   }).join('');
+}
+
+function renderDettaglioFattura(entry){
+  if (!entry.dettagli) return '';
+  var d = entry.dettagli;
+  var c = d.cliente || {};
+  var html = '<details style="margin-top:6px;"><summary style="cursor:pointer;color:var(--brass);font-size:12.5px;">▸ Vedi dettagli fattura</summary>' +
+    '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);font-size:13px;">';
+  if (d.date) html += '<div class="as-sub" style="margin:2px 0;">Data: ' + escapeHtml(d.date) + '</div>';
+  if (c.nome) html += '<div class="as-sub" style="margin:2px 0;">Cliente: ' + escapeHtml(c.nome) + (c.piva ? ' (P.IVA ' + escapeHtml(c.piva) + ')' : (c.cf ? ' (CF ' + escapeHtml(c.cf) + ')' : '')) + '</div>';
+  if (c.indirizzo) html += '<div class="as-sub" style="margin:2px 0;">Indirizzo: ' + escapeHtml(c.indirizzo) + (c.cap ? ', ' + escapeHtml(c.cap) : '') + (c.citta ? ' ' + escapeHtml(c.citta) : '') + (c.provincia ? ' (' + escapeHtml(c.provincia) + ')' : '') + '</div>';
+  if (d.righe && d.righe.length) html += d.righe.map(function(r){ return '<div class="as-sub" style="margin:2px 0;">· ' + escapeHtml(r.descrizione||'') + (r.importo != null ? ' — € ' + Number(r.importo).toFixed(2) : '') + '</div>'; }).join('');
+  if (d.importoTotale != null) html += '<div style="margin-top:6px;font-weight:600;">Totale: € ' + Number(d.importoTotale).toFixed(2) + '</div>';
+  html += '</div></details>';
+  return html;
 }
 
 function aggiornaBarraFattureUnite(){
@@ -5249,12 +5270,52 @@ function collegaFormFatturaMulti(prenotazioni, wrap){
   };
 }
 
+async function importaFatturaEsistente(bookingId, wrap){
+  var idInput = wrap.querySelector('[data-fatt-importa-id]');
+  var esitoEl = wrap.querySelector('[data-fatt-importa-esito]');
+  var ficId = idInput.value.trim();
+  if (!ficId){ esitoEl.innerHTML = '<span class="as-err">Inserisci l\'ID del documento.</span>'; return; }
+  esitoEl.innerHTML = '<span class="as-warn"><span class="as-spin"></span>verifica in corso…</span>';
+  try {
+    var resp = await fetch(backendUrl('/api/fattura/' + encodeURIComponent(ficId) + '/status'), { headers: backendHeaders() });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'errore verifica');
+    if (data.notFound){ esitoEl.innerHTML = '<span class="as-err">Nessun documento trovato con questo ID su Fatture in Cloud.</span>'; return; }
+    var stato = (STATI_SDI_INVIATI.indexOf(data.eiStatus) !== -1 || STATI_SDI_PROBLEMA.indexOf(data.eiStatus) !== -1) ? 'inviata' : 'emessa';
+    state.fatture[bookingId] = {
+      stato: stato,
+      ficDocumentId: ficId,
+      ficDocumentNumber: data.number || null,
+      eiStatus: data.eiStatus || null,
+      importata: true,
+      dettagli: { cliente: data.cliente, importoTotale: data.importoTotale, righe: data.righe, date: data.date }
+    };
+    await saveFatture();
+    renderFattureTab();
+  } catch(e){
+    esitoEl.innerHTML = '<div class="as-err">'+e.message+'</div>';
+  }
+}
+
 function collegaAzioniFatture(container){
   container.querySelectorAll('[data-fatt-crea]').forEach(function(btn){
     btn.onclick = function(){ vaiECreaFattura(JSON.parse(decodeURIComponent(btn.getAttribute('data-fatt-booking'))), btn); };
   });
   container.querySelectorAll('[data-fatt-verifica]').forEach(function(btn){
     btn.onclick = function(){ verificaStatoSdi(btn.getAttribute('data-fatt-verifica')); };
+  });
+  container.querySelectorAll('[data-fatt-importa-apri]').forEach(function(btn){
+    btn.onclick = function(){
+      var bookingId = btn.getAttribute('data-fatt-importa-apri');
+      var wrap = container.querySelector('[data-fatt-importa-wrap="'+bookingId+'"]');
+      if (!wrap) return;
+      wrap.innerHTML =
+        '<div class="as-field"><label>ID del documento su Fatture in Cloud (visibile nell\'indirizzo quando lo apri lì)</label><input data-fatt-importa-id="'+bookingId+'" inputmode="numeric"></div>' +
+        '<button class="as-btn secondary" data-fatt-importa-conferma="'+bookingId+'">Verifica e collega</button>' +
+        '<div class="as-sub" data-fatt-importa-esito="'+bookingId+'" style="margin-top:6px;"></div>';
+      wrap.querySelector('[data-fatt-importa-conferma]').onclick = function(){ importaFatturaEsistente(bookingId, wrap); };
+      btn.style.display = 'none';
+    };
   });
   container.querySelectorAll('[data-fatt-seleziona]').forEach(function(chk){
     chk.onchange = function(){
