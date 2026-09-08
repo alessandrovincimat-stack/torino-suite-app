@@ -3515,8 +3515,8 @@ function generaEInviaPanel(ordered, wrapEl){
     var istatBox = document.createElement('div');
     istatBox.style.marginTop = '14px';
     istatBox.innerHTML =
-      '<p class="as-sub"><strong>1) Piemonte Dati Turismo (ISTAT)</strong> — invia gli arrivi di oggi (' + toItDate(todayISO()) + ') insieme alla partenza presunta calcolata dalla permanenza indicata: con questo l\'obbligo è assolto. Serve un nuovo invio solo se la prenotazione cambia davvero (proroga o partenza anticipata).</p>' +
-      '<button class="as-btn secondary" data-role="istat">Invia dati ISTAT (arrivi di oggi)</button>' +
+      '<p class="as-sub"><strong>1) Piemonte Dati Turismo (ISTAT)</strong> — invia l\'arrivo di questi ospiti (con le rispettive date) insieme alla partenza presunta calcolata dalla permanenza indicata: con questo l\'obbligo è assolto (l\'invio ISTAT è mensile, va fatto entro fine mese, non per forza il giorno stesso dell\'arrivo). Serve un nuovo invio solo se la prenotazione cambia davvero (proroga o partenza anticipata).</p>' +
+      '<button class="as-btn secondary" data-role="istat">Invia dati ISTAT</button>' +
       '<div class="as-istat-result" style="margin-top:10px;"></div>';
     wrapEl.appendChild(istatBox);
     var istatResultEl = istatBox.querySelector('.as-istat-result');
@@ -3601,7 +3601,7 @@ function calcolaDataPartenzaPresunta(dataArrivoISO, permanenza){
 }
 
 async function inviaIstatArrivi(arriviOggi, allOrdered){
-  if (!arriviOggi.length) throw new Error('nessun ospite con arrivo odierno');
+  if (!arriviOggi.length) throw new Error('nessun ospite da inviare');
   var arrivi = arriviOggi.map(function(g){ return buildIstatArrivo(g, allOrdered); });
   var resp = await fetch(backendUrl('/api/istat/movimento'), {
     method: 'POST',
@@ -3651,16 +3651,14 @@ async function inviaIstatArrivi(arriviOggi, allOrdered){
 
 async function inviaIstat(ordered, outEl, onSuccess){
   var out = outEl;
-  var oggiISO = todayISO();
-  var arriviOggi = ordered.filter(function(g){ return g.dataArrivo === oggiISO; });
-  if (!arriviOggi.length){
-    out.innerHTML = '<div class="as-err">Nessun ospite con data di arrivo odierna tra quelli generati.</div>';
+  if (!ordered.length){
+    out.innerHTML = '<div class="as-err">Nessun ospite tra quelli generati.</div>';
     return;
   }
   out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>invio in corso…</span>';
   try {
-    var risultato = await inviaIstatArrivi(arriviOggi, ordered);
-    var msg = '<p class="as-ok">Inviato correttamente a Piemonte Dati Turismo (' + arriviOggi.length + ' arrivi';
+    var risultato = await inviaIstatArrivi(ordered, ordered);
+    var msg = '<p class="as-ok">Inviato correttamente a Piemonte Dati Turismo (' + ordered.length + ' arrivi';
     if (risultato.partenzeInviate) msg += ', ' + risultato.partenzeInviate + ' partenze presunte';
     msg += ').</p>';
     if (risultato.partenzeFallite && risultato.partenzeFallite.length){
