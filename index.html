@@ -1394,6 +1394,22 @@ async function ocrDocument(files, guest){
       else guest.comuneResidenzaNome = parsed.comune_residenza.toUpperCase();
     }
     if (parsed.codice_fiscale && parsed.codice_fiscale.trim()) guest.codiceFiscale = parsed.codice_fiscale.trim().toUpperCase();
+
+    if (!guest.indirizzoResidenza && guest.smoobuBookingId && state.backend.url){
+      try {
+        var respSmoobu = await fetch(backendUrl('/api/smoobu/reservations/' + encodeURIComponent(guest.smoobuBookingId)), { headers: backendHeaders() });
+        var datiSmoobu = await respSmoobu.json();
+        if (respSmoobu.ok && datiSmoobu.address && datiSmoobu.address.street){
+          var nomeDocumento = normalizzaNome((guest.cognome||'') + ' ' + (guest.nome||''));
+          var nomePrenotazione = normalizzaNome(datiSmoobu['guest-name'] || '');
+          var coincide = nomeDocumento && nomePrenotazione && (nomePrenotazione.indexOf(guest.cognome ? guest.cognome.toLowerCase() : '###') !== -1 || nomeDocumento.indexOf(nomePrenotazione) !== -1 || nomePrenotazione.indexOf(nomeDocumento) !== -1);
+          if (coincide){
+            guest.indirizzoResidenza = datiSmoobu.address.street;
+            if (!guest.comuneResidenzaNome && datiSmoobu.address.location) guest.comuneResidenzaNome = datiSmoobu.address.location.toUpperCase();
+          }
+        }
+      } catch(eSmoobuIndirizzo){}
+    }
   } catch(e){
     alert('Estrazione non riuscita, inserisci i dati manualmente. (' + e.message + ')');
   }
