@@ -2112,12 +2112,20 @@ function renderOspiti(){
 
   html += '<div class="as-card"><button class="as-btn ghost" id="as-add-manual" style="width:100%;">+ Aggiungi ospite</button></div>';
 
-  var guestsSenzaPrenotazione = state.backend.url ? state.guests.filter(function(g){ return !g.smoobuBookingId; }) : state.guests;
+  var oggiFinestraISO = todayISO();
+  var fineFinestraD = new Date(); fineFinestraD.setDate(fineFinestraD.getDate() + 7);
+  var fineFinestraISO = fineFinestraD.toISOString().slice(0,10);
+  var guestsSenzaPrenotazione = state.guests.filter(function(g){
+    if (!state.backend.url || !g.smoobuBookingId) return true;
+    // Se ha una prenotazione Smoobu ma l'arrivo è fuori dalla finestra dei prossimi 7 giorni
+    // mostrata sopra, la mostro comunque qui: altrimenti la scheda resterebbe irraggiungibile.
+    return !(g.dataArrivo >= oggiFinestraISO && g.dataArrivo <= fineFinestraISO);
+  });
   guestsSenzaPrenotazione = guestsSenzaPrenotazione.slice().sort(function(a, b){
     return String(a.dataArrivo || '9999').localeCompare(String(b.dataArrivo || '9999'));
   });
   if (guestsSenzaPrenotazione.length){
-    html += '<p class="as-title" style="font-size:15px;margin-top:16px;">Altri ospiti (senza prenotazione Smoobu)</p>';
+    html += '<p class="as-title" style="font-size:15px;margin-top:16px;">Altre schede (fuori dai prossimi 7 giorni o senza prenotazione Smoobu)</p>';
   }
   guestsSenzaPrenotazione.forEach(function(g){ html += buildGuestCardHtml(g); });
 
