@@ -1393,6 +1393,7 @@ async function ocrDocument(files, guest){
       if (guest.residenzaEstero) guest.statoResidenzaNome = parsed.comune_residenza.toUpperCase();
       else guest.comuneResidenzaNome = parsed.comune_residenza.toUpperCase();
     }
+    if (parsed.codice_fiscale && parsed.codice_fiscale.trim()) guest.codiceFiscale = parsed.codice_fiscale.trim().toUpperCase();
   } catch(e){
     alert('Estrazione non riuscita, inserisci i dati manualmente. (' + e.message + ')');
   }
@@ -1550,6 +1551,7 @@ function buildGuestCardHtml(g, extraPrimaDiGenera){
   }
   html += '</div>';
   html += '<div class="as-field"><label>Indirizzo di residenza (via e civico) — per la fattura</label><input data-f="indirizzoResidenza" data-id="'+g.id+'" value="'+(g.indirizzoResidenza||'')+'"></div>';
+  html += '<div class="as-field"><label>Codice fiscale (se stampato sul documento) — per la fattura</label><input data-f="codiceFiscale" data-id="'+g.id+'" style="text-transform:uppercase;" value="'+(g.codiceFiscale||'')+'"></div>';
   html += '<div class="as-row">';
   html += '<div class="as-field"><label>Tipo turismo</label><select data-f="tipoTurismo" data-id="'+g.id+'">' +
     ['Non specificato','Culturale','Balneare','Congressuale/Affari','Fieristico','Sportivo/Fitness','Scolastico','Religioso','Sociale','Parchi Tematici','Termale/Trattamenti salute','Enogastronomico','Cicloturismo','Escursionistico/Naturalistico','Altro motivo'].map(function(t){ return '<option '+(g.tipoTurismo===t?'selected':'')+'>'+t+'</option>'; }).join('') +
@@ -2956,6 +2958,12 @@ async function precompilaCodiceFiscale(id){
   if (!cfInput) return;
   if (cfInput.value.trim()){
     if (noteEl) noteEl.textContent = '';
+    return;
+  }
+  var guest = state.guests.find(function(g){ return g.id === id; });
+  if (guest && guest.codiceFiscale && guest.codiceFiscale.trim()){
+    cfInput.value = guest.codiceFiscale.trim().toUpperCase();
+    if (noteEl) noteEl.textContent = 'Letto dal documento d\'identità.';
     return;
   }
   if (noteEl) noteEl.innerHTML = '<span style="color:var(--muted);">calcolo dai dati anagrafici…</span>';
