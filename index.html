@@ -1066,6 +1066,7 @@ async function loadState(){
   try {
     var g = await remoteStorage.get('as-guests');
     if (g && g.value) state.guests = JSON.parse(g.value);
+    ultimaVersioneGuestsNota = (g && g.value) || JSON.stringify(state.guests);
   } catch(e){}
   try {
     var t = await remoteStorage.get('as-tables');
@@ -1140,8 +1141,22 @@ function giorniIstatMancanti(){
   }
   return out;
 }
+var ultimaVersioneGuestsNota = null; // ultimo contenuto di as-guests visto da questo dispositivo, per accorgersi di modifiche fatte altrove
+
 async function saveGuests(){
-  try { await remoteStorage.set('as-guests', JSON.stringify(state.guests)); } catch(e){}
+  try {
+    if (ultimaVersioneGuestsNota !== null){
+      var attuale = await remoteStorage.get('as-guests');
+      var valoreAttuale = (attuale && attuale.value) || '';
+      if (valoreAttuale && valoreAttuale !== ultimaVersioneGuestsNota){
+        var continua = confirm('⚠️ I dati ospiti sono stati modificati da un altro dispositivo/scheda mentre lavoravi qui. Se continui, quelle modifiche andranno perse e verranno sostituite con quello che vedi tu adesso.\n\nPremi "Annulla" e ricarica la pagina per riprendere quelle modifiche, oppure "OK" per salvare comunque quello che hai fatto qui.');
+        if (!continua) return;
+      }
+    }
+    var daSalvare = JSON.stringify(state.guests);
+    await remoteStorage.set('as-guests', daSalvare);
+    ultimaVersioneGuestsNota = daSalvare;
+  } catch(e){}
 }
 async function saveTables(){
   try { await remoteStorage.set('as-tables', JSON.stringify(state.tables)); } catch(e){}
