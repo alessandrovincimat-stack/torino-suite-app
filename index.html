@@ -1213,7 +1213,21 @@ async function archiveDocument(file, guest){
       permanenza: (head && head.permanenza) || guest.permanenza || '',
       cognomeOspite: guest.cognome || '',
       nomeOspite: guest.nome || '',
-      guestId: guest.id
+      guestId: guest.id,
+      // Snapshot completo dei dati anagrafici di questo ospite (non solo nome), così restano
+      // recuperabili tramite "Ospite già registrato? Cerca per cognome" anche se la scheda
+      // viene poi rimossa senza mai arrivare all'invio a Questura/ISTAT.
+      datiAnagrafici: {
+        cognome: guest.cognome || '', nome: guest.nome || '', sesso: guest.sesso || '',
+        dataNascita: guest.dataNascita || '', nascitaEstero: !!guest.nascitaEstero,
+        comuneNascitaNome: guest.comuneNascitaNome || '', statoNascitaNome: guest.statoNascitaNome || '',
+        cittadinanzaNome: guest.cittadinanzaNome || '', tipoDocumentoNome: guest.tipoDocumentoNome || '',
+        numeroDocumento: guest.numeroDocumento || '', dataScadenzaDocumento: guest.dataScadenzaDocumento || '',
+        rilascioEstero: !!guest.rilascioEstero, luogoRilascioNome: guest.luogoRilascioNome || '',
+        residenzaEstero: !!guest.residenzaEstero, comuneResidenzaNome: guest.comuneResidenzaNome || '',
+        statoResidenzaNome: guest.statoResidenzaNome || '', indirizzoResidenza: guest.indirizzoResidenza || '',
+        codiceFiscale: guest.codiceFiscale || ''
+      }
     };
     await remoteStorage.set(entry.fotoKey, b64);
     state.archivio.push(entry);
@@ -2154,6 +2168,15 @@ function cercaOspitiArchivio(query){
       }
     });
   });
+  state.archivio.forEach(function(doc){
+    var o = doc.datiAnagrafici;
+    if (!o || !o.cognome) return;
+    if (normalizzaNome(o.cognome).indexOf(q) !== 0) return;
+    var chiave = normalizzaNome(o.cognome) + '|' + normalizzaNome(o.nome) + '|' + (o.dataNascita || '');
+    if (!visti[chiave] || (doc.dataCaricamento || '') > (visti[chiave].dataInvio || '')){
+      visti[chiave] = { ospite: o, dataInvio: doc.dataCaricamento };
+    }
+  });
   var trovati = Object.keys(visti).map(function(k){ return visti[k]; });
   trovati.sort(function(a, b){ return String(b.dataInvio||'').localeCompare(String(a.dataInvio||'')); });
   return trovati.slice(0, 8).map(function(x){ return x.ospite; });
@@ -2179,6 +2202,7 @@ function applicaDatiArchivioOspite(id, o){
   if (o.comuneResidenzaNome) g.comuneResidenzaNome = o.comuneResidenzaNome;
   if (o.statoResidenzaNome) g.statoResidenzaNome = o.statoResidenzaNome;
   if (o.indirizzoResidenza) g.indirizzoResidenza = o.indirizzoResidenza;
+  if (o.codiceFiscale) g.codiceFiscale = o.codiceFiscale;
   saveGuests(); render();
 }
 
