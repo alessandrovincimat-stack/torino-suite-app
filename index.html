@@ -2146,13 +2146,15 @@ function renderOspiti(){
 
   html += '<div class="as-card"><button class="as-btn ghost" id="as-add-manual" style="width:100%;">+ Aggiungi ospite</button></div>';
 
-  var oggiFinestraISO = todayISO();
+  var inizioFinestraD = new Date(); inizioFinestraD.setDate(inizioFinestraD.getDate() - 2);
+  var oggiFinestraISO = inizioFinestraD.toISOString().slice(0,10);
   var fineFinestraD = new Date(); fineFinestraD.setDate(fineFinestraD.getDate() + 7);
   var fineFinestraISO = fineFinestraD.toISOString().slice(0,10);
   var guestsSenzaPrenotazione = state.guests.filter(function(g){
     if (!state.backend.url || !g.smoobuBookingId) return true;
-    // Se ha una prenotazione Smoobu ma l'arrivo è fuori dalla finestra dei prossimi 7 giorni
-    // mostrata sopra, la mostro comunque qui: altrimenti la scheda resterebbe irraggiungibile.
+    // Se ha una prenotazione Smoobu ma l'arrivo è fuori dalla finestra mostrata sopra
+    // (da 2 giorni fa a 7 giorni avanti), la mostro comunque qui: altrimenti la scheda
+    // resterebbe irraggiungibile.
     return !(g.dataArrivo >= oggiFinestraISO && g.dataArrivo <= fineFinestraISO);
   });
   guestsSenzaPrenotazione = guestsSenzaPrenotazione.slice().sort(function(a, b){
@@ -2292,7 +2294,7 @@ function renderSmoobuBox(box, bookings){
     var appMatch = state.tables.appartamenti.find(function(a){ return a.smoobuId && b.apartment && String(a.smoobuId) === String(b.apartment.id); });
     return { b: b, nomeCompleto: nomeCompleto, collegate: collegate, invioCollegato: invioCollegato, appMatch: appMatch };
   });
-  box.innerHTML = '<p class="as-title" style="font-size:15px;">Prossimi arrivi e schedine (7 giorni)</p>' +
+  box.innerHTML = '<p class="as-title" style="font-size:15px;">Arrivi e schedine (ultimi 2 giorni + prossimi 7)</p>' +
     righe.map(function(r){
       var b = r.b;
       var stato;
@@ -2367,8 +2369,9 @@ async function caricaArriviSmoobu(forceRefresh){
   }
   try {
     var oggi = new Date();
+    var da2GiorniFa = new Date(); da2GiorniFa.setDate(da2GiorniFa.getDate() - 2);
     var tra7 = new Date(); tra7.setDate(tra7.getDate() + 7);
-    var from = oggi.toISOString().slice(0,10);
+    var from = da2GiorniFa.toISOString().slice(0,10);
     var to = tra7.toISOString().slice(0,10);
     var controller = new AbortController();
     var timeoutId = setTimeout(function(){ controller.abort(); }, 15000);
