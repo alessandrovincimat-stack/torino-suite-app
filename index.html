@@ -1141,21 +1141,39 @@ function giorniIstatMancanti(){
   }
   return out;
 }
-var ultimaVersioneGuestsNota = null; // ultimo contenuto di as-guests visto da questo dispositivo, per accorgersi di modifiche fatte altrove
+var ultimaVersioneGuestsNota = null; // ultimo contenuto di as-guests visto da questo dispositivo (solo per diagnostica)
+var guestsRimossiInQuestaSessione = []; // id espressamente rimossi/archiviati da qui, da non far "resuscitare" dalla fusione
 
 async function saveGuests(){
   try {
-    if (ultimaVersioneGuestsNota !== null){
-      var attuale = await remoteStorage.get('as-guests');
-      var valoreAttuale = (attuale && attuale.value) || '';
-      if (valoreAttuale && valoreAttuale !== ultimaVersioneGuestsNota){
-        var continua = confirm('⚠️ I dati ospiti sono stati modificati da un altro dispositivo/scheda mentre lavoravi qui. Se continui, quelle modifiche andranno perse e verranno sostituite con quello che vedi tu adesso.\n\nPremi "Annulla" e ricarica la pagina per riprendere quelle modifiche, oppure "OK" per salvare comunque quello che hai fatto qui.');
-        if (!continua) return;
-      }
-    }
+    var attuale = await remoteStorage.get('as-guests');
+    var remotiGrezzi = [];
+    try { if (attuale && attuale.value) remotiGrezzi = JSON.parse(attuale.value) || []; } catch(eParse){}
+
+    // Fusione, non sovrascrittura: parto dall'ultima versione presente sul server (che potrebbe
+    // già includere ospiti aggiunti da un altro dispositivo dopo che questo ha caricato la
+    // pagina), applico sopra i miei ospiti locali (le mie aggiunte/modifiche), e tolgo solo
+    // quelli che ho esplicitamente rimosso/archiviato io in questa sessione. Così due
+    // dispositivi che lavorano su OSPITI DIVERSI non si cancellano più a vicenda — solo se
+    // lo STESSO ospite viene modificato nello stesso momento da entrambi vince l'ultimo salvataggio.
+    var mappa = {};
+    remotiGrezzi.forEach(function(g){ if (g && g.id) mappa[g.id] = g; });
+    state.guests.forEach(function(g){ mappa[g.id] = g; });
+    guestsRimossiInQuestaSessione.forEach(function(id){ delete mappa[id]; });
+
+    var ordinePreferito = state.guests.map(function(g){ return g.id; });
+    var fuso = Object.keys(mappa).map(function(k){ return mappa[k]; });
+    fuso.sort(function(a, b){
+      var ia = ordinePreferito.indexOf(a.id); if (ia === -1) ia = 9999;
+      var ib = ordinePreferito.indexOf(b.id); if (ib === -1) ib = 9999;
+      return ia - ib;
+    });
+
+    state.guests = fuso;
     var daSalvare = JSON.stringify(state.guests);
     await remoteStorage.set('as-guests', daSalvare);
     ultimaVersioneGuestsNota = daSalvare;
+    guestsRimossiInQuestaSessione = [];
   } catch(e){}
 }
 async function saveTables(){
@@ -1625,6 +1643,7 @@ function attachGuestHandlers(root){
   root.querySelectorAll('[data-remove]').forEach(function(btn){
     btn.onclick = function(){
       var id = btn.getAttribute('data-remove');
+      guestsRimossiInQuestaSessione.push(id);
       state.guests = state.guests.filter(function(g){ return g.id !== id; });
       saveGuests(); render();
     };
@@ -3701,6 +3720,7 @@ async function archiveInvio(ordered, idAppartamento, nRighe, arrivoIstatOk, part
   };
   state.invii.push(entry);
   var sentIds = ordered.map(function(g){ return g.id; });
+  guestsRimossiInQuestaSessione = guestsRimossiInQuestaSessione.concat(sentIds);
   state.guests = state.guests.filter(function(g){ return sentIds.indexOf(g.id) === -1; });
   try { await remoteStorage.set('as-invii', JSON.stringify(state.invii)); } catch(e){}
   await saveGuests();
@@ -4832,6 +4852,7 @@ async function renderArchivioRecuperoSchede(el){
           .filter(function(c){ return c && c.dove === 'duplicato'; })
           .map(function(c){ return c.id; });
         if (!confirm('Rimuovere ' + idsDaRimuovere.length + ' scheda/e attiva/e duplicata/e in Ospiti? Resta intatto tutto ciò che è già in Archivio.')) return;
+        guestsRimossiInQuestaSessione = guestsRimossiInQuestaSessione.concat(idsDaRimuovere);
         state.guests = state.guests.filter(function(g){ return idsDaRimuovere.indexOf(g.id) === -1; });
         await saveGuests();
         out.textContent = idsDaRimuovere.length + ' doppione/i rimosso/i.';
