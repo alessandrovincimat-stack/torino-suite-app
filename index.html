@@ -3618,7 +3618,8 @@ function buildIstatArrivo(g, allOrdered){
   var cittadinanza = findByName(state.tables.stati, g.cittadinanzaNome);
   var comuneRes = g.residenzaEstero ? null : findByName(state.tables.comuni, g.comuneResidenzaNome);
   var statoRes = g.residenzaEstero ? findByName(state.tables.stati, g.statoResidenzaNome) : italiaEntry();
-  var head = (g.ruolo==='familiare'||g.ruolo==='membro') ? allOrdered.find(function(x){ return x.id===g.groupOf; }) : null;
+  var isDependent = g.ruolo === 'familiare' || g.ruolo === 'membro';
+  var head = isDependent ? allOrdered.find(function(x){ return x.id===g.groupOf; }) : null;
   return {
     idswh: g.id,
     tipoalloggiato: ruoloCode[g.ruolo] || '16',
@@ -3631,7 +3632,10 @@ function buildIstatArrivo(g, allOrdered){
     statonascita: statoNascita ? statoNascita.codice : '',
     comunenascita: comune ? comune.codice : '',
     tipoturismo: g.tipoTurismo || 'Non specificato',
-    mezzotrasporto: g.mezzoTrasporto || 'Non specificato'
+    mezzotrasporto: g.mezzoTrasporto || 'Non specificato',
+    // Camere occupate: il capo (o l'ospite singolo) conta per l'intero appartamento/camera;
+    // i membri del gruppo/famiglia sono già conteggiati tramite il capo, quindi 0.
+    camereoccupate: isDependent ? 0 : 1
   };
 }
 
