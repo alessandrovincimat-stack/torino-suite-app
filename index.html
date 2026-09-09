@@ -3632,10 +3632,10 @@ function buildIstatArrivo(g, allOrdered){
     statonascita: statoNascita ? statoNascita.codice : '',
     comunenascita: comune ? comune.codice : '',
     tipoturismo: g.tipoTurismo || 'Non specificato',
-    mezzotrasporto: g.mezzoTrasporto || 'Non specificato',
-    // Camere occupate: il capo (o l'ospite singolo) conta per l'intero appartamento/camera;
-    // i membri del gruppo/famiglia sono già conteggiati tramite il capo, quindi 0.
-    camereoccupate: isDependent ? 0 : 1
+    mezzotrasporto: g.mezzoTrasporto || 'Non specificato'
+    // Nota: "camereoccupate" NON è un campo valido per l'elemento <arrivo> del web service
+    // (confermato da un errore HTTP 500 "unexpected element" del server): quel campo, sul
+    // portale manuale, riguarda la struttura nel suo complesso, non il singolo arrivo via API.
   };
 }
 
