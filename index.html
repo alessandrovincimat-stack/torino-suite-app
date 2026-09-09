@@ -18,58 +18,62 @@
 
   .ts-switcher { position: sticky; top: 0; z-index: 40; display: none; gap: 4px; padding: calc(8px + env(safe-area-inset-top)) 6px 8px; background: #18150f; backdrop-filter: blur(6px); border-bottom: 2px solid var(--brass); box-shadow: 0 2px 12px rgba(0,0,0,0.5); }
   .ts-switcher.ts-visible { display: flex; }
-  .ts-switch-btn { flex: 1; min-width: 0; background: var(--surface-2); border: 1px solid #433c2e; color: var(--text); padding: 8px 3px; border-radius: 7px; font-size: 12.5px; font-weight: 600; letter-spacing: 0; cursor: pointer; text-align: center; line-height: 1.2; }
-  .ts-switch-btn.ts-active { border-color: var(--brass); color: var(--brass); background: #2c2517; box-shadow: 0 0 0 1px var(--brass) inset; }
+  .ts-switch-btn { flex: 1; min-width: 0; background: var(--surface-2); border: 1px solid #4a4335; color: var(--text); padding: 11px 4px; border-radius: 8px; font-size: 14px; font-weight: 600; letter-spacing: 0; cursor: pointer; text-align: center; line-height: 1.25; min-height: 48px; }
+  .ts-switch-btn.ts-active { border-color: var(--brass); color: var(--brass); background: #33291a; box-shadow: 0 0 0 1.5px var(--brass) inset; }
   #porte-section { display: block; }
   #questura-section { display: none; min-height: 100vh; background: var(--bg); }
 
   #app * { box-sizing: border-box; }
-  #app { background:var(--bg); }
-  .as-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:18px; margin-bottom:16px; }
-  .as-title { font-size:20px; font-weight:600; color:var(--brass); letter-spacing:.3px; margin:0 0 4px; }
-  .as-sub { font-size:13px; color:var(--text-muted); margin:0 0 16px; }
+  #app { background:var(--bg); font-size:16px; }
+  .as-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:16px; }
+  .as-title { font-size:21px; font-weight:600; color:var(--brass); letter-spacing:.3px; margin:0 0 4px; }
+  .as-sub { font-size:14.5px; color:var(--text-muted); margin:0 0 16px; line-height:1.45; }
   .as-tabs { display:flex; gap:6px; margin-bottom:18px; flex-wrap:wrap; }
-  .as-tab { background:var(--surface); border:1px solid var(--border); color:var(--text-muted); padding:9px 14px; border-radius:8px; font-size:13px; cursor:pointer; }
-  .as-tab.active { background:var(--surface-2); border-color:var(--brass); color:var(--brass); }
-  .as-field { margin-bottom:10px; }
-  .as-field label { display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px; }
+  .as-tab { background:var(--surface); border:1px solid var(--border); color:var(--text-muted); padding:11px 15px; border-radius:9px; font-size:14.5px; cursor:pointer; min-height:44px; display:flex; align-items:center; }
+  .as-tab.active { background:var(--surface-2); border-color:var(--brass); color:var(--brass); font-weight:600; }
+  .as-field { margin-bottom:12px; }
+  .as-field label { display:block; font-size:13.5px; color:var(--text-muted); margin-bottom:5px; }
   .as-field input, .as-field select, .as-field textarea {
     width:100%; background:var(--surface-2); border:1px solid var(--border); color:var(--text);
-    border-radius:6px; padding:8px 10px; font-size:14px;
+    border-radius:8px; padding:12px 12px; font-size:16px; min-height:46px;
   }
-  .as-field input:focus, .as-field select:focus, .as-field textarea:focus { outline:1px solid var(--brass); }
+  .as-field input:focus, .as-field select:focus, .as-field textarea:focus { outline:2px solid var(--brass); }
   .as-row { display:flex; gap:10px; flex-wrap:wrap; }
   .as-row > div { flex:1; min-width:140px; }
-  .as-btn { background:var(--brass); color:var(--surface); border:none; border-radius:6px; padding:9px 16px; font-size:13px; font-weight:600; cursor:pointer; }
-  .as-btn.secondary { background:transparent; border:1px solid var(--brass); color:var(--brass); }
+  .as-btn { background:var(--brass); color:#1a1408; border:none; border-radius:8px; padding:12px 18px; font-size:15px; font-weight:600; cursor:pointer; min-height:46px; }
+  .as-btn.secondary { background:transparent; border:1.5px solid var(--brass); color:var(--brass); }
   .as-btn.ghost { background:transparent; border:1px solid var(--border); color:var(--text-muted); }
   .as-btn:disabled { opacity:.4; cursor:default; }
-  .as-guest { border:1px solid var(--border); border-radius:8px; padding:14px; margin-bottom:12px; background:var(--surface); }
-  .as-guest-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
-  .as-guest-head .as-name { font-size:15px; font-weight:600; color:var(--text); }
-  .as-guest-head .as-role { font-size:11px; color:var(--brass); border:1px solid var(--brass); border-radius:20px; padding:2px 9px; margin-left:8px; }
-  .as-warn { font-size:12px; color:#e0a04a; margin-top:4px; }
-  .as-err { font-size:12px; color:var(--danger); margin-top:4px; }
-  .as-ok { font-size:12px; color:var(--ok); }
-  .as-info { font-size:12px; color:var(--info); }
+  .as-guest { border:1px solid var(--border); border-radius:10px; padding:15px; margin-bottom:14px; background:var(--surface); }
+  .as-guest-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:8px; flex-wrap:wrap; }
+  .as-guest-head .as-name { font-size:17px; font-weight:600; color:var(--text); }
+  .as-guest-head .as-role { font-size:14px; color:var(--brass); border:1px solid var(--brass); border-radius:20px; padding:3px 10px; margin-left:8px; white-space:nowrap; }
+  .as-warn { font-size:14px; color:#f0b96a; margin-top:4px; }
+  .as-err { font-size:14px; color:var(--danger); margin-top:4px; }
+  .as-ok { font-size:14px; color:var(--ok); }
+  .as-info { font-size:14px; color:var(--info); }
   .as-links { display:flex; gap:10px; flex-wrap:wrap; }
-  .as-link-card { flex:1; min-width:200px; border:1px solid var(--border); border-radius:8px; padding:14px; text-decoration:none; color:var(--text); display:block; }
+  .as-link-card { flex:1; min-width:200px; border:1px solid var(--border); border-radius:10px; padding:15px; text-decoration:none; color:var(--text); display:block; }
   .as-link-card:hover { border-color:var(--brass); }
-  .as-link-card .n { font-weight:600; color:var(--brass); margin-bottom:4px; }
-  .as-link-card .d { font-size:12px; color:var(--text-muted); }
-  #as-file-preview { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:10px; font-family:monospace; font-size:11px; color:#8fcf8f; white-space:pre; overflow-x:auto; max-height:260px; overflow-y:auto; }
+  .as-link-card .n { font-weight:600; color:var(--brass); margin-bottom:4px; font-size:16px; }
+  .as-link-card .d { font-size:13.5px; color:var(--text-muted); }
+  #as-file-preview { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px; font-family:monospace; font-size:13px; color:#a5dda5; white-space:pre; overflow-x:auto; max-height:260px; overflow-y:auto; }
   .as-hidden { display:none; }
-  .as-remove { background:transparent; border:none; color:var(--danger); cursor:pointer; font-size:12px; }
-  .as-photobox { border:1.5px dashed var(--border); border-radius:8px; padding:20px; text-align:center; cursor:pointer; color:var(--text-muted); font-size:13px; }
+  .as-remove { background:transparent; border:none; color:var(--danger); cursor:pointer; font-size:14px; padding:8px 4px; min-height:40px; }
+  .as-photobox { border:1.5px dashed var(--border); border-radius:10px; padding:20px; text-align:center; cursor:pointer; color:var(--text-muted); font-size:14.5px; }
   .as-photobox:hover { border-color:var(--brass); }
   .as-doc-grid { display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; }
-  .as-doc { width:96px; border:1px solid var(--border); border-radius:6px; padding:6px; text-align:center; background:var(--surface); }
-  .as-doc img { width:100%; height:64px; object-fit:cover; border-radius:4px; display:block; margin-bottom:4px; cursor:pointer; }
-  .as-doc .n { font-size:10px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .as-group-head { font-size:14px; font-weight:600; color:var(--brass); margin:18px 0 4px; }
-  .as-group-period { font-size:12px; color:var(--text-muted); margin-bottom:6px; }
-  .as-spin { display:inline-block; width:12px; height:12px; border:2px solid var(--border); border-top-color:var(--brass); border-radius:50%; animation:asspin .7s linear infinite; margin-right:6px; vertical-align:-2px; }
+  .as-doc { width:108px; border:1px solid var(--border); border-radius:8px; padding:7px; text-align:center; background:var(--surface); }
+  .as-doc img { width:100%; height:70px; object-fit:cover; border-radius:5px; display:block; margin-bottom:5px; cursor:pointer; }
+  .as-doc .n { font-size:14px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .as-group-head { font-size:15.5px; font-weight:600; color:var(--brass); margin:18px 0 4px; }
+  .as-group-period { font-size:13.5px; color:var(--text-muted); margin-bottom:6px; }
+  .as-spin { display:inline-block; width:13px; height:13px; border:2px solid var(--border); border-top-color:var(--brass); border-radius:50%; animation:asspin .7s linear infinite; margin-right:6px; vertical-align:-2px; }
   @keyframes asspin { to { transform:rotate(360deg); } }
+  .as-booking { border-bottom:1px solid var(--border); padding:14px 0; font-size:15px; line-height:1.5; }
+  .as-booking:last-child { border-bottom:none; }
+  #app a { min-height:40px; display:inline-block; }
+  #app details summary { min-height:44px; display:flex; align-items:center; font-size:14.5px; }
 
 </style>
 </head>
@@ -118,7 +122,7 @@
   .as-tab { background:var(--surface); border:1px solid var(--border); color:var(--text-muted); padding:9px 14px; border-radius:8px; font-size:13px; cursor:pointer; }
   .as-tab.active { background:var(--surface-2); border-color:var(--brass); color:var(--brass); }
   .as-field { margin-bottom:10px; }
-  .as-field label { display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px; }
+  .as-field label { display:block; font-size:14px; color:var(--text-muted); margin-bottom:4px; }
   .as-field input, .as-field select, .as-field textarea {
     width:100%; background:var(--surface-2); border:1px solid var(--border); color:var(--text);
     border-radius:6px; padding:8px 10px; font-size:14px;
@@ -133,27 +137,27 @@
   .as-guest { border:1px solid var(--border); border-radius:8px; padding:14px; margin-bottom:12px; background:var(--surface); }
   .as-guest-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
   .as-guest-head .as-name { font-size:15px; font-weight:600; color:var(--text); }
-  .as-guest-head .as-role { font-size:11px; color:var(--brass); border:1px solid var(--brass); border-radius:20px; padding:2px 9px; margin-left:8px; }
-  .as-warn { font-size:12px; color:#e0a04a; margin-top:4px; }
-  .as-err { font-size:12px; color:var(--danger); margin-top:4px; }
-  .as-ok { font-size:12px; color:var(--ok); }
-  .as-info { font-size:12px; color:var(--info); }
+  .as-guest-head .as-role { font-size:13.5px; color:var(--brass); border:1px solid var(--brass); border-radius:20px; padding:2px 9px; margin-left:8px; }
+  .as-warn { font-size:14px; color:#e0a04a; margin-top:4px; }
+  .as-err { font-size:14px; color:var(--danger); margin-top:4px; }
+  .as-ok { font-size:14px; color:var(--ok); }
+  .as-info { font-size:14px; color:var(--info); }
   .as-links { display:flex; gap:10px; flex-wrap:wrap; }
   .as-link-card { flex:1; min-width:200px; border:1px solid var(--border); border-radius:8px; padding:14px; text-decoration:none; color:var(--text); display:block; }
   .as-link-card:hover { border-color:var(--brass); }
   .as-link-card .n { font-weight:600; color:var(--brass); margin-bottom:4px; }
-  .as-link-card .d { font-size:12px; color:var(--text-muted); }
-  #as-file-preview { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:10px; font-family:monospace; font-size:11px; color:#8fcf8f; white-space:pre; overflow-x:auto; max-height:260px; overflow-y:auto; }
+  .as-link-card .d { font-size:14px; color:var(--text-muted); }
+  #as-file-preview { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:10px; font-family:monospace; font-size:13.5px; color:#8fcf8f; white-space:pre; overflow-x:auto; max-height:260px; overflow-y:auto; }
   .as-hidden { display:none; }
-  .as-remove { background:transparent; border:none; color:var(--danger); cursor:pointer; font-size:12px; }
+  .as-remove { background:transparent; border:none; color:var(--danger); cursor:pointer; font-size:14px; }
   .as-photobox { border:1.5px dashed var(--border); border-radius:8px; padding:20px; text-align:center; cursor:pointer; color:var(--text-muted); font-size:13px; }
   .as-photobox:hover { border-color:var(--brass); }
   .as-doc-grid { display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; }
   .as-doc { width:96px; border:1px solid var(--border); border-radius:6px; padding:6px; text-align:center; background:var(--surface); }
   .as-doc img { width:100%; height:64px; object-fit:cover; border-radius:4px; display:block; margin-bottom:4px; cursor:pointer; }
-  .as-doc .n { font-size:10px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .as-doc .n { font-size:13.5px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .as-group-head { font-size:14px; font-weight:600; color:var(--brass); margin:18px 0 4px; }
-  .as-group-period { font-size:12px; color:var(--text-muted); margin-bottom:6px; }
+  .as-group-period { font-size:14px; color:var(--text-muted); margin-bottom:6px; }
   .as-booking { border:1.5px solid var(--border); border-radius:10px; padding:14px; margin-bottom:14px; background:var(--surface); }
   .as-booking summary { list-style:none; }
   .as-booking summary::-webkit-details-marker { display:none; }
@@ -290,15 +294,15 @@ ${Wp}
   --bg: #0a0a0a;
   --surface: #141210;
   --surface-2: #1c1915;
-  --border: #2a2620;
-  --brass: #c9a24a;
+  --border: #3a352c;
+  --brass: #d9b45e;
   --brass-dim: #8a713a;
   --steel: #a8956a;
-  --text: #f2ede3;
-  --text-muted: #9c9686;
-  --danger: #b25a45;
-  --ok: #8aae6f;
-  --info: #6fa8c9;
+  --text: #f5f1e8;
+  --text-muted: #b8b2a1;
+  --danger: #e07a60;
+  --ok: #a3c983;
+  --info: #86bfe0;
 }
 
 .app-root {
@@ -1514,7 +1518,7 @@ function buildFatturaFormHtml(id, nomeCompleto, descrizioneDefault){
     '<div class="as-field"><label>Provincia (sigla)</label><input data-fattura-provincia="'+id+'" maxlength="2" style="text-transform:uppercase;"></div>' +
     '</div>';
   html += '<div class="as-sub" data-fattura-capnote="'+id+'" style="margin:-4px 0 8px;"></div>';
-  html += '<details style="margin:8px 0;"><summary style="cursor:pointer;color:var(--text-muted);font-size:12px;">Altri dati (facoltativi): codice destinatario SDI, email, telefono</summary>' +
+  html += '<details style="margin:8px 0;"><summary style="cursor:pointer;color:var(--text-muted);font-size:14px;">Altri dati (facoltativi): codice destinatario SDI, email, telefono</summary>' +
     '<div class="as-field" style="margin-top:8px;"><label>Codice destinatario (SDI) — "0000000" se il cliente non ne ha uno proprio</label><input data-fattura-sdi="'+id+'" value="0000000" maxlength="7" style="text-transform:uppercase;"></div>' +
     '<div class="as-row">' +
       '<div class="as-field"><label>Email (facoltativa)</label><input type="email" data-fattura-email="'+id+'"></div>' +
@@ -1540,8 +1544,8 @@ function buildGuestCardHtml(g, extraPrimaDiGenera){
   var faseBadge = '';
   if (!isDependent && !g.ocrPending){
     faseBadge = g.istatArrivoOk
-      ? ' <span class="as-info" style="font-size:11.5px;padding:2px 7px;border-radius:10px;">📨 ISTAT fatto, manca Questura</span>'
-      : ' <span class="as-warn" style="font-size:11.5px;padding:2px 7px;border-radius:10px;">🆕 Da avviare</span>';
+      ? ' <span class="as-info" style="font-size:14px;padding:2px 7px;border-radius:10px;">📨 ISTAT fatto, manca Questura</span>'
+      : ' <span class="as-warn" style="font-size:14px;padding:2px 7px;border-radius:10px;">🆕 Da avviare</span>';
   }
   var capiOptions = getCapiOptions();
   var html = '';
@@ -1558,7 +1562,7 @@ function buildGuestCardHtml(g, extraPrimaDiGenera){
       '</div>';
     html += '<label for="doc-input-'+g.id+'" class="as-photobox" style="margin-bottom:6px;font-size:13px;padding:12px;display:block;">📷 Carica/sostituisci foto documento (anche fronte e retro insieme)</label>' +
             '<input type="file" accept="image/*,application/pdf" multiple id="doc-input-'+g.id+'" data-doc-input="'+g.id+'" style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;">';
-    html += '<button type="button" class="as-btn ghost" data-doc-incolla="'+g.id+'" style="margin-bottom:12px;font-size:12.5px;width:100%;">📋 Incolla foto copiata (da WhatsApp/email, senza salvarla prima)</button>';
+    html += '<button type="button" class="as-btn ghost" data-doc-incolla="'+g.id+'" style="margin-bottom:12px;font-size:14px;width:100%;">📋 Incolla foto copiata (da WhatsApp/email, senza salvarla prima)</button>';
   }
 
   html += '<div class="as-row">';
@@ -1611,7 +1615,7 @@ function buildGuestCardHtml(g, extraPrimaDiGenera){
     html += '</div>';
   }
 
-  html += '<details style="margin-top:10px;" data-istat-details="'+g.id+'"'+(smoobuDetailsAperti['istat-'+g.id]?' open':'')+'><summary style="cursor:pointer;color:var(--text-muted);font-size:12px;">Dati ISTAT (Piemonte Dati Turismo) — facoltativi</summary>';
+  html += '<details style="margin-top:10px;" data-istat-details="'+g.id+'"'+(smoobuDetailsAperti['istat-'+g.id]?' open':'')+'><summary style="cursor:pointer;color:var(--text-muted);font-size:14px;">Dati ISTAT (Piemonte Dati Turismo) — facoltativi</summary>';
   html += '<div class="as-row" style="margin-top:8px;">';
   html += '<div class="as-field"><label>Residente all\'estero?</label><select data-f="residenzaEstero" data-id="'+g.id+'"><option value="false" '+(!g.residenzaEstero?'selected':'')+'>No, in Italia</option><option value="true" '+(g.residenzaEstero?'selected':'')+'>Sì</option></select></div>';
   if (g.residenzaEstero){
@@ -1864,7 +1868,7 @@ function attachGuestHandlers(root){
           return;
         }
         dropdown.innerHTML = match.map(function(c){
-          return '<div data-client-opt="'+c.id+'" style="padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;">'+(c.name||'')+(c.vat_number?' <span style="color:var(--muted);font-size:12px;">('+c.vat_number+')</span>':'')+'</div>';
+          return '<div data-client-opt="'+c.id+'" style="padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;">'+(c.name||'')+(c.vat_number?' <span style="color:var(--muted);font-size:14px;">('+c.vat_number+')</span>':'')+'</div>';
         }).join('');
         dropdown.querySelectorAll('[data-client-opt]').forEach(function(opt){
           opt.onmousedown = function(e){ e.preventDefault(); };
@@ -2340,7 +2344,7 @@ function renderSmoobuBox(box, bookings){
           '</div></details>';
       } else {
         stato = '<button class="as-btn secondary" style="margin-top:6px;" data-crea-smoobu="'+encodeURIComponent(JSON.stringify(b))+'">Crea scheda</button> ' +
-          '<button class="as-btn ghost" data-schedina-escludi="'+b.id+'" style="margin-top:6px;font-size:12px;">✕ Rimuovi dalla lista (non serve la schedina)</button>';
+          '<button class="as-btn ghost" data-schedina-escludi="'+b.id+'" style="margin-top:6px;font-size:14px;">✕ Rimuovi dalla lista (non serve la schedina)</button>';
       }
       return '<div class="as-booking">' +
         '<div>'+toItDate(b.arrival)+' → '+toItDate(b.departure)+' · prenotazione a nome '+(r.nomeCompleto||'sconosciuto')+'</div>' +
@@ -2349,12 +2353,12 @@ function renderSmoobuBox(box, bookings){
         '</div>';
     }).join('') +
     (bookingsEscluse.length ? (
-      '<button class="as-btn ghost" id="smoobu-toggle-escluse" style="margin:10px 0;font-size:12.5px;">'+(smoobuMostraEscluse?'Nascondi':'Mostra')+' le '+bookingsEscluse.length+' rimosse dalla lista</button>' +
+      '<button class="as-btn ghost" id="smoobu-toggle-escluse" style="margin:10px 0;font-size:14px;">'+(smoobuMostraEscluse?'Nascondi':'Mostra')+' le '+bookingsEscluse.length+' rimosse dalla lista</button>' +
       (smoobuMostraEscluse ? bookingsEscluse.map(function(b){
         return '<div class="as-booking" style="opacity:.7;">' +
           '<div>⚪ '+toItDate(b.arrival)+' → '+toItDate(b.departure)+' · prenotazione a nome '+(b['guest-name']||'sconosciuto')+'</div>' +
           '<div class="as-sub" style="margin:0;">'+(b.apartment?b.apartment.name:'')+'</div>' +
-          '<button class="as-btn ghost" data-schedina-includi="'+b.id+'" style="margin-top:6px;font-size:12px;">Rimetti nella lista</button>' +
+          '<button class="as-btn ghost" data-schedina-includi="'+b.id+'" style="margin-top:6px;font-size:14px;">Rimetti nella lista</button>' +
           '</div>';
       }).join('') : '')
     ) : '');
@@ -2852,7 +2856,7 @@ async function renderStoricoTariffe(containerId, settingKey, campi, caricaFn, in
         '</tr>';
     });
     html += '</table>';
-    html += '<details><summary style="cursor:pointer;color:var(--brass);font-size:12.5px;">▸ Aggiungi una nuova tariffa (valida da una data in poi)</summary>' +
+    html += '<details><summary style="cursor:pointer;color:var(--brass);font-size:14px;">▸ Aggiungi una nuova tariffa (valida da una data in poi)</summary>' +
       '<div style="margin-top:8px;">' +
       '<div class="as-field"><label>Valida dal</label><input type="date" id="'+containerId+'-nuova-data"></div>' +
       campi.map(function(c){ return '<div class="as-field"><label>'+c.etichetta+'</label><input id="'+containerId+'-nuova-'+c.chiave+'" placeholder="'+c.placeholder+'"></div>'; }).join('') +
@@ -3572,7 +3576,7 @@ function generaEInviaPanel(ordered, wrapEl){
         '<button class="as-btn secondary" data-role="test">Valida con la Questura (senza inviare)</button>' +
         '<button class="as-btn" data-role="send"' + (istatStato.arrivoOk ? '' : ' disabled') + '>Invia alla Questura</button>' +
       '</div>' +
-      '<button class="as-btn ghost" data-role="salta-istat" style="margin-top:8px;font-size:12px;">ISTAT già inviato tramite altro canale / lo farò dopo — sblocca comunque</button>' +
+      '<button class="as-btn ghost" data-role="salta-istat" style="margin-top:8px;font-size:14px;">ISTAT già inviato tramite altro canale / lo farò dopo — sblocca comunque</button>' +
       '<div class="as-send-result" style="margin-top:10px;"></div>';
     wrapEl.appendChild(sendBox);
 
@@ -4035,10 +4039,10 @@ function renderArchivioIstatOk(el){
         return '<div style="padding:4px 0;border-top:1px solid var(--border);">' +
           '<strong>'+escapeHtml((o.cognome+' '+o.nome).trim())+'</strong> ('+ruoloTesto+')<br>' +
           '<span class="as-sub" style="margin:0;">Data arrivo: '+(o.dataArrivo ? toItDate(o.dataArrivo) : '(non compilata)')+' · Permanenza: '+(o.permanenza||'—')+' notti</span><br>' +
-          '<details style="margin-top:4px;"><summary style="cursor:pointer;color:var(--brass);font-size:11.5px;">▸ Vedi tutti i dati salvati</summary>' +
+          '<details style="margin-top:4px;"><summary style="cursor:pointer;color:var(--brass);font-size:14px;">▸ Vedi tutti i dati salvati</summary>' +
           '<div style="margin-top:4px;padding-top:4px;border-top:1px dashed var(--border);">' + campiHtml + '</div>' +
           '</details>' +
-          '<button class="as-btn ghost" data-modifica-arrivo-archivio="'+escapeHtml(iv.id)+'|'+escapeHtml(o.id)+'" style="margin-top:4px;font-size:11.5px;padding:3px 8px;">✏️ Correggi data/permanenza</button>' +
+          '<button class="as-btn ghost" data-modifica-arrivo-archivio="'+escapeHtml(iv.id)+'|'+escapeHtml(o.id)+'" style="margin-top:4px;font-size:14px;padding:3px 8px;">✏️ Correggi data/permanenza</button>' +
           '</div>';
       }).join('');
       html += '<div data-search="'+escapeHtml(normalizzaNome(nomi))+'" style="border-bottom:1px solid var(--border);padding:8px 0;">' +
@@ -4046,7 +4050,7 @@ function renderArchivioIstatOk(el){
         '<div class="as-sub" style="margin:0;">' + nomi + '</div>' +
         (dateUniche.indexOf(dataISO)===-1 ? '<button class="as-btn ghost" data-ricevuta="'+dataISO+'" style="margin-top:6px;">Scarica ricevuta del '+g.toLocaleDateString('it-IT')+'</button>' : '') +
         '<span class="'+classeBadge+'" style="margin-left:8px;">'+testoBadge+'</span>' +
-        '<details style="margin-top:6px;"><summary style="cursor:pointer;color:var(--brass);font-size:12.5px;">▸ Vedi dettagli ospiti</summary>' + dettagliOspiti +
+        '<details style="margin-top:6px;"><summary style="cursor:pointer;color:var(--brass);font-size:14px;">▸ Vedi dettagli ospiti</summary>' + dettagliOspiti +
         (iv.manuale ? (
           '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);">' +
           '<button class="as-btn ghost" data-rimuovi-archiviazione="'+escapeHtml(iv.id)+'" style="color:var(--danger);">🗑️ Rimuovi questa archiviazione (torna in Elenco di controllo)</button>' +
@@ -4147,7 +4151,7 @@ function renderArchivioFattureEmesse(el){
       '<div><strong>' + escapeHtml(nomeMostrato) + '</strong>' + (e.appartamentoNome ? ' — ' + escapeHtml(e.appartamentoNome) : '') + '</div>' +
       '<div class="as-sub" style="margin:2px 0;">' + (e.dataArrivo ? toItDate(e.dataArrivo) : '') + (e.dataPartenza ? ' → ' + toItDate(e.dataPartenza) : '') + '</div>' +
       '<div class="as-sub" style="margin:0;">' + (e.importata ? '📥 Fattura importata (collegata, non creata da qui)' : 'Fattura') + (e.ficDocumentNumber ? ' n. ' + escapeHtml(e.ficDocumentNumber) : '') + (e.dataFatturazione && !e.importata ? ' del ' + toItDate(e.dataFatturazione.slice(0,10)) : '') + ' — inviata allo SDI</div>' +
-      (e.ficDocumentId ? '<button class="as-btn ghost" data-fatt-verifica="'+v.id+'" style="margin-top:4px;font-size:12px;">Ricontrolla</button>' : '') +
+      (e.ficDocumentId ? '<button class="as-btn ghost" data-fatt-verifica="'+v.id+'" style="margin-top:4px;font-size:14px;">Ricontrolla</button>' : '') +
       renderDettaglioFattura(e) +
       '</div>';
   });
@@ -4445,7 +4449,7 @@ function renderBackend(){
         if (!elenco.length){ out4.innerHTML = '<p class="as-sub">Nessuna fattura trovata.</p>'; return; }
         out4.innerHTML = '<div style="max-height:70vh;overflow-y:auto;">' + elenco.map(function(f, i){
           var c = f.cliente || {};
-          return '<div class="as-card" style="padding:10px;margin-bottom:6px;font-size:12.5px;">' +
+          return '<div class="as-card" style="padding:10px;margin-bottom:6px;font-size:14px;">' +
             '<p style="margin:0 0 4px;font-weight:600;">'+(i+1)+') n. '+escapeHtml(f.number||'—')+' del '+escapeHtml(f.date||'—')+'</p>' +
             '<p class="as-sub" style="margin:2px 0;">Cliente: '+escapeHtml(c.nome||'—')+(c.piva?' · P.IVA '+escapeHtml(c.piva):'')+(c.cf?' · CF '+escapeHtml(c.cf):'')+'</p>' +
             '<p class="as-sub" style="margin:2px 0;">Indirizzo: '+escapeHtml([c.indirizzo,c.cap,c.citta,c.provincia,c.paese].filter(Boolean).join(', ')||'—')+'</p>' +
@@ -4538,7 +4542,7 @@ async function renderTassaTab(){
     if (!dettaglio.length){
       html += '<p class="as-sub" style="margin-top:8px;">Nessuna riga da inserire in questo periodo.</p>';
     } else {
-      html += '<table style="width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px;">' +
+      html += '<table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:8px;">' +
         '<tr style="text-align:left;color:var(--muted);">' +
           '<th style="padding:4px 6px 4px 0;">Mese</th>' +
           '<th style="padding:4px 6px;">Alloggio</th>' +
@@ -4558,8 +4562,8 @@ async function renderTassaTab(){
           '<td style="padding:5px 0;">'+(r.tipologia==='minori'?'—':'€'+r.importo.toFixed(2).replace('.',','))+'</td>' +
         '</tr>';
         html += '<tr style="border-top:none;"><td colspan="6" style="padding:0 0 6px 0;">' +
-          '<details><summary style="cursor:pointer;color:var(--text-muted);font-size:11.5px;">▸ da quali prenotazioni viene questo totale (' + r.prenotazioni.length + ')</summary>' +
-          '<table style="width:100%;border-collapse:collapse;font-size:11.5px;margin:4px 0 4px 12px;">' +
+          '<details><summary style="cursor:pointer;color:var(--text-muted);font-size:14px;">▸ da quali prenotazioni viene questo totale (' + r.prenotazioni.length + ')</summary>' +
+          '<table style="width:100%;border-collapse:collapse;font-size:14px;margin:4px 0 4px 12px;">' +
           r.prenotazioni.map(function(p){
             var avvisoP = p.mancantiDati ? ' ⚠️' : '';
             return '<tr><td style="padding:2px 6px 2px 0;color:var(--text-muted);">'+toItDate(p.dataArrivo)+'</td>' +
@@ -4663,11 +4667,11 @@ async function renderTassaTab(){
       var htmlErr2 = '<div class="as-err">'+e.message+'</div>';
       if (e.screenshotBase64) htmlErr2 += '<img src="data:image/png;base64,'+e.screenshotBase64+'" style="max-width:100%;border:1px solid var(--border);border-radius:8px;margin-top:8px;">';
       if (e.diagnosticaUrl || e.diagnosticaTesto){
-        htmlErr2 += '<details style="margin-top:8px;" open><summary style="cursor:pointer;color:var(--text-muted);font-size:12px;">Diagnostica tecnica (copia e invia se il problema persiste)</summary>' +
+        htmlErr2 += '<details style="margin-top:8px;" open><summary style="cursor:pointer;color:var(--text-muted);font-size:14px;">Diagnostica tecnica (copia e invia se il problema persiste)</summary>' +
           '<div class="as-sub" style="margin-top:6px;user-select:text;">URL: '+escapeHtml(e.diagnosticaUrl||'')+'</div>' +
           (e.diagnosticaClick ? '<div class="as-sub" style="margin-top:6px;user-select:text;">Elemento cliccato per "Accedi all\'area personale" (match '+escapeHtml(e.diagnosticaClick.tipoMatch||'')+'): &lt;'+escapeHtml(e.diagnosticaClick.tag||'')+'&gt; classi="'+escapeHtml(e.diagnosticaClick.classi||'')+'" href="'+escapeHtml(e.diagnosticaClick.href||'')+'" haOnclick='+e.diagnosticaClick.haOnclick+'<br>HTML: '+escapeHtml(e.diagnosticaClick.outerHtmlBreve||'')+'</div>' : '') +
           (e.diagnosticaPresenza ? '<div class="as-sub" style="margin-top:6px;user-select:text;">Elementi trovati nella pagina (anche se non visibili) per: '+Object.keys(e.diagnosticaPresenza).map(function(k){ return k+'='+e.diagnosticaPresenza[k]; }).join(', ')+'</div>' : '') +
-          '<textarea readonly rows="6" style="width:100%;margin-top:6px;font-size:11px;" onclick="this.select()">'+escapeHtml(e.diagnosticaTesto||'')+'</textarea>' +
+          '<textarea readonly rows="6" style="width:100%;margin-top:6px;font-size:13.5px;" onclick="this.select()">'+escapeHtml(e.diagnosticaTesto||'')+'</textarea>' +
           '</details>';
       }
       outS.innerHTML = htmlErr2;
@@ -4772,7 +4776,7 @@ function renderListaRecupero(prenotazioni, oggiISO){
       html += '<button class="as-btn secondary" data-recupero-vai-ospiti="'+collegamento.id+'" style="margin-top:8px;">Vai alla scheda in Ospiti</button>';
     } else if (collegamento && collegamento.dove === 'esclusa'){
       html += '<p class="as-sub" style="margin:0;">Rimossa dalla lista in Questura e ISTAT (non serve la schedina).</p>';
-      html += '<button class="as-btn ghost" data-recupero-rimetti="'+b.id+'" style="margin-top:8px;font-size:12px;">Rimetti nella lista</button>';
+      html += '<button class="as-btn ghost" data-recupero-rimetti="'+b.id+'" style="margin-top:8px;font-size:14px;">Rimetti nella lista</button>';
     } else if (collegamento){
       var doveTesto = collegamento.dove === 'archivio' ? 'in Archivio' : 'in Ospiti';
       html += '<p class="as-sub" style="margin:0;">Scheda già presente (' + doveTesto + (collegamento.manuale ? ' — altri canali/verifica esterna' : '') + ').</p>';
@@ -4893,7 +4897,7 @@ async function renderArchivioRecuperoSchede(el){
         ? '<p style="margin:8px 0 0;color:var(--danger);">⚠️ <strong>'+oltreTerminiN+'</strong> in ritardo, oltre i termini per l\'invio Questura</p>'
         : '<p class="as-ok" style="margin:8px 0 0;">Nessun ritardo.</p>') +
       (doppioniN ? '<button class="as-btn secondary" id="recupero-pulisci-doppioni" style="margin-top:8px;">🧹 Rimuovi i '+doppioniN+' doppione/i (tiene solo l\'Archivio)</button><div id="recupero-pulisci-esito" class="as-sub" style="margin-top:6px;"></div>' : '') +
-      '<button class="as-btn ghost" id="recupero-mostra-dettaglio" style="margin-top:10px;font-size:12.5px;">'+((oltreTerminiN||doppioniN) ? 'Vedi il dettaglio' : 'Vedi il dettaglio comunque')+'</button>' +
+      '<button class="as-btn ghost" id="recupero-mostra-dettaglio" style="margin-top:10px;font-size:14px;">'+((oltreTerminiN||doppioniN) ? 'Vedi il dettaglio' : 'Vedi il dettaglio comunque')+'</button>' +
       '</div>';
 
     if (doppioniN){
@@ -5051,7 +5055,7 @@ async function renderArchivioPulizie(el){
               : (escapeHtml(v.appartamentoNome) + (v.nota ? ' — ' + escapeHtml(v.nota) : ''));
             return '<span style="display:inline-block;margin:3px 6px 0 0;padding:2px 8px;border:1px solid var(--border);border-radius:12px;">' +
               descrizione +
-              ' <em style="color:var(--brass);font-style:normal;font-size:11px;">' + etichetteTipo[v.tipo] + '</em>' +
+              ' <em style="color:var(--brass);font-style:normal;font-size:13.5px;">' + etichetteTipo[v.tipo] + '</em>' +
               ' <a href="#" data-pulizie-rimuovi-extra="'+v.extraId+'" style="color:var(--danger);text-decoration:none;">×</a></span>';
           }
           if (v.escluso){
@@ -5226,8 +5230,8 @@ function renderListaFatture(prenotazioni){
     htmlRiga += '<div class="as-sub" style="margin:2px 0 8px;">' + toItDate(b.arrival) + ' → ' + toItDate(b.departure) + ' · ' + nomeApp + '</div>';
     if (stato === 'pendente'){
       htmlRiga += '<button class="as-btn secondary" data-fatt-crea="'+b.id+'" data-fatt-booking="'+encodeURIComponent(JSON.stringify(b))+'">Crea fattura</button> ';
-      htmlRiga += '<button class="as-btn ghost" data-fatt-importa-apri="'+b.id+'" data-fatt-importa-booking="'+encodeURIComponent(JSON.stringify(b))+'" style="font-size:12px;">Ho già una fattura per questa (collegala)</button> ';
-      htmlRiga += '<button class="as-btn ghost" data-fatt-escludi="'+b.id+'" data-fatt-escludi-booking="'+encodeURIComponent(JSON.stringify(b))+'" style="font-size:12px;">✕ Rimuovi dalla lista (non va fatturata)</button>';
+      htmlRiga += '<button class="as-btn ghost" data-fatt-importa-apri="'+b.id+'" data-fatt-importa-booking="'+encodeURIComponent(JSON.stringify(b))+'" style="font-size:14px;">Ho già una fattura per questa (collegala)</button> ';
+      htmlRiga += '<button class="as-btn ghost" data-fatt-escludi="'+b.id+'" data-fatt-escludi-booking="'+encodeURIComponent(JSON.stringify(b))+'" style="font-size:14px;">✕ Rimuovi dalla lista (non va fatturata)</button>';
       htmlRiga += '<div data-fatt-form-wrap="'+b.id+'" style="margin-top:8px;"></div>';
       htmlRiga += '<div data-fatt-importa-wrap="'+b.id+'" style="margin-top:8px;"></div>';
     } else if (stato === 'emessa'){
@@ -5245,7 +5249,7 @@ function renderListaFatture(prenotazioni){
   }).join('');
 
   if (escluse.length){
-    html += '<button class="as-btn ghost" id="fatt-toggle-escluse" style="margin:10px 0;font-size:12.5px;">'+(mostraEscluseFatture?'Nascondi':'Mostra')+' le '+escluse.length+' rimosse dalla lista</button>';
+    html += '<button class="as-btn ghost" id="fatt-toggle-escluse" style="margin:10px 0;font-size:14px;">'+(mostraEscluseFatture?'Nascondi':'Mostra')+' le '+escluse.length+' rimosse dalla lista</button>';
     if (mostraEscluseFatture){
       html += escluse.map(function(b){
         var nomeApp = b.apartment ? b.apartment.name : '';
@@ -5265,7 +5269,7 @@ function renderDettaglioFattura(entry){
   if (!entry.dettagli) return '';
   var d = entry.dettagli;
   var c = d.cliente || {};
-  var html = '<details style="margin-top:6px;"><summary style="cursor:pointer;color:var(--brass);font-size:12.5px;">▸ Vedi dettagli fattura</summary>' +
+  var html = '<details style="margin-top:6px;"><summary style="cursor:pointer;color:var(--brass);font-size:14px;">▸ Vedi dettagli fattura</summary>' +
     '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);font-size:13px;">';
   if (d.date) html += '<div class="as-sub" style="margin:2px 0;">Data: ' + escapeHtml(d.date) + '</div>';
   if (c.nome) html += '<div class="as-sub" style="margin:2px 0;">Cliente: ' + escapeHtml(c.nome) + (c.piva ? ' (P.IVA ' + escapeHtml(c.piva) + ')' : (c.cf ? ' (CF ' + escapeHtml(c.cf) + ')' : '')) + '</div>';
@@ -5289,7 +5293,7 @@ function aggiornaBarraFattureUnite(){
     html += selezionate.map(function(b){
       return '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-top:1px solid var(--border);">' +
         '<span>'+(b['guest-name']||'sconosciuto')+' — '+toItDate(b.arrival)+' → '+toItDate(b.departure)+'</span>' +
-        '<button class="as-btn ghost" data-fatt-deseleziona="'+b.id+'" style="padding:2px 8px;font-size:12px;">✕</button>' +
+        '<button class="as-btn ghost" data-fatt-deseleziona="'+b.id+'" style="padding:2px 8px;font-size:14px;">✕</button>' +
         '</div>';
     }).join('');
     html += '<div style="margin-top:8px;">';
@@ -5318,7 +5322,7 @@ function aggiornaBarraFattureUnite(){
         var giaFatturata = entry && entry.stato !== 'pendente';
         return '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-top:1px solid var(--border);">' +
           '<span>'+(b['guest-name']||'sconosciuto')+' — '+toItDate(b.arrival)+' → '+toItDate(b.departure)+(giaFatturata?' (già fatturata)':'')+'</span>' +
-          (giaSelezionata || giaFatturata ? '' : '<button class="as-btn ghost" data-fatt-aggiungi="'+encodeURIComponent(JSON.stringify(b))+'" style="padding:2px 8px;font-size:12px;">+ Aggiungi</button>') +
+          (giaSelezionata || giaFatturata ? '' : '<button class="as-btn ghost" data-fatt-aggiungi="'+encodeURIComponent(JSON.stringify(b))+'" style="padding:2px 8px;font-size:14px;">+ Aggiungi</button>') +
           '</div>';
       }).join('');
       risultati.querySelectorAll('[data-fatt-aggiungi]').forEach(function(btn){
@@ -5412,7 +5416,7 @@ function buildFatturaFormMultiHtml(prenotazioni){
     '<div class="as-field"><label>Comune</label><input data-fm-citta></div>' +
     '<div class="as-field"><label>Provincia (sigla)</label><input data-fm-provincia maxlength="2" style="text-transform:uppercase;"></div>' +
     '</div>';
-  html += '<details style="margin:8px 0;"><summary style="cursor:pointer;color:var(--text-muted);font-size:12px;">Altri dati (facoltativi): codice destinatario SDI, email, telefono</summary>' +
+  html += '<details style="margin:8px 0;"><summary style="cursor:pointer;color:var(--text-muted);font-size:14px;">Altri dati (facoltativi): codice destinatario SDI, email, telefono</summary>' +
     '<div class="as-field" style="margin-top:8px;"><label>Codice destinatario (SDI)</label><input data-fm-sdi value="0000000" maxlength="7" style="text-transform:uppercase;"></div>' +
     '<div class="as-row"><div class="as-field"><label>Email</label><input type="email" data-fm-email></div><div class="as-field"><label>Telefono</label><input data-fm-telefono></div></div>' +
     '</details>';
