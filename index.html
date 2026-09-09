@@ -1562,7 +1562,7 @@ function buildGuestCardHtml(g, extraPrimaDiGenera){
       '</div>';
     html += '<label for="doc-input-'+g.id+'" class="as-photobox" style="margin-bottom:6px;font-size:13px;padding:12px;display:block;">📷 Carica/sostituisci foto documento (anche fronte e retro insieme)</label>' +
             '<input type="file" accept="image/*,application/pdf" multiple id="doc-input-'+g.id+'" data-doc-input="'+g.id+'" style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;">';
-    html += '<button type="button" class="as-btn ghost" data-doc-incolla="'+g.id+'" style="margin-bottom:12px;font-size:14px;width:100%;">📋 Incolla foto/PDF copiato (da WhatsApp/email, senza salvarlo prima)</button>';
+    html += '<button type="button" class="as-btn ghost" data-doc-incolla="'+g.id+'" style="margin-bottom:12px;font-size:14px;width:100%;">📋 Incolla foto copiata (da WhatsApp/email, senza salvarla prima)</button>';
   }
 
   html += '<div class="as-row">';
@@ -1757,21 +1757,20 @@ function attachGuestHandlers(root){
         var items = await navigator.clipboard.read();
         var files = [];
         for (var i = 0; i < items.length; i++){
-          var tipoTrovato = items[i].types.find(function(t){ return t.indexOf('image/') === 0 || t === 'application/pdf'; });
-          if (!tipoTrovato) continue;
-          var blob = await items[i].getType(tipoTrovato);
-          var isPdfTrovato = (tipoTrovato === 'application/pdf');
-          var estensione = isPdfTrovato ? 'pdf' : (tipoTrovato.split('/')[1] || 'png');
-          files.push(new File([blob], 'incollata-'+Date.now()+'.'+estensione, { type: tipoTrovato }));
+          var tipoImmagine = items[i].types.find(function(t){ return t.indexOf('image/') === 0; });
+          if (!tipoImmagine) continue;
+          var blob = await items[i].getType(tipoImmagine);
+          var estensione = tipoImmagine.split('/')[1] || 'png';
+          files.push(new File([blob], 'incollata-'+Date.now()+'.'+estensione, { type: tipoImmagine }));
         }
         if (!files.length){
-          alert('Non ho trovato nessuna immagine o PDF negli appunti. Prima copia il documento (tieni premuto sull\'immagine o sul file in WhatsApp/email e scegli "Copia"), poi torna qui e riprova.\n\nNota: su iPhone il "Copia" di un PDF da WhatsApp a volte non funziona con questo pulsante — se non va, usa "Carica/sostituisci foto documento" e scegli il file dai tuoi documenti/file salvati.');
+          alert('Non ho trovato nessuna immagine negli appunti. Prima copia la foto del documento (tieni premuto sull\'immagine in WhatsApp/email e scegli "Copia"), poi torna qui e riprova.');
           return;
         }
         await ocrDocument(files, g);
         files.forEach(function(file){ archiveDocument(file, g); });
       } catch(e){
-        alert('Non sono riuscito a leggere gli appunti (potrebbe servire dare il permesso al browser, o niente è stato copiato come immagine/PDF): ' + e.message);
+        alert('Non sono riuscito a leggere gli appunti (potrebbe servire dare il permesso al browser, o niente è stato copiato come immagine): ' + e.message);
       } finally {
         btn.textContent = testoOriginale;
       }
