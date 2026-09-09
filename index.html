@@ -3709,12 +3709,12 @@ async function inviaIstat(ordered, outEl, onSuccess){
     if (risultato.partenzeInviate) msg += ', ' + risultato.partenzeInviate + ' partenze presunte';
     msg += ').</p>';
     if (risultato.partenzeFallite && risultato.partenzeFallite.length){
-      msg += '<div class="as-err">⚠️ Partenza presunta non inviata per: ' + risultato.partenzeFallite.map(function(f){ return toItDate(f.data)+' ('+f.errore+')'; }).join(', ') + '. Riprova più tardi o usa "Segnala partenza" in Archivio.</div>';
+      msg += '<div class="as-err">⚠️ Partenza presunta non inviata per: ' + risultato.partenzeFallite.map(function(f){ return toItDate(f.data)+' ('+escapeHtml(f.errore)+')'; }).join(', ') + '. Riprova più tardi o usa "Segnala partenza" in Archivio.</div>';
     }
     out.innerHTML = msg;
     if (onSuccess) onSuccess({ arrivoOk: true, partenzaOk: !!(risultato.partenzeInviate && (!risultato.partenzeFallite || !risultato.partenzeFallite.length)) });
   } catch(e){
-    out.innerHTML = '<div class="as-err">'+e.message+'</div>';
+    out.innerHTML = '<div class="as-err">'+escapeHtml(e.message)+'</div>';
   }
 }
 
@@ -3844,13 +3844,13 @@ async function segnalaArrivo(invioId, btn){
         await segnaIstatInviato(dataPartenzaPresunta);
         msg += '<p class="as-ok">Partenza presunta (' + toItDate(dataPartenzaPresunta) + ') segnalata correttamente.</p>';
       } catch(eP){
-        msg += '<div class="as-err">⚠️ Partenza presunta non inviata: '+eP.message+'. Riprova con "Segnala partenza".</div>';
+        msg += '<div class="as-err">⚠️ Partenza presunta non inviata: '+escapeHtml(eP.message)+'. Riprova con "Segnala partenza".</div>';
       }
     }
     out.innerHTML = msg;
     render();
   } catch(e){
-    out.innerHTML = '<div class="as-err">'+e.message+'</div>';
+    out.innerHTML = '<div class="as-err">'+escapeHtml(e.message)+'</div>';
   }
 }
 
@@ -3888,7 +3888,7 @@ async function segnalaPartenza(invioId, btn){
     out.innerHTML = '<p class="as-ok">Partenza segnalata correttamente.</p>';
     render();
   } catch(e){
-    out.innerHTML = '<div class="as-err">'+e.message+'</div>';
+    out.innerHTML = '<div class="as-err">'+escapeHtml(e.message)+'</div>';
   }
 }
 
