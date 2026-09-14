@@ -1383,7 +1383,7 @@ function newGuest(){
     tipoTurismo: 'Non specificato', mezzoTrasporto: 'Non specificato',
     tipoDocumentoNome: '', numeroDocumento: '', dataScadenzaDocumento: '',
     rilascioEstero: false, luogoRilascioNome: '',
-    ocrPending: false, smoobuBookingId: ''
+    ocrPending: false, smoobuBookingId: '', categoriaSpecialeTassa: ''
   };
 }
 
@@ -1626,6 +1626,20 @@ function buildGuestCardHtml(g, extraPrimaDiGenera){
   html += '</div>';
   html += '<div class="as-field"><label>Indirizzo di residenza (via e civico) — per la fattura</label><input data-f="indirizzoResidenza" data-id="'+g.id+'" value="'+(g.indirizzoResidenza||'')+'"></div>';
   html += '<div class="as-field"><label>Codice fiscale (se stampato sul documento) — per la fattura</label><input data-f="codiceFiscale" data-id="'+g.id+'" style="text-transform:uppercase;" value="'+(g.codiceFiscale||'')+'"></div>';
+  html += '<div class="as-field"><label>Categoria speciale tassa di soggiorno (lascia vuoto se non si applica nessun caso particolare)</label><select data-f="categoriaSpecialeTassa" data-id="'+g.id+'">' +
+    [
+      ['', '— Nessuna (calcolo automatico: paganti / minori / residenti) —'],
+      ['airbnb', 'Prenotato tramite piattaforma Airbnb'],
+      ['autisti', 'Autista pullman / accompagnatore gruppo organizzato'],
+      ['sanitarie', 'Cure presso struttura sanitaria o assistenza a degente'],
+      ['universitari', 'Universitario fuori sede / scolaresca con docenti'],
+      ['autorita', 'Alloggiato per provvedimento di autorità pubblica'],
+      ['volontari', 'Volontario per servizio in occasione di calamità'],
+      ['dipendenti', 'Dipendente della struttura ricettiva'],
+      ['disabili', 'Persona con disabilità grave + accompagnatore'],
+      ['forzeordine', "Polizia di Stato / Vigili del Fuoco / Forze Armate"]
+    ].map(function(o){ return '<option value="'+o[0]+'" '+(((g.categoriaSpecialeTassa||'')===o[0])?'selected':'')+'>'+o[1]+'</option>'; }).join('') +
+    '</select></div>';
   html += '<div class="as-row">';
   html += '<div class="as-field"><label>Tipo turismo</label><select data-f="tipoTurismo" data-id="'+g.id+'">' +
     ['Non specificato','Culturale','Balneare','Congressuale/Affari','Fieristico','Sportivo/Fitness','Scolastico','Religioso','Sociale','Parchi Tematici','Termale/Trattamenti salute','Enogastronomico','Cicloturismo','Escursionistico/Naturalistico','Altro motivo'].map(function(t){ return '<option '+(g.tipoTurismo===t?'selected':'')+'>'+t+'</option>'; }).join('') +
@@ -2287,6 +2301,11 @@ function creaSchedaDaPrenotazioneSmoobu(b, capoId){
   var appMatch = state.tables.appartamenti.find(function(a){ return a.smoobuId && b.apartment && String(a.smoobuId) === String(b.apartment.id); });
   if (appMatch) g.idAppartamento = appMatch.id;
   if (capoId){ g.ruolo = 'familiare'; g.groupOf = capoId; }
+  // Rilevamento automatico canale Airbnb (best-effort: il nome esatto del campo restituito
+  // da Smoobu per il canale non è stato verificato dal vivo — se non funziona, il campo
+  // "Categoria speciale tassa" sulla scheda ospite resta comunque modificabile a mano).
+  var nomeCanale = (b['channel-name'] || b.channelName || (b.channel && b.channel.name) || '').toString().toLowerCase();
+  if (nomeCanale.indexOf('airbnb') !== -1) g.categoriaSpecialeTassa = 'airbnb';
   state.guests.push(g);
   smoobuDetailsAperti[b.id] = true;
   saveGuests(); render();
@@ -3279,9 +3298,12 @@ async function calcolaRiepilogoTassa(anno, trimestre){
     var tariffaGruppo = tariffaAllaData(cfgTassa.storico, gr.dataArrivo) || { importo: 0 };
     var notti = parseInt(gr.permanenza, 10) || 0;
     var nottiTassate = cfgTassa.maxNotti ? Math.min(notti, cfgTassa.maxNotti) : notti;
-    var tassabili = 0, esenti = 0, esentiResidenti = 0, mancanti = 0;
+    var tassabili = 0, esenti = 0, esentiResidenti = 0, esentiSpeciali = 0, mancanti = 0;
     gr.membri.forEach(function(m){
       if (!m.dataNascita) mancanti++;
+      var speciale = (m.categoriaSpecialeTassa || '').trim();
+      if (speciale === 'airbnb') { tassabili++; return; }
+      if (speciale && CATEGORIE_SPECIALI_ESENTI.indexOf(speciale) !== -1) { esentiSpeciali++; return; }
       var eta = calcolaEta(m.dataNascita, gr.dataArrivo);
       if (eta != null && eta < cfgTassa.eta) esenti++;
       else if (isResidenteTorino(m)) esentiResidenti++;
@@ -3290,6 +3312,7 @@ async function calcolaRiepilogoTassa(anno, trimestre){
     righe[idx].ospiti += tassabili;
     righe[idx].esenti += esenti;
     righe[idx].esentiResidenti += esentiResidenti;
+    righe[idx].esentiSpeciali = (righe[idx].esentiSpeciali || 0) + esentiSpeciali;
     righe[idx].pernottamenti += nottiTassate * tassabili;
     righe[idx].importo += nottiTassate * tassabili * tariffaGruppo.importo;
     righe[idx].mancantiDati += mancanti;
@@ -3301,8 +3324,20 @@ var TIPOLOGIA_TESTO_CLIENT = {
   paganti: 'Ospiti paganti',
   minori: 'Minori di anni 13 non compiuti',
   residenti: 'Residenti nel Comune di Torino',
-  eccedenti: 'Pernottamenti eccedenti il massimo previsto dal regolamento'
+  eccedenti: 'Pernottamenti eccedenti il massimo previsto dal regolamento',
+  airbnb: 'Ospiti tramite prenotazione piattaforma AIRBNB',
+  autisti: 'Autisti di pullman e accompagnatori turistici di gruppi organizzati',
+  sanitarie: 'Coloro che si sottopongono a cure presso strutture sanitarie e assistenti di degenti ricoverati',
+  universitari: 'Universitari fuori sede, scolaresche fino alle secondarie superiori con docenti accompagnatori',
+  autorita: 'Soggetti che alloggiano in strutture ricettive a seguito di provvedimenti adottati da autorità pubbliche',
+  volontari: 'Volontari che prestano servizio in occasione di calamità',
+  dipendenti: 'Dipendenti della struttura ricettiva che alloggiano presso la rispettiva struttura datoriale',
+  disabili: 'Persona con disabilità grave certificata e accompagnatore',
+  forzeordine: 'Personale della Polizia di Stato, Vigili del Fuoco e delle altre Forze Armate'
 };
+
+/* Categorie manuali sempre esenti da imposta (tutte tranne airbnb, che paga come un ospite pagante ma va segnalato come canale) */
+var CATEGORIE_SPECIALI_ESENTI = ['autisti','sanitarie','universitari','autorita','volontari','dipendenti','disabili','forzeordine'];
 
 async function calcolaDettaglioTassa(anno, trimestre){
   var cfgTassa = await caricaConfigTassa();
@@ -3327,13 +3362,19 @@ async function calcolaDettaglioTassa(anno, trimestre){
     var nottiTassate = cfgTassa.maxNotti ? Math.min(notti, cfgTassa.maxNotti) : notti;
     var nottiEccedenti = cfgTassa.maxNotti && notti > cfgTassa.maxNotti ? (notti - cfgTassa.maxNotti) : 0;
 
-    var tassabili = 0, esentiMinori = 0, esentiResidenti = 0, mancanti = 0;
+    var categorieConteggio = {}, mancanti = 0;
     gr.membri.forEach(function(m){
       if (!m.dataNascita) mancanti++;
-      var eta = calcolaEta(m.dataNascita, gr.dataArrivo);
-      if (eta != null && eta < cfgTassa.eta) esentiMinori++;
-      else if (isResidenteTorino(m)) esentiResidenti++;
-      else tassabili++;
+      var speciale = (m.categoriaSpecialeTassa || '').trim();
+      var categoria;
+      if (speciale && TIPOLOGIA_TESTO_CLIENT[speciale]) categoria = speciale;
+      else {
+        var eta = calcolaEta(m.dataNascita, gr.dataArrivo);
+        if (eta != null && eta < cfgTassa.eta) categoria = 'minori';
+        else if (isResidenteTorino(m)) categoria = 'residenti';
+        else categoria = 'paganti';
+      }
+      categorieConteggio[categoria] = (categorieConteggio[categoria] || 0) + 1;
     });
 
     var nomeApp = gr.appartamentoNome || '(senza alloggio)';
@@ -3344,7 +3385,8 @@ async function calcolaDettaglioTassa(anno, trimestre){
 
     function aggiungi(tipologia, ospiti, pernottamenti){
       if (!ospiti || !pernottamenti) return;
-      var importoRiga = (tipologia === 'minori' || tipologia === 'residenti') ? 0 : pernottamenti * tariffaGruppo.importo;
+      var esente = tipologia === 'minori' || tipologia === 'residenti' || CATEGORIE_SPECIALI_ESENTI.indexOf(tipologia) !== -1;
+      var importoRiga = esente ? 0 : pernottamenti * tariffaGruppo.importo;
       if (!bucket[tipologia]) bucket[tipologia] = { ospiti: 0, pernottamenti: 0, mancantiDati: 0, importo: 0, prenotazioni: [] };
       bucket[tipologia].ospiti += ospiti;
       bucket[tipologia].pernottamenti += pernottamenti;
@@ -3359,10 +3401,15 @@ async function calcolaDettaglioTassa(anno, trimestre){
         importo: importoRiga
       });
     }
-    aggiungi('paganti', tassabili, nottiTassate * tassabili);
-    aggiungi('minori', esentiMinori, notti * esentiMinori);
-    aggiungi('residenti', esentiResidenti, notti * esentiResidenti);
-    aggiungi('eccedenti', tassabili, nottiEccedenti * tassabili);
+
+    var CATEGORIE_TASSATE = ['paganti', 'airbnb'];
+    Object.keys(categorieConteggio).forEach(function(categoria){
+      var n = categorieConteggio[categoria];
+      if (CATEGORIE_TASSATE.indexOf(categoria) !== -1) aggiungi(categoria, n, nottiTassate * n);
+      else aggiungi(categoria, n, notti * n);
+    });
+    var totaleTassabili = CATEGORIE_TASSATE.reduce(function(s, c){ return s + (categorieConteggio[c] || 0); }, 0);
+    aggiungi('eccedenti', totaleTassabili, nottiEccedenti * totaleTassabili);
   });
 
   var elenco = [];
@@ -4544,16 +4591,16 @@ async function renderTassaTab(){
     }
     var righe = await calcolaRiepilogoTassa(anno, trimestre);
     var nomiMesi = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
-    var totOspiti = 0, totPern = 0, totImporto = 0, totMancanti = 0, totEsenti = 0, totEsentiResidenti = 0;
+    var totOspiti = 0, totPern = 0, totImporto = 0, totMancanti = 0, totEsenti = 0, totEsentiResidenti = 0, totEsentiSpeciali = 0;
     var html = '<table style="width:100%;border-collapse:collapse;font-size:14px;">' +
       '<tr style="text-align:left;color:var(--muted);"><th style="padding:4px 6px 4px 0;">Mese</th><th style="padding:4px 6px;">Ospiti</th><th style="padding:4px 6px;">Pernott.</th><th style="padding:4px 0;">Importo</th></tr>';
     righe.forEach(function(r){
-      totOspiti += r.ospiti; totPern += r.pernottamenti; totImporto += r.importo; totMancanti += r.mancantiDati; totEsenti += r.esenti; totEsentiResidenti += r.esentiResidenti;
+      totOspiti += r.ospiti; totPern += r.pernottamenti; totImporto += r.importo; totMancanti += r.mancantiDati; totEsenti += r.esenti; totEsentiResidenti += r.esentiResidenti; totEsentiSpeciali += (r.esentiSpeciali||0);
       html += '<tr style="border-top:1px solid var(--border);"><td style="padding:6px 6px 6px 0;">'+nomiMesi[r.mese]+'</td><td style="padding:6px;">'+r.ospiti+'</td><td style="padding:6px;">'+r.pernottamenti+'</td><td style="padding:6px 0;">€'+r.importo.toFixed(2).replace('.',',')+'</td></tr>';
     });
     html += '<tr style="border-top:2px solid var(--border);font-weight:600;"><td style="padding:6px 6px 6px 0;">Totale</td><td style="padding:6px;">'+totOspiti+'</td><td style="padding:6px;">'+totPern+'</td><td style="padding:6px 0;">€'+totImporto.toFixed(2).replace('.',',')+'</td></tr>';
     html += '</table>';
-    html += '<p class="as-sub" style="margin-top:8px;">Esenti minori (sotto '+cfgTassaR.eta+' anni) nel periodo: '+totEsenti+'. Esenti residenti nel Comune di Torino: '+totEsentiResidenti+'. Notti tassate limitate a '+(cfgTassaR.maxNotti||'—')+' per soggiorno.</p>';
+    html += '<p class="as-sub" style="margin-top:8px;">Esenti minori (sotto '+cfgTassaR.eta+' anni) nel periodo: '+totEsenti+'. Esenti residenti nel Comune di Torino: '+totEsentiResidenti+'. Esenti per categorie speciali (autisti, sanitarie, disabili, ecc.): '+totEsentiSpeciali+'. Notti tassate limitate a '+(cfgTassaR.maxNotti||'—')+' per soggiorno.</p>';
     if (totMancanti) html += '<div class="as-err" style="margin-top:6px;">⚠️ '+totMancanti+' ospite/i in questo periodo senza data di nascita registrata: sono stati conteggiati come tassabili anche se fossero minori esenti. Controlla manualmente prima di dichiarare.</div>';
     html += '<p class="as-sub" style="margin-top:8px;">I dati dei soggiorni già archiviati prima dell\'introduzione di questo riepilogo potrebbero non avere la data di nascita salvata: verifica i mesi più vecchi.</p>';
 
