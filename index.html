@@ -1802,7 +1802,7 @@ function attachGuestHandlers(root){
       if (!head || !head.cognome){ alert('Compila almeno il cognome prima di archiviare.'); return; }
       var ok = confirm('Questo sposta la scheda di ' + head.cognome + ' ' + head.nome + ' in Archivio segnandola come già completata (Questura e ISTAT), SENZA inviare nulla da qui. Usalo solo se hai già trasmesso tutto tramite altri canali (es. direttamente sul portale ufficiale). Continuare?');
       if (!ok) return;
-      await archiveInvio(groupOrdered, head.idAppartamento, groupOrdered.length, true, true, true);
+      await archiveInvio(groupOrdered, head.idAppartamento, groupOrdered.length, true, true, true, true);
       render();
     };
   });
@@ -3740,7 +3740,7 @@ async function sendToBackend(lines, real, idAppartamento, ordered, outEl, istatS
       if (!arrivoIstatOk){
         html += '<p class="as-warn">⚠️ ISTAT non risulta inviato da questa scheda: se serve ancora, fallo da Archivio con "Correggi/reinvia arrivo ISTAT".</p>';
       }
-      await archiveInvio(ordered, idAppartamento, lines.length, arrivoIstatOk, partenzaIstatOk);
+      await archiveInvio(ordered, idAppartamento, lines.length, arrivoIstatOk, partenzaIstatOk, false, true);
       html += '<p class="as-sub">Ospiti spostati nell\'archivio invii.</p>';
       html += '<button class="as-btn secondary" data-role="ricevuta" style="margin-top:8px;">Scarica ricevuta di oggi</button>';
     }
@@ -3753,7 +3753,7 @@ async function sendToBackend(lines, real, idAppartamento, ordered, outEl, istatS
   }
 }
 
-async function archiveInvio(ordered, idAppartamento, nRighe, arrivoIstatOk, partenzaIstatOk, manuale){
+async function archiveInvio(ordered, idAppartamento, nRighe, arrivoIstatOk, partenzaIstatOk, manuale, questuraInviata){
   var appNome = (state.tables.appartamenti.find(function(a){ return a.id===idAppartamento; })||{}).nome || idAppartamento || '';
   var entry = {
     id: uid(),
@@ -3764,7 +3764,8 @@ async function archiveInvio(ordered, idAppartamento, nRighe, arrivoIstatOk, part
     ospiti: ordered.map(function(g){ return { id: g.id, cognome: g.cognome, nome: g.nome, ruolo: g.ruolo, groupOf: g.groupOf || '', dataArrivo: g.dataArrivo, permanenza: g.permanenza, dataNascita: g.dataNascita || '', sesso: g.sesso || '', nascitaEstero: !!g.nascitaEstero, comuneNascitaNome: g.comuneNascitaNome || '', statoNascitaNome: g.statoNascitaNome || '', residenzaEstero: !!g.residenzaEstero, comuneResidenzaNome: g.comuneResidenzaNome || '', statoResidenzaNome: g.statoResidenzaNome || '', indirizzoResidenza: g.indirizzoResidenza || '', cittadinanzaNome: g.cittadinanzaNome || '', tipoDocumentoNome: g.tipoDocumentoNome || '', numeroDocumento: g.numeroDocumento || '', rilascioEstero: !!g.rilascioEstero, luogoRilascioNome: g.luogoRilascioNome || '', dataScadenzaDocumento: g.dataScadenzaDocumento || '', smoobuBookingId: g.smoobuBookingId || '' }; }),
     arrivoSegnalato: !!arrivoIstatOk,
     partenzaSegnalata: !!partenzaIstatOk,
-    manuale: !!manuale
+    manuale: !!manuale,
+    questuraInviata: !!questuraInviata
   };
   state.invii.push(entry);
   var sentIds = ordered.map(function(g){ return g.id; });
@@ -4021,8 +4022,11 @@ function renderArchivioIstatOk(el){
       var g = new Date(iv.dataInvio);
       var dataISO = iv.dataInvio.slice(0,10);
       var nomi = iv.ospiti.map(function(o){ return (o.cognome+' '+o.nome).trim(); }).join(', ');
-      var classeBadge = iv.manuale ? 'as-info' : 'as-ok';
-      var testoBadge = iv.manuale ? '📦 ISTAT e Questura completi (altri canali)' : '✅ ISTAT e Questura completi (arrivo + partenza)';
+      var questuraConfermata = (iv.questuraInviata !== undefined) ? iv.questuraInviata : true;
+      var classeBadge = !questuraConfermata ? 'as-warn' : (iv.manuale ? 'as-info' : 'as-ok');
+      var testoBadge = !questuraConfermata
+        ? '⚠️ ISTAT completo — Questura NON confermata'
+        : (iv.manuale ? '📦 ISTAT e Questura completi (altri canali)' : '✅ ISTAT e Questura completi (arrivo + partenza)');
       var dettagliOspiti = iv.ospiti.map(function(o){
         var ruoloTesto = (o.ruolo === 'familiare' || o.ruolo === 'membro') ? 'membro' : 'capogruppo';
         var campi = [
@@ -4756,7 +4760,7 @@ async function recuperaSchedaSingola(b, btn){
     if (!collegamento){
       var g = creaSchedaDaPrenotazioneSmoobu(b);
       var membri = orderedGuestsFor(g.id);
-      await archiveInvio(membri, g.idAppartamento, membri.length, true, true, true);
+      await archiveInvio(membri, g.idAppartamento, membri.length, true, true, true, true);
     }
     if (out) out.innerHTML = '<p class="as-ok">Archiviata come inviata da altri canali.</p>';
     btn.style.display = 'none';
