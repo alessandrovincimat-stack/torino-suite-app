@@ -3302,7 +3302,6 @@ async function calcolaRiepilogoTassa(anno, trimestre){
     gr.membri.forEach(function(m){
       if (!m.dataNascita) mancanti++;
       var speciale = (m.categoriaSpecialeTassa || '').trim();
-      if (speciale === 'airbnb') { tassabili++; return; }
       if (speciale && CATEGORIE_SPECIALI_ESENTI.indexOf(speciale) !== -1) { esentiSpeciali++; return; }
       var eta = calcolaEta(m.dataNascita, gr.dataArrivo);
       if (eta != null && eta < cfgTassa.eta) esenti++;
@@ -3337,7 +3336,7 @@ var TIPOLOGIA_TESTO_CLIENT = {
 };
 
 /* Categorie manuali sempre esenti da imposta (tutte tranne airbnb, che paga come un ospite pagante ma va segnalato come canale) */
-var CATEGORIE_SPECIALI_ESENTI = ['autisti','sanitarie','universitari','autorita','volontari','dipendenti','disabili','forzeordine'];
+var CATEGORIE_SPECIALI_ESENTI = ['airbnb','autisti','sanitarie','universitari','autorita','volontari','dipendenti','disabili','forzeordine'];
 
 async function calcolaDettaglioTassa(anno, trimestre){
   var cfgTassa = await caricaConfigTassa();
@@ -3402,7 +3401,7 @@ async function calcolaDettaglioTassa(anno, trimestre){
       });
     }
 
-    var CATEGORIE_TASSATE = ['paganti', 'airbnb'];
+    var CATEGORIE_TASSATE = ['paganti'];
     Object.keys(categorieConteggio).forEach(function(categoria){
       var n = categorieConteggio[categoria];
       if (CATEGORIE_TASSATE.indexOf(categoria) !== -1) aggiungi(categoria, n, nottiTassate * n);
