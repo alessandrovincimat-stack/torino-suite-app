@@ -4013,7 +4013,7 @@ function renderArchivioIstatOk(el){
       '</div>';
   }
   if (!invOk.length){
-    html += '<div class="as-card"><p class="as-sub">Nessuna scheda con ISTAT completo in questo mese.</p></div>';
+    html += '<div class="as-card"><p class="as-sub">Nessuna scheda con ISTAT e Questura completi in questo mese.</p></div>';
   } else {
     html += '<div class="as-card">';
     var dateUniche = [];
@@ -4022,7 +4022,7 @@ function renderArchivioIstatOk(el){
       var dataISO = iv.dataInvio.slice(0,10);
       var nomi = iv.ospiti.map(function(o){ return (o.cognome+' '+o.nome).trim(); }).join(', ');
       var classeBadge = iv.manuale ? 'as-info' : 'as-ok';
-      var testoBadge = iv.manuale ? '📦 ISTAT e Questura completi (altri canali)' : '✅ ISTAT completo (arrivo + partenza)';
+      var testoBadge = iv.manuale ? '📦 ISTAT e Questura completi (altri canali)' : '✅ ISTAT e Questura completi (arrivo + partenza)';
       var dettagliOspiti = iv.ospiti.map(function(o){
         var ruoloTesto = (o.ruolo === 'familiare' || o.ruolo === 'membro') ? 'membro' : 'capogruppo';
         var campi = [
