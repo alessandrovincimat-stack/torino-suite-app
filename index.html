@@ -1544,7 +1544,7 @@ function buildGuestCardHtml(g, extraPrimaDiGenera){
   var faseBadge = '';
   if (!isDependent && !g.ocrPending){
     faseBadge = g.istatArrivoOk
-      ? ' <span class="as-info" style="font-size:14px;padding:2px 7px;border-radius:10px;">📨 ISTAT fatto, manca Questura</span>'
+      ? ' <span class="as-info" style="font-size:14px;padding:2px 7px;border-radius:10px;">✅ ISTAT OK · ❌ Questura KO</span>'
       : ' <span class="as-warn" style="font-size:14px;padding:2px 7px;border-radius:10px;">🆕 Da avviare</span>';
   }
   var capiOptions = getCapiOptions();
@@ -2335,7 +2335,7 @@ function renderSmoobuBox(box, bookings){
           corpoSchede = '<p class="as-sub">Per aggiungere altri ospiti a questa prenotazione, cambia prima il Ruolo in "Capofamiglia" o "Capogruppo".</p>' +
             r.collegate.map(function(g){ return buildGuestCardHtml(g); }).join('');
         }
-        var faseRiepilogo = capo.istatArrivoOk ? '📨 ISTAT fatto, manca Questura' : '🆕 Da avviare';
+        var faseRiepilogo = capo.istatArrivoOk ? '✅ ISTAT OK · ❌ Questura KO' : '🆕 Da avviare';
         stato = '<details style="margin-top:6px;" data-smoobu-details="'+b.id+'"'+aperto+'><summary style="cursor:pointer;color:var(--brass);font-size:13px;font-weight:600;">▸ ' +
           r.collegate.length + ' scheda/e: ' + r.collegate.map(function(g){ return (g.cognome+' '+g.nome).trim() || '(dati da inserire)'; }).join(', ') +
           ' — ' + faseRiepilogo +
