@@ -79,7 +79,7 @@
 </head>
 <body>
 <div id="pull-refresh-indicator" style="position:fixed;top:0;left:0;right:0;text-align:center;padding:10px 8px;font-size:13px;color:var(--brass);background:var(--bg);transform:translateY(-100%);z-index:99999;border-bottom:1px solid var(--border);">↓ Trascina per aggiornare</div>
-<div class="ts-switcher" id="ts-switcher"><button class="ts-switch-btn" id="ts-btn-porte">Gestione porte</button><button class="ts-switch-btn ts-active" id="ts-btn-questura">Questura e ISTAT</button><button class="ts-switch-btn" id="ts-btn-archivio">Archivio</button><button class="ts-switch-btn" id="ts-btn-fatture">Fatture</button><button class="ts-switch-btn" id="ts-btn-tassa">Tassa di soggiorno</button><button class="ts-switch-btn" id="ts-btn-impostazioni" style="font-size:16px;">🔒</button></div><div id="porte-section">
+<div class="ts-switcher" id="ts-switcher"><button class="ts-switch-btn" id="ts-btn-porte">Gestione porte</button><button class="ts-switch-btn ts-active" id="ts-btn-questura">Questura e ISTAT</button><button class="ts-switch-btn" id="ts-btn-archivio">Archivio</button><button class="ts-switch-btn" id="ts-btn-fatture">Fatture</button><button class="ts-switch-btn" id="ts-btn-tassa">Tassa di soggiorno</button><button class="ts-switch-btn" id="ts-btn-impostazioni" style="font-size:16px;">🔒</button><button class="ts-switch-btn" id="ts-btn-booking">Incasso Booking</button></div><div id="booking-section" style="display:none;"><iframe src="incasso-booking.html" style="width:100%;height:100vh;border:0;"></iframe></div><div id="porte-section">
 <div id="root"></div>
 </div>
 <div id="fatture-section" style="display:none;">
@@ -5864,7 +5864,7 @@ loadState().then(render);
   var btnArchivio = document.getElementById('ts-btn-archivio');
   var btnFatture = document.getElementById('ts-btn-fatture');
   var btnTassa = document.getElementById('ts-btn-tassa');
-  var btnImpostazioni = document.getElementById('ts-btn-impostazioni');
+  var btnImpostazioni = document.getElementById('ts-btn-impostazioni'); var bookingSection = document.getElementById('booking-section'); var btnBooking = document.getElementById('ts-btn-booking');
 
   var sezioni = [
     { div: porteSection, btn: btnPorte },
@@ -5872,7 +5872,7 @@ loadState().then(render);
     { div: archivioSection, btn: btnArchivio },
     { div: fattureSection, btn: btnFatture },
     { div: tassaSection, btn: btnTassa },
-    { div: impostazioniSection, btn: btnImpostazioni }
+    { div: impostazioniSection, btn: btnImpostazioni }, { div: bookingSection, btn: btnBooking }
   ];
 
   function mostra(indice){
@@ -5890,14 +5890,14 @@ loadState().then(render);
   function showArchivio(){ mostra(2); }
   function showFatture(){ mostra(3); }
   function showTassa(){ mostra(4); }
-  function showImpostazioni(){ mostra(5); }
+  function showImpostazioni(){ mostra(5); } function showBooking(){ mostra(6); }
 
   btnPorte.onclick = showPorte;
   btnQuestura.onclick = showQuestura;
   btnArchivio.onclick = showArchivio;
   btnFatture.onclick = showFatture;
   btnTassa.onclick = showTassa;
-  btnImpostazioni.onclick = showImpostazioni;
+  btnImpostazioni.onclick = showImpostazioni; if (btnBooking) btnBooking.onclick = showBooking;
 
   var root = document.getElementById('root');
   var giaSbloccato = false;
