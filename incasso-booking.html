@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Incasso Virtual Card Booking.com — Torino Suite</title>
+<script src="https://js.stripe.com/v3/"></script>
+<style>
+  :root {
+    --oro: #c9a227;
+    --oro-chiaro: #e0c563;
+    --nero: #0d0d0d;
+    --nero-pannello: #1a1a1a;
+    --grigio-bordo: #333;
+    --testo: #f2f2f2;
+    --errore: #ff6b6b;
+    --successo: #4caf50;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--nero);
+    color: var(--testo);
+    font-family: 'Segoe UI', Arial, sans-serif;
+    margin: 0;
+    padding: 24px 16px;
+    display: flex;
+    justify-content: center;
+  }
+  .card {
+    background: var(--nero-pannello);
+    border: 1px solid var(--oro);
+    border-radius: 12px;
+    padding: 28px 24px;
+    max-width: 420px;
+    width: 100%;
+    box-shadow: 0 0 24px rgba(201, 162, 39, 0.15);
+  }
+  h1 {
+    color: var(--oro-chiaro);
+    font-size: 1.3rem;
+    margin: 0 0 4px 0;
+    text-align: center;
+    letter-spacing: 0.5px;
+  }
+  .sottotitolo {
+    text-align: center;
+    color: #999;
+    font-size: 0.85rem;
+    margin-bottom: 24px;
+  }
+  label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--oro);
+    margin-bottom: 6px;
+    margin-top: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  input[type="text"], input[type="number"], select {
+    width: 100%;
+    padding: 10px 12px;
+    background: #111;
+    border: 1px solid var(--grigio-bordo);
+    border-radius: 6px;
+    color: var(--testo);
+    font-size: 1rem;
+  }
+  input:focus, select:focus {
+    outline: none;
+    border-color: var(--oro);
+  }
+  #card-element {
+    padding: 12px;
+    background: #111;
+    border: 1px solid var(--grigio-bordo);
+    border-radius: 6px;
+  }
+  #card-element.StripeElement--focus {
+    border-color: var(--oro);
+  }
+  button {
+    width: 100%;
+    margin-top: 24px;
+    padding: 14px;
+    background: var(--oro);
+    color: #111;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    transition: background 0.2s;
+  }
+  button:hover:not(:disabled) { background: var(--oro-chiaro); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  #messaggio {
+    margin-top: 16px;
+    font-size: 0.9rem;
+    text-align: center;
+    min-height: 20px;
+  }
+  #messaggio.errore { color: var(--errore); }
+  #messaggio.successo { color: var(--successo); }
+  .nota {
+    font-size: 0.75rem;
+    color: #777;
+    text-align: center;
+    margin-top: 20px;
+    line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>Incasso Virtual Card</h1>
+  <div class="sottotitolo">Booking.com — Torino Suite</div>
+
+  <form id="payment-form">
+    <label for="alloggio">Alloggio</label>
+    <select id="alloggio">
+      <option>Carlo Felice</option>
+      <option>San Carlo</option>
+      <option>Carignano</option>
+      <option>Carlo Alberto</option>
+      <option>Vittorio</option>
+      <option>Casa Borgone</option>
+    </select>
+
+    <label for="riferimento">Riferimento prenotazione</label>
+    <input type="text" id="riferimento" placeholder="es. codice prenotazione Booking">
+
+    <label for="importo">Importo da addebitare (€)</label>
+    <input type="number" id="importo" placeholder="0.00" step="0.01" min="0.01" required>
+
+    <label>Dati carta (dalla prenotazione Booking su Smoobu)</label>
+    <div id="card-element"></div>
+
+    <button id="submit-btn" type="submit">Addebita ora</button>
+    <div id="messaggio"></div>
+  </form>
+
+  <div class="nota">
+    I dati della carta vengono inviati direttamente a Stripe e non transitano mai dal server dell'app.
+  </div>
+</div>
+
+<script>
+  // Chiave pubblicabile Stripe di TEST — quando passi a live, sostituiscila con quella pk_live_...
+  const stripe = Stripe('pk_test_51Oj7GmHmpN0e2dQLLRNQuKccm2JbValyHjS0RXvLfGMbVvCnjMEUa7OiHxOnu5ZBQ2Rx8Mufivj4rXuAWxmlTNVL00FWN6HIjw');
+  const elements = stripe.elements();
+
+  const cardStyle = {
+    style: {
+      base: {
+        color: '#f2f2f2',
+        fontSize: '16px',
+        '::placeholder': { color: '#666' }
+      },
+      invalid: { color: '#ff6b6b' }
+    }
+  };
+
+  const cardElement = elements.create('card', cardStyle);
+  cardElement.mount('#card-element');
+
+  const form = document.getElementById('payment-form');
+  const btn = document.getElementById('submit-btn');
+  const messaggio = document.getElementById('messaggio');
+
+  // Punta al backend Node.js sul QNAP (stesso host già usato dall'app porte/questura)
+  const BACKEND_URL = 'https://matcostruzioni.myqnapcloud.com:4600/api/pagamenti/addebita-vcc';
+  // Stesso "APP_SECRET" già usato dalle altre chiamate /api dell'app (vedi .env sul QNAP)
+  const APP_SECRET = 'EJxBz4uv_IO7ecQt1fjpVBOEKUp8oRdv';
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    btn.disabled = true;
+    messaggio.className = '';
+    messaggio.textContent = 'Elaborazione in corso...';
+
+    const importo = document.getElementById('importo').value;
+    const alloggio = document.getElementById('alloggio').value;
+    const riferimento = document.getElementById('riferimento').value;
+
+    try {
+      // 1. Crea il PaymentMethod lato client: il PAN non tocca mai il nostro server
+      const { paymentMethod, error: pmError } = await stripe.createPaymentMethod({
+        type: 'card',
+        card: cardElement,
+      });
+
+      if (pmError) {
+        throw new Error(pmError.message);
+      }
+
+      // 2. Invia solo l'ID del PaymentMethod (mai i dati della carta) al backend
+      const risposta = await fetch(BACKEND_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-app-secret': APP_SECRET
+        },
+        body: JSON.stringify({
+          payment_method_id: paymentMethod.id,
+          importo_centesimi: Math.round(parseFloat(importo) * 100),
+          alloggio,
+          riferimento
+        })
+      });
+
+      const risultato = await risposta.json();
+
+      if (!risposta.ok) {
+        throw new Error(risultato.errore || 'Addebito rifiutato');
+      }
+
+      messaggio.className = 'successo';
+      messaggio.textContent = `✓ Addebito riuscito: €${importo} — ${alloggio}`;
+      form.reset();
+      cardElement.clear();
+
+    } catch (err) {
+      messaggio.className = 'errore';
+      messaggio.textContent = '✗ ' + err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+</script>
+
+</body>
+</html>
