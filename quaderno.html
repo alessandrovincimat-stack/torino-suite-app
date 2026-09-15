@@ -537,6 +537,22 @@ function progresso(p){
 /* contesto di servizio usato solo per misurare il testo */
 const ctxMisura = document.createElement('canvas').getContext('2d');
 
+/* Capacità offerte dalla piattaforma quando la pagina è aperta dentro Claude
+   (chiedere al modello, consegnare un file). Fuori da lì non esistono e
+   l'applicazione usa le sue strade normali: fetch verso il proprio server e
+   collegamento di scaricamento. */
+const _capacita = new Map();
+async function capacita(nome){
+  if (_capacita.has(nome)) return _capacita.get(nome);
+  let attesa = null;
+  try {
+    if (window.claude && typeof window.claude.use === 'function') attesa = window.claude.use(nome);
+  } catch(e){ attesa = null; }
+  const v = attesa ? await Promise.resolve(attesa).catch(() => null) : null;
+  _capacita.set(nome, v);
+  return v;
+}
+
 function dataBreve(ts){
   if (!ts) return '';
   const d = new Date(ts), ora = new Date();
@@ -2746,16 +2762,31 @@ async function renderPaginaPiena(P, scala){
   disegnaContenuto(ctx, P, false);
   return c;
 }
-function scarica(blob, nome){
+async function scarica(blob, nome){
+  // dentro Claude i collegamenti di scaricamento non funzionano: il file si
+  // consegna chiedendolo alla piattaforma, che mostra una conferma a chi legge
+  const dl = await capacita('downloads');
+  if (dl){
+    try { await dl.save({ filename: nome, data: blob }); return true; }
+    catch(e){
+      const c = e && e.code;
+      if (c === 'declined') return false;
+      if (c === 'too_large'){ toast('File troppo grande: prova a esportare meno pagine', 'err'); return false; }
+      if (c === 'rate_limited'){ toast('Aspetta un attimo e riprova', 'err'); return false; }
+      // per ogni altro motivo ricado sul collegamento classico
+    }
+  }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = nome;
   document.body.appendChild(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 3000);
+  return true;
 }
 async function esportaPNG(){
   const c = await renderPaginaPiena(pag(), 2);
-  c.toBlob(b => { scarica(b, nomeFile() + '-pag' + (stato.iPagina + 1) + '.png'); toast('Immagine esportata', 'ok'); }, 'image/png');
+  const b = await new Promise(r => c.toBlob(r, 'image/png'));
+  if (await scarica(b, nomeFile() + '-pag' + (stato.iPagina + 1) + '.png')) toast('Immagine esportata', 'ok');
 }
 function nomeFile(){
   return (stato.quaderno.nome || 'quaderno').replace(/[^\w\sàèéìòù-]/gi, '').trim().replace(/\s+/g, '-').toLowerCase() || 'quaderno';
@@ -2772,8 +2803,8 @@ async function esportaPDF(){
   }
   const pdf = costruisciPDF(immagini, 595.28, 841.89);
   progresso(null);
-  scarica(new Blob([pdf], { type:'application/pdf' }), nomeFile() + '.pdf');
-  toast('PDF esportato (' + pagine.length + ' pagine)', 'ok');
+  if (await scarica(new Blob([pdf], { type:'application/pdf' }), nomeFile() + '.pdf'))
+    toast('PDF esportato (' + pagine.length + ' pagine)', 'ok');
 }
 /* generatore PDF minimale: una immagine JPEG per pagina */
 function costruisciPDF(immagini, W, H){
@@ -2914,9 +2945,69 @@ const MODI_IA = {
   correggi:   { nome:'Correggi',    sub:'rivedi quello che ho scritto', istr:'Leggi quello che lo studente ha scritto nella pagina allegata, segnala gli errori con precisione (uno per voce di elenco, citando la parte sbagliata e la correzione) e alla fine riscrivi la versione corretta.' }
 };
 
+/* Descrizione del formato per la via senza schema (la piattaforma non lo impone) */
+const FORMATO_JSON =
+  'FORMATO DELLA RISPOSTA\n' +
+  'Rispondi soltanto con un oggetto JSON fatto così, senza nient’altro intorno:\n' +
+  '{"titolo":"Titolo della pagina","blocchi":[{"tipo":"paragrafo","testo":"…","titolo":"","voci":[],"risposta":"","righe":[]}]}\n' +
+  'I tipi ammessi sono soltanto: titolo, sottotitolo, paragrafo, elenco, elenco_numerato, definizione, evidenzia, citazione, formula, domanda, tabella, separatore.\n' +
+  'Ogni blocco ha sempre tutti e sei i campi; in quelli che non servono metti "" oppure [].\n' +
+  '- "voci": le voci di elenco ed elenco_numerato\n' +
+  '- "titolo" dentro il blocco: il termine di una definizione o l’intestazione di un evidenzia\n' +
+  '- "risposta": la soluzione di un blocco domanda\n' +
+  '- "righe": le righe di una tabella, ognuna una lista di celle; la prima riga è l’intestazione';
+
 function iaConfigurata(){
   const c = stato.config;
   return c.iaModo === 'diretto' ? !!c.iaChiave : !!c.iaBackendUrl;
+}
+async function iaDisponibile(){
+  return !!(await capacita('sample')) || iaConfigurata();
+}
+function livelloModello(){
+  return { 'claude-opus-5':'complex', 'claude-sonnet-5':'default', 'claude-haiku-4-5':'quick' }[stato.config.iaModello] || 'complex';
+}
+/* i codici della piattaforma sono in inglese e rivolti a chi programma: qui diventano
+   frasi utili a chi sta usando il quaderno */
+function messaggioErroreIA(e){
+  const c = e && e.code;
+  const mappa = {
+    not_granted: 'Non hai dato il permesso di usare Claude da questa pagina. Riapri il quaderno e accetta la richiesta.',
+    sampling_disabled: 'Il tuo account Claude non può rispondere da qui.',
+    not_declared: 'Questa copia del quaderno non è collegata a Claude.',
+    capability_disabled: 'Da questa finestra non si può chiedere a Claude.',
+    capability_removed: 'Da questa finestra non si può chiedere a Claude.',
+    rate_limited: 'Troppe richieste di seguito, o hai finito il credito per adesso. Riprova più tardi.',
+    session_expired: 'La sessione è scaduta: rientra nel tuo account Claude e riprova.',
+    image_rejected: 'L’immagine della pagina non è stata accettata. Prova senza “leggi la pagina”.',
+    images_unavailable: 'Da qui non si possono mandare immagini: prova senza “leggi la pagina”.',
+    refused: 'Il modello ha preferito non rispondere a questa richiesta. Prova a chiedere in un altro modo.',
+    empty_completion: 'Non è arrivata nessuna risposta. Prova a chiedere meno cose insieme.',
+    invalid_json: 'La risposta è arrivata incompleta. Riprova, magari chiedendo una pagina più corta.',
+    prompt_too_large: 'La richiesta è troppo lunga: accorciala.',
+    cancelled: 'Richiesta annullata.',
+    upstream_error: 'Problema di collegamento. Riprova.'
+  };
+  return mappa[c] || (e && e.message) || 'errore sconosciuto';
+}
+/* la risposta del modello non è garantita: rendo ogni blocco sicuro da disegnare */
+function normalizzaBlocchi(out){
+  const TIPI = ['titolo','sottotitolo','paragrafo','elenco','elenco_numerato','definizione','evidenzia','citazione','formula','domanda','tabella','separatore'];
+  const testo = v => (typeof v === 'string' ? v : (v == null ? '' : String(v)));
+  const blocchi = (Array.isArray(out && out.blocchi) ? out.blocchi : []).map(b => {
+    b = b && typeof b === 'object' ? b : {};
+    return {
+      tipo: TIPI.includes(b.tipo) ? b.tipo : 'paragrafo',
+      testo: testo(b.testo),
+      titolo: testo(b.titolo),
+      risposta: testo(b.risposta),
+      voci: Array.isArray(b.voci) ? b.voci.map(testo).filter(s => s.trim()) : [],
+      righe: Array.isArray(b.righe)
+        ? b.righe.filter(Array.isArray).map(r => r.map(testo)).filter(r => r.length)
+        : []
+    };
+  }).filter(b => b.testo.trim() || b.voci.length || b.righe.length || b.titolo.trim() || b.tipo === 'separatore');
+  return { titolo: testo(out && out.titolo), blocchi };
 }
 async function chiamataIA(corpo){
   const c = stato.config;
@@ -2998,11 +3089,42 @@ async function generaConIA(opz){
     '- Se qualcosa non è certo, dillo esplicitamente invece di inventarlo: sono appunti su cui si studierà davvero.\n\n' +
     'COMPITO\n' + modo.istr + '\n' + (lunghezze[opz.lunghezza] || lunghezze.media);
 
+  const NOTA_PAGINA = 'L’immagine allegata è la pagina del quaderno su cui sto lavorando: può contenere testo scritto a mano, esercizi o uno schema. Tienine conto.';
+
+  // Strada 1: la pagina è aperta dentro Claude e può chiedere direttamente al
+  // modello, sull'account di chi la sta usando: nessuna chiave, nessun server.
+  const camp = await capacita('sample');
+  if (camp){
+    let immagini = null;
+    if (opz.conPagina){
+      const lim = await camp.limits().catch(() => null);
+      if (lim && lim.images){
+        const tela = await renderPaginaPiena(pag(), 1.4);
+        immagini = [await new Promise(r => tela.toBlob(r, 'image/jpeg', 0.82))];
+      } else {
+        toast('Da qui non si può mandare l’immagine della pagina');
+      }
+    }
+    const richiamo = sistema + '\n\n' + FORMATO_JSON +
+      '\n\nRICHIESTA\n' + opz.richiesta + (immagini ? '\n\n' + NOTA_PAGINA : '');
+    const out = await camp.json(richiamo, {
+      modelTier: livelloModello(),
+      images: immagini || undefined,
+      cache: false,                       // ogni "crea la pagina" deve chiedere davvero
+      signal: opz.segnale,
+      onText: opz.suTesto
+    });
+    const pulito = normalizzaBlocchi(out);
+    if (!pulito.blocchi.length) throw { code:'empty_completion' };
+    return pulito;
+  }
+
+  // Strada 2: server proprio oppure chiave sul dispositivo, con schema imposto
   const contenuto = [];
   if (opz.conPagina){
     const b64 = await immaginePaginaBase64(pag());
     contenuto.push({ type:'image', source:{ type:'base64', media_type:'image/jpeg', data:b64 } });
-    contenuto.push({ type:'text', text:'Questa immagine è la pagina del quaderno su cui sto lavorando (può contenere testo scritto a mano, esercizi o uno schema). Tienine conto.' });
+    contenuto.push({ type:'text', text: NOTA_PAGINA });
   }
   contenuto.push({ type:'text', text: opz.richiesta });
 
@@ -3022,8 +3144,9 @@ async function generaConIA(opz){
     if (!m) throw new Error('la risposta non era in formato leggibile');
     out = JSON.parse(m[0]);
   }
-  if (!out.blocchi || !out.blocchi.length) throw new Error('la risposta non conteneva contenuti');
-  return out;
+  const pulito = normalizzaBlocchi(out);
+  if (!pulito.blocchi.length) throw new Error('la risposta non conteneva contenuti');
+  return pulito;
 }
 
 /* trasforma la risposta del modello in una o più pagine nuove dopo quella corrente */
@@ -3049,9 +3172,9 @@ async function inserisciRisultatoIA(out){
   return fogli.length;
 }
 
-function modaleIA(){
+async function modaleIA(){
   if (!stato.quaderno) return;
-  if (!iaConfigurata()){
+  if (!await iaDisponibile()){
     modaleImpostazioni('ia');
     toast('Configura prima l’IA');
     return;
@@ -3088,11 +3211,13 @@ function modaleIA(){
     '<div class="aiuto">Serve per far correggere quello che hai scritto a mano, risolvere un esercizio fotografato o riassumere una pagina importata.</div>' +
     '<div id="ia-esito" style="margin-top:12px"></div>';
 
+  let controllore = null;
   modale({
     titolo:'Chiedi all’IA',
     largo: true,
     corpo,
     fondo:'<button class="btn" data-chiudi>Annulla</button><button class="btn primario" id="ia-vai"><svg class="i" style="width:16px;height:16px"><use href="#ic-ia"/></svg>Crea la pagina</button>',
+    suChiusura: () => { if (controllore) controllore.abort(); },
     pronto: (v, chiudi) => {
       let modo = 'spiega', conPagina = false;
       const ta = $('#ia-richiesta', v);
@@ -3113,24 +3238,37 @@ function modaleIA(){
         const esito = $('#ia-esito', v);
         const bottone = $('#ia-vai', v);
         bottone.disabled = true;
-        esito.innerHTML = '<div class="ia-stato"><span class="girella"></span> Sto preparando la pagina… di solito ci vuole qualche secondo.</div>';
+        const stato1 = 'Ci sto pensando… per una pagina intera possono volerci fino a un minuto.';
+        const stato2 = 'Sto scrivendo la pagina…';
+        const mostraStato = t => {
+          esito.innerHTML = '<div class="ia-stato"><span class="girella"></span> <span>' + esc(t) + '</span></div>' +
+            '<button class="btn piccolo" id="ia-stop" style="margin-top:4px">Ferma</button>';
+          $('#ia-stop', esito).onclick = () => { if (controllore) controllore.abort(); };
+        };
+        mostraStato(stato1);
+        controllore = new AbortController();
+        let iniziato = false;
         progresso(0.3);
         try {
           const out = await generaConIA({
             richiesta: richiesta || 'Guarda la pagina allegata e fai quello che serve.',
             modo, conPagina,
-            lunghezza: $('#ia-lunghezza', v).value
+            lunghezza: $('#ia-lunghezza', v).value,
+            segnale: controllore.signal,
+            suTesto: () => { if (!iniziato){ iniziato = true; mostraStato(stato2); } }
           });
           progresso(0.85);
           const n = await inserisciRisultatoIA(out);
           progresso(null);
+          controllore = null;
           chiudi();
           toast(n === 1 ? 'Pagina creata' : n + ' pagine create', 'ok');
         } catch(err){
           progresso(null);
+          controllore = null;
           bottone.disabled = false;
-          esito.innerHTML = '<div class="avviso"><b>Non ha funzionato.</b><br>' + esc(err.message) +
-            '<br><br>Controlla la connessione e le impostazioni dell’IA.</div>';
+          if (err && err.code === 'cancelled'){ esito.innerHTML = ''; return; }
+          esito.innerHTML = '<div class="avviso"><b>Non ha funzionato.</b><br>' + esc(messaggioErroreIA(err)) + '</div>';
         }
       };
     }
@@ -3350,6 +3488,7 @@ function modaleImpostazioni(sezione){
     '<div class="aiuto" style="margin:-4px 0 18px">Disegna un cerchio, un quadrato o una linea e resta fermo con la penna sul foglio: il tratto diventa una forma perfetta.</div>' +
 
     '<div class="sezione-tit" style="margin-top:6px">Intelligenza artificiale</div>' +
+    '<div id="ia-piattaforma" class="hidden"></div>' +
     '<div class="campo"><label>Come ci si collega</label><div class="scelte">' +
       '<button class="scelta' + (c.iaModo === 'backend' ? ' attivo' : '') + '" data-iamodo="backend">Tramite il mio server<small>consigliato: la chiave resta sul server</small></button>' +
       '<button class="scelta' + (c.iaModo === 'diretto' ? ' attivo' : '') + '" data-iamodo="diretto">Chiave API su questo dispositivo<small>più veloce da provare</small></button>' +
@@ -3412,6 +3551,15 @@ function modaleImpostazioni(sezione){
         if (b.dataset.v === 'ripristina') importaBackup();
       });
       spazioUsato().then(t => { const el = $('#spazio-usato', v); if (el) el.textContent = t; });
+      // quando il quaderno è aperto dentro Claude non serve configurare nulla
+      capacita('sample').then(camp => {
+        const el = $('#ia-piattaforma', v); if (!el || !camp) return;
+        el.classList.remove('hidden');
+        el.innerHTML = '<div class="avviso" style="background:var(--accent-soft);border-color:transparent">' +
+          '<b>Qui l’IA è già pronta.</b> Questo quaderno chiede direttamente a Claude usando l’account di chi lo apre: ' +
+          'non serve nessuna chiave né nessun server, e la prima volta ti verrà chiesto il permesso. ' +
+          'Le impostazioni qui sotto servono solo se metti il file su un tuo sito.</div>';
+      });
     }
   });
 }
@@ -3445,9 +3593,8 @@ async function esportaBackup(){
     const fuori = { versione:1, data:Date.now(), quaderni, pagine, asset:[] };
     for (const a of asset) fuori.asset.push({ id:a.id, tipo:a.blob.type, dati: await blobInBase64(a.blob) });
     progresso(null);
-    scarica(new Blob([JSON.stringify(fuori)], { type:'application/json' }),
-      'quaderno-backup-' + new Date().toISOString().slice(0, 10) + '.json');
-    toast('Copia salvata', 'ok');
+    if (await scarica(new Blob([JSON.stringify(fuori)], { type:'application/json' }),
+      'quaderno-backup-' + new Date().toISOString().slice(0, 10) + '.json')) toast('Copia salvata', 'ok');
   } catch(e){ progresso(null); toast('Copia non riuscita: ' + e.message, 'err'); }
 }
 function importaBackup(){
