@@ -5992,7 +5992,7 @@ async function caricaPrenotazioniPagamenti(){
   var controller = new AbortController();
   var timeoutId = setTimeout(function(){ controller.abort(); }, 15000);
   try {
-    var resp = await pagFetch('/api/smoobu/reservations?arrivalFrom='+daISO+'&arrivalTo='+aISO, { signal: controller.signal });
+    var resp = await pagFetch('/api/smoobu/reservations?arrivalFrom='+daISO+'&arrivalTo='+aISO+'&pageSize=100', { signal: controller.signal });
     clearTimeout(timeoutId);
     if (!resp.ok) return { errore: 'Il server ha risposto con un errore (' + resp.status + ')' };
     var data = await resp.json();
