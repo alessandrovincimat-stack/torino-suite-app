@@ -3716,13 +3716,32 @@ function calcolaDataPartenzaPresunta(dataArrivoISO, permanenza){
 async function inviaIstatArrivi(arriviOggi, allOrdered){
   if (!arriviOggi.length) throw new Error('nessun ospite da inviare');
   var arrivi = arriviOggi.map(function(g){ return buildIstatArrivo(g, allOrdered); });
+
+  // Blocco "prenotazioni": unico punto del webservice dove si dichiara il numero di
+  // camere (vedi WSDL: prenotazioneBean). Una prenotazione per ogni unità abitativa:
+  // capogruppo+membri, o singolo. Senza questo il campo "Camere" resta sempre vuoto
+  // in Storico ospiti sul portale.
+  var capiOSingoli = arriviOggi.filter(function(g){ return g.ruolo !== 'familiare' && g.ruolo !== 'membro'; });
+  var prenotazioni = capiOSingoli.map(function(capo){
+    var membriDelGruppo = arriviOggi.filter(function(g){ return g.groupOf === capo.id; });
+    var dataPartenzaGruppo = calcolaDataPartenzaPresunta(capo.dataArrivo, capo.permanenza) || capo.dataArrivo;
+    return {
+      idswh: capo.id,
+      arrivo: (capo.dataArrivo||'').replace(/-/g,''),
+      partenza: (dataPartenzaGruppo||'').replace(/-/g,''),
+      ospiti: String(1 + membriDelGruppo.length),
+      camere: '1'
+    };
+  });
+
   var resp = await fetch(backendUrl('/api/istat/movimento'), {
     method: 'POST',
     headers: backendHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({
       data: todayISO().replace(/-/g,''),
       camereOccupate: new Set(arriviOggi.map(function(g){ return g.idAppartamento; })).size,
-      arrivi: arrivi
+      arrivi: arrivi,
+      prenotazioni: prenotazioni
     })
   });
   var data = await resp.json();
@@ -3882,13 +3901,26 @@ async function segnalaArrivo(invioId, btn){
   out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>invio in corso…</span>';
   try {
     var arrivi = iv.ospiti.map(function(o){ return buildIstatArrivo(o, iv.ospiti); });
+
+    // Blocco "prenotazioni": vedi nota in inviaIstatArrivi — unico modo di dichiarare
+    // il numero di camere per questa prenotazione al webservice.
+    var dataPartenzaGruppo = calcolaDataPartenzaPresunta(dataArrivo, iv.ospiti[0] && iv.ospiti[0].permanenza) || dataArrivo;
+    var prenotazioni = [{
+      idswh: iv.ospiti[0].id,
+      arrivo: dataArrivo.replace(/-/g,''),
+      partenza: (dataPartenzaGruppo||'').replace(/-/g,''),
+      ospiti: String(iv.ospiti.length),
+      camere: '1'
+    }];
+
     var resp = await fetch(backendUrl('/api/istat/movimento'), {
       method: 'POST',
       headers: backendHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         data: dataArrivo.replace(/-/g,''),
         camereOccupate: 1,
-        arrivi: arrivi
+        arrivi: arrivi,
+        prenotazioni: prenotazioni
       })
     });
     var data = await resp.json();
@@ -3896,7 +3928,7 @@ async function segnalaArrivo(invioId, btn){
     iv.arrivoSegnalato = true;
     await remoteStorage.set('as-invii', JSON.stringify(state.invii));
     await segnaIstatInviato(dataArrivo);
-    var msg = '<p class="as-ok">Arrivo segnalato correttamente.</p>';
+    var msg = '<p class="as-ok">Arrivo segnalato correttamente (con camere occupate incluse).</p>';
 
     // La partenza presunta va SEMPRE su una chiamata separata, con la sua data futura
     // (giorno diverso dall'arrivo): il campo "data" del movimento è un singolo giorno.
