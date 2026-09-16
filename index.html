@@ -6035,9 +6035,11 @@ async function renderPagamentiAsync(el){
         azioni = '<button class="as-btn secondary" data-archivia="'+b.id+'" style="margin-top:6px;">Archivia</button>';
       } else if (canale === 'booking'){
         azioni = '<button class="as-btn" data-paga="'+b.id+'" style="margin-top:6px;">Paga</button> ' +
+                 '<button class="as-btn secondary" data-pagato="'+b.id+'" style="margin-top:6px;">Segna come incassato</button> ' +
                  '<button class="as-btn ghost" data-archivia="'+b.id+'" style="margin-top:6px;">Archivia</button>';
       } else {
         azioni = '<button class="as-btn secondary" data-link="'+b.id+'" style="margin-top:6px;">Crea link di pagamento</button> ' +
+                 '<button class="as-btn secondary" data-pagato="'+b.id+'" style="margin-top:6px;">Segna come incassato</button> ' +
                  '<button class="as-btn ghost" data-archivia="'+b.id+'" style="margin-top:6px;">Archivia</button>';
       }
       return '<div class="as-booking" data-booking-id="'+b.id+'">' +
@@ -6058,6 +6060,13 @@ async function renderPagamentiAsync(el){
   el.querySelectorAll('[data-archivia]').forEach(function(btn){
     btn.onclick = function(){
       segnaPagamento(btn.getAttribute('data-archivia'), 'archiviato', {}, btn);
+    };
+  });
+  el.querySelectorAll('[data-pagato]').forEach(function(btn){
+    btn.onclick = function(){
+      var b = pagamentiCache.find(function(x){ return String(x.id) === btn.getAttribute('data-pagato'); });
+      var importo = b && b.price != null ? Number(b.price) : null;
+      segnaPagamento(btn.getAttribute('data-pagato'), 'pagato', { importo: importo }, btn);
     };
   });
   el.querySelectorAll('[data-link]').forEach(function(btn){
