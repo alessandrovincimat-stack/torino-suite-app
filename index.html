@@ -1450,6 +1450,13 @@ async function ocrDocument(files, guest){
     if (parsed.comune_residenza){
       if (guest.residenzaEstero) guest.statoResidenzaNome = parsed.comune_residenza.toUpperCase();
       else guest.comuneResidenzaNome = parsed.comune_residenza.toUpperCase();
+    } else if (guest.cittadinanzaNome && guest.cittadinanzaNome !== 'ITALIA'){
+      // Il documento (spesso un passaporto) non riporta alcuna residenza stampata: come
+      // default ragionevole assumiamo la residenza nello stesso stato di cittadinanza,
+      // correggibile manualmente in scheda. Meglio di "Italia/comune vuoto", che risultava
+      // "NON DEFINITO" sul portale ROSS1000/Questura.
+      guest.residenzaEstero = true;
+      guest.statoResidenzaNome = guest.cittadinanzaNome;
     }
     if (parsed.codice_fiscale && parsed.codice_fiscale.trim()) guest.codiceFiscale = parsed.codice_fiscale.trim().toUpperCase();
 
