@@ -186,6 +186,11 @@
     }
     if (riferimentoParam) document.getElementById('riferimento').value = riferimentoParam;
     if (importoParam) document.getElementById('importo').value = importoParam;
+    window.__datiPrenotazione = {
+      ospite: parametri.get('ospite') || '',
+      checkin: parametri.get('checkin') || '',
+      checkout: parametri.get('checkout') || ''
+    };
   })();
 
   const form = document.getElementById('payment-form');
@@ -229,7 +234,10 @@
           payment_method_id: paymentMethod.id,
           importo_centesimi: Math.round(parseFloat(importo) * 100),
           alloggio,
-          riferimento
+          riferimento,
+          ospite: (window.__datiPrenotazione && window.__datiPrenotazione.ospite) || '',
+          checkin: (window.__datiPrenotazione && window.__datiPrenotazione.checkin) || '',
+          checkout: (window.__datiPrenotazione && window.__datiPrenotazione.checkout) || ''
         })
       });
 
