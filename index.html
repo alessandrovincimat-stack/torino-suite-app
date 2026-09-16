@@ -5901,8 +5901,48 @@ loadState().then(render);
   btnImpostazioni.onclick = showImpostazioni; if (btnBooking) btnBooking.onclick = showBooking;
 
 // ===== Sezione Pagamenti =====
+// Nota: definite in modo autonomo (pagUrl/pagHeaders/pagStoreGet/pagStoreSet)
+// per non dipendere da backendUrl/backendHeaders/remoteStorage che potrebbero
+// non essere raggiungibili da questo punto del file.
 var pagamentiSubtabAttivo = 'da-incassare';
 var pagamentiCache = null;
+
+function pagUrl(path){
+  var base = (state.backend.url || '').replace(/\/$/, '');
+  return base + path;
+}
+function pagHeaders(extra){
+  var h = Object.assign({}, extra || {});
+  if (state.backend.secret) h['x-app-secret'] = state.backend.secret;
+  return h;
+}
+function pagToItData(iso){
+  if (!iso) return '';
+  var p = String(iso).split('-');
+  if (p.length !== 3) return '';
+  return p[2] + '/' + p[1] + '/' + p[0];
+}
+async function pagStoreGet(key){
+  if (!state.backend.url) return null;
+  try {
+    var r = await fetch(pagUrl('/api/store?key='+encodeURIComponent(key)), { headers: pagHeaders(), cache: 'no-store' });
+    if (!r.ok) return null;
+    var d = await r.json();
+    return (d && d.value != null) ? d.value : null;
+  } catch(e){ return null; }
+}
+async function pagStoreSet(key, value){
+  if (!state.backend.url) return false;
+  try {
+    var r = await fetch(pagUrl('/api/store'), {
+      method: 'POST',
+      headers: pagHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ key: key, value: value }),
+      cache: 'no-store'
+    });
+    return r.ok;
+  } catch(e){ return false; }
+}
 
 function getCanaleBooking(b){
   var nome = (b['channel-name'] || b.channelName || (b.channel && b.channel.name) || '').toString().toLowerCase();
@@ -5915,23 +5955,24 @@ function nomeAppartamentoBooking(b){
   return appMatch ? appMatch.nome : (b.apartment ? b.apartment.name : '');
 }
 async function getStatiPagamenti(){
-  var r = await remoteStorage.get('pagamenti-stati');
-  return (r && r.value) ? r.value : {};
+  var v = await pagStoreGet('pagamenti-stati');
+  return v || {};
 }
 async function setStatoPagamento(bookingId, dati){
   var stati = await getStatiPagamenti();
   stati[String(bookingId)] = dati;
-  await remoteStorage.set('pagamenti-stati', stati);
+  await pagStoreSet('pagamenti-stati', stati);
 }
 async function caricaPrenotazioniPagamenti(){
   var oggi = new Date();
   var da = new Date(oggi); da.setDate(da.getDate() - 30);
   var a = new Date(oggi); a.setDate(a.getDate() + 60);
   var daISO = da.toISOString().slice(0,10), aISO = a.toISOString().slice(0,10);
+  if (!state.backend.url) return { errore: 'backend non configurato (vai in Impostazioni)' };
   var controller = new AbortController();
   var timeoutId = setTimeout(function(){ controller.abort(); }, 15000);
   try {
-    var resp = await fetch(backendUrl('/api/smoobu/reservations?arrivalFrom='+daISO+'&arrivalTo='+aISO), { headers: backendHeaders(), signal: controller.signal });
+    var resp = await fetch(pagUrl('/api/smoobu/reservations?arrivalFrom='+daISO+'&arrivalTo='+aISO), { headers: pagHeaders(), signal: controller.signal });
     clearTimeout(timeoutId);
     if (!resp.ok) return { errore: 'Il server ha risposto con un errore (' + resp.status + ')' };
     var data = await resp.json();
@@ -5944,7 +5985,7 @@ async function caricaPrenotazioniPagamenti(){
 function formattaMeseAnno(iso){
   var mesi = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
   var p = (iso||'').split('-');
-  if (p.length !== 3) return '';
+  if (p.length !== 3 && p.length !== 2) return '';
   return mesi[parseInt(p[1],10)-1] + ' ' + p[0];
 }
 function raggruppaPerMese(prenotazioni){
@@ -5957,7 +5998,6 @@ function raggruppaPerMese(prenotazioni){
   return Object.keys(gruppi).sort().map(function(k){ return { mese: k, prenotazioni: gruppi[k] }; });
 }
 function apriModuloPagamento(b){
-  var canale = getCanaleBooking(b);
   var alloggio = nomeAppartamentoBooking(b);
   var riferimento = b['reference-id'] || b.id;
   var importo = b.price != null ? Number(b.price) : '';
@@ -5966,7 +6006,7 @@ function apriModuloPagamento(b){
 }
 async function segnaPagamento(bookingId, stato, extra, btnEl){
   if (btnEl) btnEl.disabled = true;
-  await setStatoPagamento(bookingId, Object.assign({ stato: stato, data: todayISO() }, extra||{}));
+  await setStatoPagamento(bookingId, Object.assign({ stato: stato, data: new Date().toISOString().slice(0,10) }, extra||{}));
   renderPagamenti();
 }
 async function creaLinkPagamento(b, btnEl){
@@ -5975,9 +6015,9 @@ async function creaLinkPagamento(b, btnEl){
   var riferimento = b['reference-id'] || b.id;
   var importoCent = b.price != null ? Math.round(Number(b.price)*100) : 0;
   try {
-    var resp = await fetch(backendUrl('/api/pagamenti/crea-link'), {
+    var resp = await fetch(pagUrl('/api/pagamenti/crea-link'), {
       method: 'POST',
-      headers: backendHeaders({ 'Content-Type': 'application/json' }),
+      headers: pagHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ importo_centesimi: importoCent, alloggio: alloggio, riferimento: String(riferimento) })
     });
     var data = await resp.json();
@@ -6041,7 +6081,7 @@ async function renderPagamentiAsync(el){
       var azioni = '';
       if (pagamentiSubtabAttivo === 'ok'){
         var s = stati[String(b.id)] || {};
-        azioni = '<p class="as-ok" style="margin:6px 0 0;">Incassato il '+toItDate(s.data)+' — '+importo+'</p>';
+        azioni = '<p class="as-ok" style="margin:6px 0 0;">Incassato il '+pagToItData(s.data)+' — '+importo+'</p>';
       } else if (canale === 'airbnb'){
         azioni = '<button class="as-btn secondary" data-archivia="'+b.id+'" style="margin-top:6px;">Archivia</button>';
       } else if (canale === 'booking'){
@@ -6054,7 +6094,7 @@ async function renderPagamentiAsync(el){
                  '<button class="as-btn ghost" data-archivia="'+b.id+'" style="margin-top:6px;">Archivia</button>';
       }
       return '<div class="as-booking" data-booking-id="'+b.id+'">' +
-        '<div>'+toItDate(b.arrival)+' → '+toItDate(b.departure)+' · '+(b['guest-name']||'ospite sconosciuto')+'</div>' +
+        '<div>'+pagToItData(b.arrival)+' → '+pagToItData(b.departure)+' · '+(b['guest-name']||'ospite sconosciuto')+'</div>' +
         '<div class="as-sub" style="margin:0;">'+alloggio+' — '+etichettaCanale+' — '+importo+'</div>' +
         azioni +
         '</div>';
