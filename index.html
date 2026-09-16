@@ -5928,12 +5928,18 @@ async function caricaPrenotazioniPagamenti(){
   var da = new Date(oggi); da.setDate(da.getDate() - 30);
   var a = new Date(oggi); a.setDate(a.getDate() + 60);
   var daISO = da.toISOString().slice(0,10), aISO = a.toISOString().slice(0,10);
+  var controller = new AbortController();
+  var timeoutId = setTimeout(function(){ controller.abort(); }, 15000);
   try {
-    var resp = await fetch(backendUrl('/api/smoobu/reservations?arrivalFrom='+daISO+'&arrivalTo='+aISO), { headers: backendHeaders() });
-    if (!resp.ok) return [];
+    var resp = await fetch(backendUrl('/api/smoobu/reservations?arrivalFrom='+daISO+'&arrivalTo='+aISO), { headers: backendHeaders(), signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (!resp.ok) return { errore: 'Il server ha risposto con un errore (' + resp.status + ')' };
     var data = await resp.json();
-    return data.bookings || data.data || (Array.isArray(data) ? data : []);
-  } catch(e){ return []; }
+    return { bookings: data.bookings || data.data || (Array.isArray(data) ? data : []) };
+  } catch(e){
+    clearTimeout(timeoutId);
+    return { errore: e.name === 'AbortError' ? 'il server non ha risposto in tempo (15s)' : e.message };
+  }
 }
 function formattaMeseAnno(iso){
   var mesi = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
@@ -6007,7 +6013,12 @@ function renderPagamenti(){
 }
 async function renderPagamentiAsync(el){
   if (!pagamentiCache){
-    pagamentiCache = await caricaPrenotazioniPagamenti();
+    var risultato = await caricaPrenotazioniPagamenti();
+    if (risultato.errore){
+      el.innerHTML = '<div class="as-err">Prenotazioni non disponibili: '+risultato.errore+'</div>';
+      return;
+    }
+    pagamentiCache = risultato.bookings;
   }
   var stati = await getStatiPagamenti();
   var daIncassare = pagamentiCache.filter(function(b){ return !stati[String(b.id)]; });
