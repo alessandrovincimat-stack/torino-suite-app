@@ -6099,17 +6099,20 @@ async function renderPagamentiAsync(el){
   var lista = pagamentiSubtabAttivo === 'ok' ? ok : daIncassare;
   var gruppi = raggruppaPerMese(lista);
 
+  var debugConteggio = '<p class="as-sub" style="opacity:0.7;">[debug] totale ricevuto da Smoobu: '+pagamentiCache.length+' — booking: '+pagamentiCache.filter(function(x){return getCanaleBooking(x)==='booking';}).length+' — airbnb: '+pagamentiCache.filter(function(x){return getCanaleBooking(x)==='airbnb';}).length+' — altro: '+pagamentiCache.filter(function(x){return getCanaleBooking(x)==='altro';}).length+'</p>';
+
   if (!gruppi.length){
-    el.innerHTML = '<p class="as-sub">'+(pagamentiSubtabAttivo==='ok' ? 'Nessun pagamento registrato ancora.' : 'Nessuna prenotazione da gestire al momento.')+'</p>';
+    el.innerHTML = debugConteggio + '<p class="as-sub">'+(pagamentiSubtabAttivo==='ok' ? 'Nessun pagamento registrato ancora.' : 'Nessuna prenotazione da gestire al momento.')+'</p>';
     return;
   }
 
-  el.innerHTML = gruppi.map(function(g){
+  el.innerHTML = debugConteggio + gruppi.map(function(g){
     var righe = g.prenotazioni.slice().sort(function(x,y){ return String(x.arrival).localeCompare(String(y.arrival)); }).map(function(b){
       var canale = getCanaleBooking(b);
       var alloggio = trovaNomeAppartamento(b, listaAppartamenti);
       var importo = b.price != null ? Number(b.price).toFixed(2) + ' €' : 'importo da verificare';
       var etichettaCanale = canale === 'booking' ? 'Booking.com' : (canale === 'airbnb' ? 'Airbnb — paga alla piattaforma' : 'Altro canale');
+      var debugCanale = ' [debug: channel-name="'+(b['channel-name']||'')+'" channelName="'+(b.channelName||'')+'" channel.name="'+((b.channel&&b.channel.name)||'')+'" type="'+(b.type||'')+'"]';
       var azioni = '';
       if (pagamentiSubtabAttivo === 'ok'){
         var s = stati[String(b.id)] || {};
@@ -6127,7 +6130,7 @@ async function renderPagamentiAsync(el){
       }
       return '<div class="as-booking" data-booking-id="'+b.id+'">' +
         '<div>'+pagToItData(b.arrival)+' → '+pagToItData(b.departure)+' · '+(b['guest-name']||'ospite sconosciuto')+'</div>' +
-        '<div class="as-sub" style="margin:0;">'+alloggio+' — '+etichettaCanale+' — '+importo+'</div>' +
+        '<div class="as-sub" style="margin:0;">'+alloggio+' — '+etichettaCanale+' — '+importo+debugCanale+'</div>' +
         azioni +
         '</div>';
     }).join('');
