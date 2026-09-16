@@ -3715,29 +3715,53 @@ function calcolaDataPartenzaPresunta(dataArrivoISO, permanenza){
 
 async function inviaIstatArrivi(arriviOggi, allOrdered){
   if (!arriviOggi.length) throw new Error('nessun ospite da inviare');
-  // Invio unico: arrivo e partenza presunta nella STESSA chiamata (stesso campo "data",
-  // quello dell'arrivo). Il sistema Piemonte Dati Turismo richiede i movimenti in sequenza
-  // giornaliera (vedi <apertura>SI</apertura>): inviare una partenza per un giorno futuro
-  // non ancora "aperto" veniva ignorato/perso, lasciando la partenza mancante sul portale.
   var arrivi = arriviOggi.map(function(g){ return buildIstatArrivo(g, allOrdered); });
-  var partenze = arriviOggi.map(function(g){
-    return { idswh: g.id, tipoalloggiato: ruoloCode[g.ruolo] || '16', arrivo: (g.dataArrivo||'').replace(/-/g,'') };
-  });
   var resp = await fetch(backendUrl('/api/istat/movimento'), {
     method: 'POST',
     headers: backendHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({
       data: todayISO().replace(/-/g,''),
       camereOccupate: new Set(arriviOggi.map(function(g){ return g.idAppartamento; })).size,
-      arrivi: arrivi,
-      partenze: partenze
+      arrivi: arrivi
     })
   });
   var data = await resp.json();
   if (!resp.ok) throw new Error(data.error || 'errore invio ISTAT');
   await segnaIstatInviato(todayISO());
-  data.partenzeInviate = partenze.length;
-  data.partenzeFallite = [];
+
+  // NOTA: la partenza presunta va inviata separatamente, con la SUA data (futura, diversa
+  // da quella di arrivo) — il campo "data" di ogni movimento rappresenta un singolo giorno,
+  // quindi arrivo e partenza (giorni diversi) non possono condividere la stessa chiamata.
+  var gruppiPerPartenza = {};
+  arriviOggi.forEach(function(g){
+    var dataPartenza = calcolaDataPartenzaPresunta(g.dataArrivo, g.permanenza);
+    if (!dataPartenza) return;
+    if (!gruppiPerPartenza[dataPartenza]) gruppiPerPartenza[dataPartenza] = [];
+    gruppiPerPartenza[dataPartenza].push(g);
+  });
+  var partenzeInviate = 0;
+  var partenzeFallite = [];
+  for (var dataPartenza in gruppiPerPartenza){
+    var ospitiGruppo = gruppiPerPartenza[dataPartenza];
+    var partenze = ospitiGruppo.map(function(g){
+      return { idswh: g.id, tipoalloggiato: ruoloCode[g.ruolo] || '16', arrivo: (g.dataArrivo||'').replace(/-/g,'') };
+    });
+    try {
+      var respP = await fetch(backendUrl('/api/istat/movimento'), {
+        method: 'POST',
+        headers: backendHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ data: dataPartenza.replace(/-/g,''), camereOccupate: 0, partenze: partenze })
+      });
+      var dataP = await respP.json();
+      if (!respP.ok) throw new Error(dataP.error || 'errore invio partenza');
+      partenzeInviate += ospitiGruppo.length;
+      await segnaIstatInviato(dataPartenza);
+    } catch(ePartenza){
+      partenzeFallite.push({ data: dataPartenza, errore: ePartenza.message });
+    }
+  }
+  data.partenzeInviate = partenzeInviate;
+  data.partenzeFallite = partenzeFallite;
   return data;
 }
 
@@ -3857,28 +3881,45 @@ async function segnalaArrivo(invioId, btn){
   var out = btn.nextElementSibling;
   out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>invio in corso…</span>';
   try {
-    // Invio unico: arrivo e partenza presunta nella STESSA chiamata (stesso campo "data",
-    // quello dell'arrivo). Il sistema Piemonte Dati Turismo richiede i movimenti in sequenza
-    // giornaliera: una partenza per un giorno futuro non ancora "aperto" veniva persa.
     var arrivi = iv.ospiti.map(function(o){ return buildIstatArrivo(o, iv.ospiti); });
-    var partenze = iv.ospiti.map(function(o){ return { idswh: o.id, tipoalloggiato: ruoloCode[o.ruolo] || '16', arrivo: dataArrivo.replace(/-/g,'') }; });
     var resp = await fetch(backendUrl('/api/istat/movimento'), {
       method: 'POST',
       headers: backendHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         data: dataArrivo.replace(/-/g,''),
         camereOccupate: 1,
-        arrivi: arrivi,
-        partenze: partenze
+        arrivi: arrivi
       })
     });
     var data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'errore invio ISTAT');
     iv.arrivoSegnalato = true;
-    iv.partenzaSegnalata = true;
     await remoteStorage.set('as-invii', JSON.stringify(state.invii));
     await segnaIstatInviato(dataArrivo);
-    out.innerHTML = '<p class="as-ok">Arrivo e partenza presunta segnalati correttamente in un unico invio.</p>';
+    var msg = '<p class="as-ok">Arrivo segnalato correttamente.</p>';
+
+    // La partenza presunta va SEMPRE su una chiamata separata, con la sua data futura
+    // (giorno diverso dall'arrivo): il campo "data" del movimento è un singolo giorno.
+    var dataPartenzaPresunta = calcolaDataPartenzaPresunta(dataArrivo, iv.ospiti[0] && iv.ospiti[0].permanenza);
+    if (dataPartenzaPresunta){
+      try {
+        var partenze = iv.ospiti.map(function(o){ return { idswh: o.id, tipoalloggiato: ruoloCode[o.ruolo] || '16', arrivo: dataArrivo.replace(/-/g,'') }; });
+        var respP = await fetch(backendUrl('/api/istat/movimento'), {
+          method: 'POST',
+          headers: backendHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ data: dataPartenzaPresunta.replace(/-/g,''), camereOccupate: 0, partenze: partenze })
+        });
+        var dataP = await respP.json();
+        if (!respP.ok) throw new Error(dataP.error || 'errore invio partenza');
+        iv.partenzaSegnalata = true;
+        await remoteStorage.set('as-invii', JSON.stringify(state.invii));
+        await segnaIstatInviato(dataPartenzaPresunta);
+        msg += '<p class="as-ok">Partenza presunta (' + toItDate(dataPartenzaPresunta) + ') segnalata correttamente.</p>';
+      } catch(eP){
+        msg += '<div class="as-err">⚠️ Partenza presunta NON inviata: '+escapeHtml(eP.message)+'. Riprova con il pulsante "Segnala partenza".</div>';
+      }
+    }
+    out.innerHTML = msg;
     render();
   } catch(e){
     out.innerHTML = '<div class="as-err">'+escapeHtml(e.message)+'</div>';
