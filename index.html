@@ -5966,7 +5966,9 @@ async function pagStoreSet(key, value){
 function getCanaleBooking(b){
   var nome = (b['channel-name'] || b.channelName || (b.channel && b.channel.name) || '').toString().toLowerCase();
   if (nome.indexOf('airbnb') !== -1) return 'airbnb';
-  if (nome.indexOf('booking') !== -1) return 'booking';
+  // Attenzione: controllare solo "booking" matcherebbe anche "Direct booking"
+  // (prenotazione diretta), che NON e' Booking.com. Serve "booking.com" specifico.
+  if (nome.indexOf('booking.com') !== -1) return 'booking';
   return 'altro';
 }
 function trovaNomeAppartamento(b, listaAppartamenti){
@@ -6099,14 +6101,12 @@ async function renderPagamentiAsync(el){
   var lista = pagamentiSubtabAttivo === 'ok' ? ok : daIncassare;
   var gruppi = raggruppaPerMese(lista);
 
-  var debugConteggio = '<p class="as-sub" style="opacity:0.7;">[debug] totale ricevuto da Smoobu: '+pagamentiCache.length+' — booking: '+pagamentiCache.filter(function(x){return getCanaleBooking(x)==='booking';}).length+' — airbnb: '+pagamentiCache.filter(function(x){return getCanaleBooking(x)==='airbnb';}).length+' — altro: '+pagamentiCache.filter(function(x){return getCanaleBooking(x)==='altro';}).length+'</p>';
-
   if (!gruppi.length){
-    el.innerHTML = debugConteggio + '<p class="as-sub">'+(pagamentiSubtabAttivo==='ok' ? 'Nessun pagamento registrato ancora.' : 'Nessuna prenotazione da gestire al momento.')+'</p>';
+    el.innerHTML = '<p class="as-sub">'+(pagamentiSubtabAttivo==='ok' ? 'Nessun pagamento registrato ancora.' : 'Nessuna prenotazione da gestire al momento.')+'</p>';
     return;
   }
 
-  el.innerHTML = debugConteggio + gruppi.map(function(g){
+  el.innerHTML = gruppi.map(function(g){
     var righe = g.prenotazioni.slice().sort(function(x,y){ return String(x.arrival).localeCompare(String(y.arrival)); }).map(function(b){
       var canale = getCanaleBooking(b);
       var alloggio = trovaNomeAppartamento(b, listaAppartamenti);
@@ -6130,7 +6130,7 @@ async function renderPagamentiAsync(el){
       }
       return '<div class="as-booking" data-booking-id="'+b.id+'">' +
         '<div>'+pagToItData(b.arrival)+' → '+pagToItData(b.departure)+' · '+(b['guest-name']||'ospite sconosciuto')+'</div>' +
-        '<div class="as-sub" style="margin:0;">'+alloggio+' — '+etichettaCanale+' — '+importo+debugCanale+'</div>' +
+        '<div class="as-sub" style="margin:0;">'+alloggio+' — '+etichettaCanale+' — '+importo+'</div>' +
         azioni +
         '</div>';
     }).join('');
