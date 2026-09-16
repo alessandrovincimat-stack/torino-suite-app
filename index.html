@@ -6052,6 +6052,7 @@ function renderPagamenti(){
   renderPagamentiAsync(el);
 }
 async function renderPagamentiAsync(el){
+ try {
   if (!pagamentiCache){
     var risultato = await caricaPrenotazioniPagamenti();
     if (risultato.errore){
@@ -6126,6 +6127,9 @@ async function renderPagamentiAsync(el){
       if (b) creaLinkPagamento(b, btn);
     };
   });
+ } catch(erroreRender){
+   el.innerHTML = '<div class="as-err">Errore nel disegnare la lista: '+erroreRender.message+'</div>';
+ }
 }
 window.renderPagamenti = renderPagamenti;
 
