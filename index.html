@@ -4170,6 +4170,7 @@ function renderArchivioIstatOk(el){
           '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);">' +
           '<p class="as-sub" style="margin:0 0 6px;">Solo ISTAT (Piemonte Dati Turismo) — la Questura non è modificabile una volta inviata:</p>' +
           '<button class="as-btn secondary" data-correggi-istat="'+escapeHtml(iv.id)+'" style="margin-top:4px;">🔁 Correggi/reinvia ISTAT (arrivo + partenza presunta)</button>' +
+          '<button class="as-btn ghost" data-elimina-istat="'+escapeHtml(iv.id)+'" style="margin-top:4px;color:var(--danger);">🗑️ Elimina arrivo errato da ISTAT</button>' +
           '<div class="as-esito-istat" style="margin-top:6px;"></div>' +
           '</div>') +
         '</details>' +
@@ -4223,6 +4224,39 @@ function renderArchivioIstatOk(el){
   el.querySelectorAll('[data-correggi-istat]').forEach(function(btn){
     btn.onclick = function(){ segnalaArrivo(btn.getAttribute('data-correggi-istat'), btn); };
   });
+  el.querySelectorAll('[data-elimina-istat]').forEach(function(btn){
+    btn.onclick = function(){ eliminaArrivoIstat(btn.getAttribute('data-elimina-istat'), btn); };
+  });
+}
+
+// Elimina un arrivo registrato per errore su Piemonte Dati Turismo (ROSS1000), senza
+// doverlo fare a mano sul portale. Usa il blocco "rettifiche" del webservice (vedi WSDL:
+// eliminazioneBean), diverso da arrivi/partenze/prenotazioni ma incluso nella stessa
+// chiamata /api/istat/movimento.
+async function eliminaArrivoIstat(invioId, btn){
+  var iv = state.invii.find(function(x){ return x.id === invioId; });
+  if (!iv) return;
+  var suggerita = (iv.ospiti[0] && iv.ospiti[0].dataArrivo) || todayISO();
+  var dataDaEliminare = prompt('Data di ARRIVO registrata sul portale da eliminare (AAAA-MM-GG). Attenzione: se sul portale la data è diversa da quella salvata qui, inserisci quella del portale:', suggerita);
+  if (!dataDaEliminare) return;
+  if (!confirm('Confermi di voler ELIMINARE da Piemonte Dati Turismo la registrazione del '+toItDate(dataDaEliminare)+' per: '+iv.ospiti.map(function(o){return o.cognome+' '+o.nome;}).join(', ')+'?\n\nQuesta operazione rimuove il record dal portale e non è reversibile da qui.')) return;
+  var out = btn.nextElementSibling;
+  out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>eliminazione in corso…</span>';
+  try {
+    var rettifiche = iv.ospiti.map(function(o){
+      return { tipo: 'eliminazione', idswh: o.id, tipoalloggiato: ruoloCode[o.ruolo] || '16', arrivo: dataDaEliminare.replace(/-/g,'') };
+    });
+    var resp = await fetch(backendUrl('/api/istat/movimento'), {
+      method: 'POST',
+      headers: backendHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ data: todayISO().replace(/-/g,''), camereOccupate: 0, rettifiche: rettifiche })
+    });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'errore eliminazione ISTAT');
+    out.innerHTML = '<p class="as-ok">Eliminazione inviata correttamente. Controlla su Storico ospiti che la riga sia sparita.</p>';
+  } catch(e){
+    out.innerHTML = '<div class="as-err">'+escapeHtml(e.message)+'</div>';
+  }
 }
 
 async function correggiDataArrivoArchivio(invioId, ospiteId){
