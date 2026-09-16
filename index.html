@@ -5901,20 +5901,41 @@ loadState().then(render);
   btnImpostazioni.onclick = showImpostazioni; if (btnBooking) btnBooking.onclick = showBooking;
 
 // ===== Sezione Pagamenti =====
-// Nota: definite in modo autonomo (pagUrl/pagHeaders/pagStoreGet/pagStoreSet)
-// per non dipendere da backendUrl/backendHeaders/remoteStorage che potrebbero
-// non essere raggiungibili da questo punto del file.
+// Completamente autonoma: usa solo window.storage (globale, agganciato esplicitamente
+// a window) e fetch dirette al backend. NON usa 'state', 'backendUrl', 'remoteStorage'
+// perche' quelle variabili vivono in un modulo JS separato e non sono raggiungibili
+// da questo punto del file (il bundle usa scope isolati per modulo).
 var pagamentiSubtabAttivo = 'da-incassare';
 var pagamentiCache = null;
+var pagBackendCache = null;
+var pagAppartamentiCache = null;
 
-function pagUrl(path){
-  var base = (state.backend.url || '').replace(/\/$/, '');
-  return base + path;
+async function pagGetBackend(){
+  if (pagBackendCache) return pagBackendCache;
+  try {
+    var b = await window.storage.get('as-backend', false);
+    pagBackendCache = (b && b.value) ? JSON.parse(b.value) : { url: '', secret: '' };
+  } catch(e){ pagBackendCache = { url: '', secret: '' }; }
+  return pagBackendCache;
 }
-function pagHeaders(extra){
-  var h = Object.assign({}, extra || {});
-  if (state.backend.secret) h['x-app-secret'] = state.backend.secret;
-  return h;
+async function pagFetch(path, options){
+  var backend = await pagGetBackend();
+  var base = (backend.url || '').replace(/\/$/, '');
+  var headers = Object.assign({}, (options && options.headers) || {});
+  if (backend.secret) headers['x-app-secret'] = backend.secret;
+  return fetch(base + path, Object.assign({}, options || {}, { headers: headers }));
+}
+async function pagGetAppartamenti(){
+  if (pagAppartamentiCache) return pagAppartamentiCache;
+  try {
+    var r = await pagFetch('/api/store?key=' + encodeURIComponent('as-tables'));
+    if (r.ok){
+      var d = await r.json();
+      var tables = (d && d.value) ? JSON.parse(d.value) : null;
+      pagAppartamentiCache = (tables && tables.appartamenti) ? tables.appartamenti : [];
+    } else { pagAppartamentiCache = []; }
+  } catch(e){ pagAppartamentiCache = []; }
+  return pagAppartamentiCache;
 }
 function pagToItData(iso){
   if (!iso) return '';
@@ -5923,20 +5944,18 @@ function pagToItData(iso){
   return p[2] + '/' + p[1] + '/' + p[0];
 }
 async function pagStoreGet(key){
-  if (!state.backend.url) return null;
   try {
-    var r = await fetch(pagUrl('/api/store?key='+encodeURIComponent(key)), { headers: pagHeaders(), cache: 'no-store' });
+    var r = await pagFetch('/api/store?key='+encodeURIComponent(key), { cache: 'no-store' });
     if (!r.ok) return null;
     var d = await r.json();
     return (d && d.value != null) ? d.value : null;
   } catch(e){ return null; }
 }
 async function pagStoreSet(key, value){
-  if (!state.backend.url) return false;
   try {
-    var r = await fetch(pagUrl('/api/store'), {
+    var r = await pagFetch('/api/store', {
       method: 'POST',
-      headers: pagHeaders({ 'Content-Type': 'application/json' }),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: key, value: value }),
       cache: 'no-store'
     });
@@ -5950,8 +5969,8 @@ function getCanaleBooking(b){
   if (nome.indexOf('booking') !== -1) return 'booking';
   return 'altro';
 }
-function nomeAppartamentoBooking(b){
-  var appMatch = (state.tables.appartamenti||[]).find(function(a){ return a.smoobuId && b.apartment && String(a.smoobuId) === String(b.apartment.id); });
+function trovaNomeAppartamento(b, listaAppartamenti){
+  var appMatch = (listaAppartamenti||[]).find(function(a){ return a.smoobuId && b.apartment && String(a.smoobuId) === String(b.apartment.id); });
   return appMatch ? appMatch.nome : (b.apartment ? b.apartment.name : '');
 }
 async function getStatiPagamenti(){
@@ -5964,15 +5983,16 @@ async function setStatoPagamento(bookingId, dati){
   await pagStoreSet('pagamenti-stati', stati);
 }
 async function caricaPrenotazioniPagamenti(){
+  var backend = await pagGetBackend();
+  if (!backend.url) return { errore: 'backend non configurato (vai in Impostazioni)' };
   var oggi = new Date();
   var da = new Date(oggi); da.setDate(da.getDate() - 30);
   var a = new Date(oggi); a.setDate(a.getDate() + 60);
   var daISO = da.toISOString().slice(0,10), aISO = a.toISOString().slice(0,10);
-  if (!state.backend.url) return { errore: 'backend non configurato (vai in Impostazioni)' };
   var controller = new AbortController();
   var timeoutId = setTimeout(function(){ controller.abort(); }, 15000);
   try {
-    var resp = await fetch(pagUrl('/api/smoobu/reservations?arrivalFrom='+daISO+'&arrivalTo='+aISO), { headers: pagHeaders(), signal: controller.signal });
+    var resp = await pagFetch('/api/smoobu/reservations?arrivalFrom='+daISO+'&arrivalTo='+aISO, { signal: controller.signal });
     clearTimeout(timeoutId);
     if (!resp.ok) return { errore: 'Il server ha risposto con un errore (' + resp.status + ')' };
     var data = await resp.json();
@@ -5985,7 +6005,7 @@ async function caricaPrenotazioniPagamenti(){
 function formattaMeseAnno(iso){
   var mesi = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
   var p = (iso||'').split('-');
-  if (p.length !== 3 && p.length !== 2) return '';
+  if (p.length < 2) return '';
   return mesi[parseInt(p[1],10)-1] + ' ' + p[0];
 }
 function raggruppaPerMese(prenotazioni){
@@ -5997,8 +6017,9 @@ function raggruppaPerMese(prenotazioni){
   });
   return Object.keys(gruppi).sort().map(function(k){ return { mese: k, prenotazioni: gruppi[k] }; });
 }
-function apriModuloPagamento(b){
-  var alloggio = nomeAppartamentoBooking(b);
+async function apriModuloPagamento(b){
+  var listaAppartamenti = await pagGetAppartamenti();
+  var alloggio = trovaNomeAppartamento(b, listaAppartamenti);
   var riferimento = b['reference-id'] || b.id;
   var importo = b.price != null ? Number(b.price) : '';
   var url = 'incasso-booking.html?alloggio='+encodeURIComponent(alloggio)+'&riferimento='+encodeURIComponent(riferimento)+'&importo='+encodeURIComponent(importo);
@@ -6011,13 +6032,14 @@ async function segnaPagamento(bookingId, stato, extra, btnEl){
 }
 async function creaLinkPagamento(b, btnEl){
   if (btnEl){ btnEl.disabled = true; btnEl.textContent = 'Genero il link…'; }
-  var alloggio = nomeAppartamentoBooking(b);
+  var listaAppartamenti = await pagGetAppartamenti();
+  var alloggio = trovaNomeAppartamento(b, listaAppartamenti);
   var riferimento = b['reference-id'] || b.id;
   var importoCent = b.price != null ? Math.round(Number(b.price)*100) : 0;
   try {
-    var resp = await fetch(pagUrl('/api/pagamenti/crea-link'), {
+    var resp = await pagFetch('/api/pagamenti/crea-link', {
       method: 'POST',
-      headers: pagHeaders({ 'Content-Type': 'application/json' }),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ importo_centesimi: importoCent, alloggio: alloggio, riferimento: String(riferimento) })
     });
     var data = await resp.json();
@@ -6062,6 +6084,7 @@ async function renderPagamentiAsync(el){
     pagamentiCache = risultato.bookings;
   }
   var stati = await getStatiPagamenti();
+  var listaAppartamenti = await pagGetAppartamenti();
   var daIncassare = pagamentiCache.filter(function(b){ return !stati[String(b.id)]; });
   var ok = pagamentiCache.filter(function(b){ return stati[String(b.id)] && stati[String(b.id)].stato === 'pagato'; });
 
@@ -6076,7 +6099,7 @@ async function renderPagamentiAsync(el){
   el.innerHTML = gruppi.map(function(g){
     var righe = g.prenotazioni.slice().sort(function(x,y){ return String(x.arrival).localeCompare(String(y.arrival)); }).map(function(b){
       var canale = getCanaleBooking(b);
-      var alloggio = nomeAppartamentoBooking(b);
+      var alloggio = trovaNomeAppartamento(b, listaAppartamenti);
       var importo = b.price != null ? Number(b.price).toFixed(2) + ' €' : 'importo da verificare';
       var etichettaCanale = canale === 'booking' ? 'Booking.com' : (canale === 'airbnb' ? 'Airbnb — paga alla piattaforma' : 'Altro canale');
       var azioni = '';
