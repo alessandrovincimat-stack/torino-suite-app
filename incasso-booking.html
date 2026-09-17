@@ -169,6 +169,7 @@
   // Precompila i campi se arrivano da un link con parametri (es. dalla sezione Pagamenti dell'app)
   (function precompilaDaUrl(){
     var parametri = new URLSearchParams(window.location.search);
+    var idParam = parametri.get('id');
     var alloggioParam = parametri.get('alloggio');
     var riferimentoParam = parametri.get('riferimento');
     var importoParam = parametri.get('importo');
@@ -187,6 +188,7 @@
     if (riferimentoParam) document.getElementById('riferimento').value = riferimentoParam;
     if (importoParam) document.getElementById('importo').value = importoParam;
     window.__datiPrenotazione = {
+      id: idParam || '',
       ospite: parametri.get('ospite') || '',
       checkin: parametri.get('checkin') || '',
       checkout: parametri.get('checkout') || ''
@@ -251,6 +253,21 @@
       messaggio.textContent = `✓ Addebito riuscito: €${importo} — ${alloggio}`;
       form.reset();
       cardElement.clear();
+
+      var idPrenotazione = (window.__datiPrenotazione && window.__datiPrenotazione.id) || '';
+      if (idPrenotazione && window.opener && !window.opener.closed) {
+        try {
+          window.opener.postMessage({
+            tipo: 'torino-suite-pagamento-riuscito',
+            id: idPrenotazione,
+            importo: parseFloat(importo)
+          }, window.location.origin);
+          messaggio.textContent += ' — spostato in archivio nell\'app';
+        } catch (erroreNotifica) {
+          // se non riesce a notificare l'app, l'addebito resta comunque riuscito:
+          // l'utente potrà archiviarlo manualmente da "Pagamenti"
+        }
+      }
 
     } catch (err) {
       messaggio.className = 'errore';
