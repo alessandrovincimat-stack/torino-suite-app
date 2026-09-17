@@ -6104,9 +6104,15 @@ async function apriModuloPagamento(b){
   var riferimento = b['reference-id'] || b.id;
   var importo = b.price != null ? Number(b.price) : '';
   var ospite = b['guest-name'] || '';
-  var url = 'incasso-booking.html?alloggio='+encodeURIComponent(alloggio)+'&riferimento='+encodeURIComponent(riferimento)+'&importo='+encodeURIComponent(importo)+'&ospite='+encodeURIComponent(ospite)+'&checkin='+encodeURIComponent(b.arrival||'')+'&checkout='+encodeURIComponent(b.departure||'');
+  var url = 'incasso-booking.html?id='+encodeURIComponent(b.id)+'&alloggio='+encodeURIComponent(alloggio)+'&riferimento='+encodeURIComponent(riferimento)+'&importo='+encodeURIComponent(importo)+'&ospite='+encodeURIComponent(ospite)+'&checkin='+encodeURIComponent(b.arrival||'')+'&checkout='+encodeURIComponent(b.departure||'');
   window.open(url, '_blank');
 }
+window.addEventListener('message', function(evento){
+  if (evento.origin !== window.location.origin) return;
+  var dati = evento.data;
+  if (!dati || dati.tipo !== 'torino-suite-pagamento-riuscito' || !dati.id) return;
+  segnaPagamento(String(dati.id), 'archiviato', { importo: dati.importo != null ? Number(dati.importo) : null, viaAddebitoCartaAutomatico: true }, null);
+});
 async function segnaPagamento(bookingId, stato, extra, btnEl){
   if (btnEl) btnEl.disabled = true;
   await setStatoPagamento(bookingId, Object.assign({ stato: stato, data: new Date().toISOString().slice(0,10) }, extra||{}));
