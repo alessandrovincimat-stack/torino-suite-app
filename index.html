@@ -6152,9 +6152,62 @@ async function creaLinkPagamento(b, btnEl){
       '<a class="as-btn secondary" href="https://wa.me/?text='+testo+'" target="_blank" style="margin-top:6px;display:inline-block;">Invia su WhatsApp</a> ' +
       '<a class="as-btn ghost" href="mailto:?subject=Pagamento%20soggiorno%20Torino%20Suite&body='+testo+'" style="display:inline-block;">Invia via email</a>';
     if (btnEl){ btnEl.textContent = 'Link creato ✓'; }
+    // Salviamo lo stato "in attesa" con l'id del link Stripe: serve per poterlo
+    // verificare più avanti (automaticamente o col pulsante "Verifica pagamento"),
+    // senza far sparire la prenotazione da "Da incassare" nel frattempo.
+    await setStatoPagamento(b.id, {
+      stato: 'link-in-attesa',
+      linkId: data.id,
+      importo: importoCent / 100,
+      data: new Date().toISOString().slice(0,10)
+    });
   } catch(e){
     if (btnEl){ btnEl.disabled = false; btnEl.textContent = 'Crea link di pagamento'; }
     alert('Errore: ' + e.message);
+  }
+}
+// Interroga Stripe (via backend) per sapere se un Payment Link è stato pagato.
+// Usata sia dal pulsante "Verifica pagamento" (con messaggi) sia dal controllo
+// automatico ad ogni apertura di "Da incassare" (silenzioso).
+async function verificaPagamentoLink(bookingId, linkId){
+  var resp = await pagFetch('/api/pagamenti/verifica-link', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: linkId })
+  });
+  var data = await resp.json();
+  if (!resp.ok) throw new Error(data.errore || 'Errore nella verifica su Stripe');
+  return data;
+}
+async function verificaPagamentoLinkManuale(b, stato, btnEl){
+  if (!stato || !stato.linkId){ alert('Nessun link Stripe registrato per questa prenotazione.'); return; }
+  if (btnEl){ btnEl.disabled = true; btnEl.textContent = 'Verifico su Stripe…'; }
+  try {
+    var data = await verificaPagamentoLink(b.id, stato.linkId);
+    if (data.pagato){
+      await segnaPagamento(b.id, 'archiviato', { importo: data.importo != null ? data.importo : stato.importo, viaLinkStripe: true }, null);
+    } else {
+      if (btnEl){ btnEl.disabled = false; btnEl.textContent = 'Verifica pagamento'; }
+      alert('Non risulta ancora pagato su Stripe.');
+    }
+  } catch(e){
+    if (btnEl){ btnEl.disabled = false; btnEl.textContent = 'Verifica pagamento'; }
+    alert('Errore: ' + e.message);
+  }
+}
+async function verificaPagamentiLinkAutomatica(prenotazioniInAttesa){
+  for (var i = 0; i < prenotazioniInAttesa.length; i++){
+    var voce = prenotazioniInAttesa[i];
+    try {
+      var data = await verificaPagamentoLink(voce.booking.id, voce.stato.linkId);
+      if (data.pagato){
+        await segnaPagamento(voce.booking.id, 'archiviato', { importo: data.importo != null ? data.importo : voce.stato.importo, viaLinkStripe: true }, null);
+      }
+    } catch(e){
+      // Controllo automatico e silenzioso: se una verifica fallisce (rete, Stripe
+      // momentaneamente irraggiungibile, ecc.) non blocchiamo il resto — resta
+      // comunque disponibile il pulsante "Verifica pagamento" per riprovare a mano.
+    }
   }
 }
 function renderPagamenti(){
@@ -6180,11 +6233,15 @@ async function renderPagamentiAsync(el){
   }
   var stati = await getStatiPagamenti();
   var listaAppartamenti = await pagGetAppartamenti();
-  var daIncassare = pagamentiCache.filter(function(b){ return !stati[String(b.id)]; });
+  var daIncassare = pagamentiCache.filter(function(b){
+    var s = stati[String(b.id)];
+    return !s || s.stato === 'link-in-attesa';
+  });
   var ok = pagamentiCache.filter(function(b){ return stati[String(b.id)] && stati[String(b.id)].stato === 'pagato'; });
 
   var lista = pagamentiSubtabAttivo === 'ok' ? ok : daIncassare;
   var gruppi = raggruppaPerMese(lista);
+  var prenotazioniConLinkInAttesa = [];
 
   if (!gruppi.length){
     el.innerHTML = '<p class="as-sub">'+(pagamentiSubtabAttivo==='ok' ? 'Nessun pagamento registrato ancora.' : 'Nessuna prenotazione da gestire al momento.')+'</p>';
@@ -6209,9 +6266,18 @@ async function renderPagamentiAsync(el){
                  '<button class="as-btn secondary" data-pagato="'+b.id+'" style="margin-top:6px;">Segna come incassato</button> ' +
                  '<button class="as-btn ghost" data-archivia="'+b.id+'" style="margin-top:6px;">Archivia</button>';
       } else {
-        azioni = '<button class="as-btn secondary" data-link="'+b.id+'" style="margin-top:6px;">Crea link di pagamento</button> ' +
-                 '<button class="as-btn secondary" data-pagato="'+b.id+'" style="margin-top:6px;">Segna come incassato</button> ' +
-                 '<button class="as-btn ghost" data-archivia="'+b.id+'" style="margin-top:6px;">Archivia</button>';
+        var statoLink = stati[String(b.id)];
+        if (statoLink && statoLink.stato === 'link-in-attesa' && statoLink.linkId){
+          prenotazioniConLinkInAttesa.push({ booking: b, stato: statoLink });
+          azioni = '<p class="as-sub" style="margin:6px 0;">Link inviato, in attesa di pagamento — verifica automatica su Stripe in corso…</p>' +
+                   '<button class="as-btn secondary" data-verifica="'+b.id+'" style="margin-top:6px;">Verifica pagamento</button> ' +
+                   '<button class="as-btn secondary" data-pagato="'+b.id+'" style="margin-top:6px;">Segna come incassato</button> ' +
+                   '<button class="as-btn ghost" data-archivia="'+b.id+'" style="margin-top:6px;">Archivia</button>';
+        } else {
+          azioni = '<button class="as-btn secondary" data-link="'+b.id+'" style="margin-top:6px;">Crea link di pagamento</button> ' +
+                   '<button class="as-btn secondary" data-pagato="'+b.id+'" style="margin-top:6px;">Segna come incassato</button> ' +
+                   '<button class="as-btn ghost" data-archivia="'+b.id+'" style="margin-top:6px;">Archivia</button>';
+        }
       }
       return '<div class="as-booking" data-booking-id="'+b.id+'">' +
         '<div>'+pagToItData(b.arrival)+' → '+pagToItData(b.departure)+' · '+(b['guest-name']||'ospite sconosciuto')+'</div>' +
@@ -6246,6 +6312,18 @@ async function renderPagamentiAsync(el){
       if (b) creaLinkPagamento(b, btn);
     };
   });
+  el.querySelectorAll('[data-verifica]').forEach(function(btn){
+    btn.onclick = function(){
+      var voce = prenotazioniConLinkInAttesa.find(function(x){ return String(x.booking.id) === btn.getAttribute('data-verifica'); });
+      if (voce) verificaPagamentoLinkManuale(voce.booking, voce.stato, btn);
+    };
+  });
+  // Controllo automatico: appena la lista è disegnata, verifichiamo in background
+  // su Stripe se qualcuno dei link in attesa è stato nel frattempo pagato, e in
+  // quel caso lo archiviamo da soli (senza bisogno del pulsante manuale).
+  if (prenotazioniConLinkInAttesa.length){
+    verificaPagamentiLinkAutomatica(prenotazioniConLinkInAttesa);
+  }
  } catch(erroreRender){
    el.innerHTML = '<div class="as-err">Errore nel disegnare la lista: '+erroreRender.message+'</div>';
  }
