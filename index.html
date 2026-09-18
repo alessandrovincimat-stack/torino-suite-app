@@ -3800,6 +3800,11 @@ async function inviaIstat(ordered, outEl, onSuccess){
     if (risultato.partenzeFallite && risultato.partenzeFallite.length){
       msg += '<div class="as-err">⚠️ Partenza presunta non inviata per: ' + risultato.partenzeFallite.map(function(f){ return toItDate(f.data)+' ('+escapeHtml(f.errore)+')'; }).join(', ') + '. Riprova più tardi o usa "Segnala partenza" in Archivio.</div>';
     }
+    if (risultato.elementiFalliti && risultato.elementiFalliti.length){
+      msg += '<div class="as-err">⚠️ Il webservice ha rifiutato alcuni elementi (probabile causa del campo "Camere" vuoto su Storico ospiti): ' +
+        risultato.elementiFalliti.map(function(f){ return escapeHtml(f.idswh + (f.errore ? ' — ' + f.errore : ' (nessun dettaglio errore fornito)')); }).join('; ') +
+        '. Puoi correggere manualmente da "Correggi/reinvia ISTAT" o dal portale.</div>';
+    }
     out.innerHTML = msg;
     if (onSuccess) onSuccess({ arrivoOk: true, partenzaOk: !!(risultato.partenzeInviate && (!risultato.partenzeFallite || !risultato.partenzeFallite.length)) });
   } catch(e){
@@ -3930,6 +3935,11 @@ async function segnalaArrivo(invioId, btn){
     await remoteStorage.set('as-invii', JSON.stringify(state.invii));
     await segnaIstatInviato(dataArrivo);
     var msg = '<p class="as-ok">Arrivo segnalato correttamente (con camere occupate incluse).</p>';
+    if (data.elementiFalliti && data.elementiFalliti.length){
+      msg += '<div class="as-err">⚠️ Il webservice ha rifiutato alcuni elementi (probabile causa del campo "Camere" vuoto su Storico ospiti): ' +
+        data.elementiFalliti.map(function(f){ return escapeHtml(f.idswh + (f.errore ? ' — ' + f.errore : ' (nessun dettaglio errore fornito)')); }).join('; ') +
+        '. Puoi correggere manualmente dal portale.</div>';
+    }
 
     // La partenza presunta va SEMPRE su una chiamata separata, con la sua data futura
     // (giorno diverso dall'arrivo): il campo "data" del movimento è un singolo giorno.
