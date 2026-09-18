@@ -2308,7 +2308,14 @@ function creaSchedaDaPrenotazioneSmoobu(b, capoId){
   g.permanenza = String(Math.max(1, Math.round((dep-arr)/86400000)));
   var appMatch = state.tables.appartamenti.find(function(a){ return a.smoobuId && b.apartment && String(a.smoobuId) === String(b.apartment.id); });
   if (appMatch) g.idAppartamento = appMatch.id;
-  if (capoId){ g.ruolo = 'familiare'; g.groupOf = capoId; }
+  if (capoId){
+    // Se nel gruppo è già stato scelto "Membro gruppo" per un altro componente,
+    // il nuovo ospite aggiunto eredita lo stesso ruolo invece di tornare sempre
+    // a "Familiare" — evita di doverlo cambiare a mano ogni volta.
+    var dipendenteEsistente = state.guests.find(function(x){ return x.groupOf === capoId; });
+    g.ruolo = (dipendenteEsistente && dipendenteEsistente.ruolo === 'membro') ? 'membro' : 'familiare';
+    g.groupOf = capoId;
+  }
   // Rilevamento automatico canale Airbnb (best-effort: il nome esatto del campo restituito
   // da Smoobu per il canale non è stato verificato dal vivo — se non funziona, il campo
   // "Categoria speciale tassa" sulla scheda ospite resta comunque modificabile a mano).
