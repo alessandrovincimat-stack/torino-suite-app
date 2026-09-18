@@ -3747,31 +3747,24 @@ async function inviaIstatArrivi(arriviOggi, allOrdered){
   if (!arriviOggi.length) throw new Error('nessun ospite da inviare');
   var arrivi = arriviOggi.map(function(g){ return buildIstatArrivo(g, allOrdered); });
 
-  // Blocco "prenotazioni": unico punto del webservice dove si dichiara il numero di
-  // camere (vedi WSDL: prenotazioneBean). Una prenotazione per ogni unità abitativa:
-  // capogruppo+membri, o singolo. Senza questo il campo "Camere" resta sempre vuoto
-  // in Storico ospiti sul portale.
-  var capiOSingoli = arriviOggi.filter(function(g){ return g.ruolo !== 'familiare' && g.ruolo !== 'membro'; });
-  var prenotazioni = capiOSingoli.map(function(capo){
-    var membriDelGruppo = arriviOggi.filter(function(g){ return g.groupOf === capo.id; });
-    var dataPartenzaGruppo = calcolaDataPartenzaPresunta(capo.dataArrivo, capo.permanenza) || capo.dataArrivo;
-    return {
-      idswh: capo.id,
-      arrivo: (capo.dataArrivo||'').replace(/-/g,''),
-      partenza: (dataPartenzaGruppo||'').replace(/-/g,''),
-      ospiti: String(1 + membriDelGruppo.length),
-      camere: '1'
-    };
-  });
-
+  // NOTA: qui NON inviamo un blocco "prenotazioni". Il tracciato ufficiale ROSS1000
+  // (Tracciato record XML-WEBSERVICE v2.4) definisce <prenotazione> come "la
+  // prenotazione di una o più camere PERVENUTA nel giorno in esame" — cioè una
+  // richiesta di soggiorno futuro ricevuta oggi, un concetto completamente diverso
+  // dall'arrivo/check-in di un ospite. Non è collegata all'elemento <arrivo> e non
+  // ha alcun effetto sul campo "Camere" mostrato per il singolo ospite in Storico
+  // Ospiti: quel campo non esiste nello schema del webservice per gli arrivi,
+  // esiste solo a livello di intera struttura (vedi camereOccupate qui sotto) ed
+  // è altrimenti compilabile solo a mano dal portale. Inviare una "prenotazione"
+  // per ogni arrivo, come si faceva qui prima, creava solo record fittizi e
+  // scollegati nel sistema, senza risolvere nulla.
   var resp = await fetch(backendUrl('/api/istat/movimento'), {
     method: 'POST',
     headers: backendHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({
       data: todayISO().replace(/-/g,''),
       camereOccupate: new Set(arriviOggi.map(function(g){ return g.idAppartamento; })).size,
-      arrivi: arrivi,
-      prenotazioni: prenotazioni
+      arrivi: arrivi
     })
   });
   var data = await resp.json();
@@ -3937,16 +3930,9 @@ async function segnalaArrivo(invioId, btn){
   try {
     var arrivi = iv.ospiti.map(function(o){ return buildIstatArrivo(o, iv.ospiti); });
 
-    // Blocco "prenotazioni": vedi nota in inviaIstatArrivi — unico modo di dichiarare
-    // il numero di camere per questa prenotazione al webservice.
-    var dataPartenzaGruppo = calcolaDataPartenzaPresunta(dataArrivo, iv.ospiti[0] && iv.ospiti[0].permanenza) || dataArrivo;
-    var prenotazioni = [{
-      idswh: iv.ospiti[0].id,
-      arrivo: dataArrivo.replace(/-/g,''),
-      partenza: (dataPartenzaGruppo||'').replace(/-/g,''),
-      ospiti: String(iv.ospiti.length),
-      camere: '1'
-    }];
+    // NOTA: non inviamo più un blocco "prenotazioni" qui — vedi la nota dettagliata
+    // in inviaIstatArrivi. Non è collegato all'arrivo e non incide sul campo "Camere",
+    // che lo schema del webservice non prevede affatto per il singolo ospite.
 
     var resp = await fetch(backendUrl('/api/istat/movimento'), {
       method: 'POST',
@@ -3954,8 +3940,7 @@ async function segnalaArrivo(invioId, btn){
       body: JSON.stringify({
         data: dataArrivo.replace(/-/g,''),
         camereOccupate: contaAppartamentiOccupatiData(dataArrivo),
-        arrivi: arrivi,
-        prenotazioni: prenotazioni
+        arrivi: arrivi
       })
     });
     var data = await resp.json();
@@ -3963,11 +3948,11 @@ async function segnalaArrivo(invioId, btn){
     iv.arrivoSegnalato = true;
     await remoteStorage.set('as-invii', JSON.stringify(state.invii));
     await segnaIstatInviato(dataArrivo);
-    var msg = '<p class="as-ok">Arrivo segnalato correttamente (con camere occupate incluse).</p>';
+    var msg = '<p class="as-ok">Arrivo segnalato correttamente.</p>';
     if (data.elementiFalliti && data.elementiFalliti.length){
-      msg += '<div class="as-err">⚠️ Il webservice ha rifiutato alcuni elementi (probabile causa del campo "Camere" vuoto su Storico ospiti): ' +
+      msg += '<div class="as-err">⚠️ Il webservice ha rifiutato alcuni elementi: ' +
         data.elementiFalliti.map(function(f){ return escapeHtml(f.idswh + (f.errore ? ' — ' + f.errore : ' (nessun dettaglio errore fornito)')); }).join('; ') +
-        '. Puoi correggere manualmente dal portale.</div>';
+        '.</div>';
     }
 
     // La partenza presunta va SEMPRE su una chiamata separata, con la sua data futura
