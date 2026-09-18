@@ -2309,11 +2309,10 @@ function creaSchedaDaPrenotazioneSmoobu(b, capoId){
   var appMatch = state.tables.appartamenti.find(function(a){ return a.smoobuId && b.apartment && String(a.smoobuId) === String(b.apartment.id); });
   if (appMatch) g.idAppartamento = appMatch.id;
   if (capoId){
-    // Se nel gruppo è già stato scelto "Membro gruppo" per un altro componente,
-    // il nuovo ospite aggiunto eredita lo stesso ruolo invece di tornare sempre
-    // a "Familiare" — evita di doverlo cambiare a mano ogni volta.
-    var dipendenteEsistente = state.guests.find(function(x){ return x.groupOf === capoId; });
-    g.ruolo = (dipendenteEsistente && dipendenteEsistente.ruolo === 'membro') ? 'membro' : 'familiare';
+    // Il tipo di dipendente dipende dal tipo di capo, come richiesto dal tracciato
+    // ISTAT: un "capogruppo" ha "membri gruppo", un "capofamiglia" ha "familiari".
+    var capoDelGruppo = state.guests.find(function(x){ return x.id === capoId; });
+    g.ruolo = (capoDelGruppo && capoDelGruppo.ruolo === 'capogruppo') ? 'membro' : 'familiare';
     g.groupOf = capoId;
   }
   // Rilevamento automatico canale Airbnb (best-effort: il nome esatto del campo restituito
