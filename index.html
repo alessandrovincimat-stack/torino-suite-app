@@ -3969,9 +3969,14 @@ async function segnalaArrivo(invioId, btn){
       }
     }
     out.innerHTML = msg;
+    iv.ultimoEsitoIstat = msg;
+    dettagliIstatOkAperti[iv.id] = true;
     render();
   } catch(e){
-    out.innerHTML = '<div class="as-err">'+escapeHtml(e.message)+'</div>';
+    var msgErrore = '<div class="as-err">'+escapeHtml(e.message)+'</div>';
+    out.innerHTML = msgErrore;
+    iv.ultimoEsitoIstat = msgErrore;
+    dettagliIstatOkAperti[iv.id] = true;
   }
 }
 
@@ -4107,6 +4112,7 @@ window.renderArchivio = renderArchivio;
 function invioCompletato(iv){
   return !!(iv.arrivoSegnalato && iv.partenzaSegnalata);
 }
+var dettagliIstatOkAperti = {};
 
 function renderArchivioIstatOk(el){
   var invOkTutti = state.invii.filter(invioCompletato).sort(function(a,b){ return b.dataInvio.localeCompare(a.dataInvio); });
@@ -4178,7 +4184,7 @@ function renderArchivioIstatOk(el){
         '<div class="as-sub" style="margin:0;">' + nomi + '</div>' +
         (dateUniche.indexOf(dataISO)===-1 ? '<button class="as-btn ghost" data-ricevuta="'+dataISO+'" style="margin-top:6px;">Scarica ricevuta del '+g.toLocaleDateString('it-IT')+'</button>' : '') +
         '<span class="'+classeBadge+'" style="margin-left:8px;">'+testoBadge+'</span>' +
-        '<details style="margin-top:6px;"><summary style="cursor:pointer;color:var(--brass);font-size:14px;">▸ Vedi dettagli ospiti</summary>' + dettagliOspiti +
+        '<details'+(dettagliIstatOkAperti[iv.id] ? ' open' : '')+' style="margin-top:6px;"><summary style="cursor:pointer;color:var(--brass);font-size:14px;">▸ Vedi dettagli ospiti</summary>' + dettagliOspiti +
         (iv.manuale ? (
           '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);">' +
           '<button class="as-btn ghost" data-rimuovi-archiviazione="'+escapeHtml(iv.id)+'" style="color:var(--danger);">🗑️ Rimuovi questa archiviazione (torna in Elenco di controllo)</button>' +
@@ -4188,7 +4194,7 @@ function renderArchivioIstatOk(el){
           '<p class="as-sub" style="margin:0 0 6px;">Solo ISTAT (Piemonte Dati Turismo) — la Questura non è modificabile una volta inviata:</p>' +
           '<button class="as-btn secondary" data-correggi-istat="'+escapeHtml(iv.id)+'" style="margin-top:4px;">🔁 Correggi/reinvia ISTAT (arrivo + partenza presunta)</button>' +
           '<button class="as-btn ghost" data-elimina-istat="'+escapeHtml(iv.id)+'" style="margin-top:4px;color:var(--danger);">🗑️ Elimina arrivo errato da ISTAT</button>' +
-          '<div class="as-esito-istat" style="margin-top:6px;"></div>' +
+          '<div class="as-esito-istat" style="margin-top:6px;">'+(iv.ultimoEsitoIstat || '')+'</div>' +
           '</div>') +
         '</details>' +
         '</div>';
