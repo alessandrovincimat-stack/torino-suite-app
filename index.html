@@ -3720,6 +3720,29 @@ function calcolaDataPartenzaPresunta(dataArrivoISO, permanenza){
   return d.toISOString().slice(0, 10);
 }
 
+// Il manuale ufficiale ROSS1000 lega "camere occupate" alla sezione "Gestione
+// disponibilità" della struttura e segnala come ERRORE un'incongruenza tipo
+// "camere occupate zero con presenze maggiori di zero". Le correzioni singole
+// (segnalaArrivo/eliminaArrivoIstat) mandavano un valore fisso (1 o 0) invece
+// del numero REALE di appartamenti occupati quel giorno in tutta la struttura:
+// se altri appartamenti erano occupati lo stesso giorno, il valore fisso creava
+// esattamente quell'incongruenza, probabile causa del campo "Camere" mai
+// registrato sulle singole schede.
+function contaAppartamentiOccupatiData(dataISO){
+  var appartamenti = {};
+  state.invii.forEach(function(iv){
+    (iv.ospiti || []).forEach(function(o){
+      if (!o.dataArrivo) return;
+      var fine = calcolaDataPartenzaPresunta(o.dataArrivo, o.permanenza) || o.dataArrivo;
+      if (dataISO >= o.dataArrivo && dataISO < fine){
+        appartamenti[iv.appartamentoNome || o.idAppartamento || iv.id] = true;
+      }
+    });
+  });
+  var n = Object.keys(appartamenti).length;
+  return n || 1;
+}
+
 async function inviaIstatArrivi(arriviOggi, allOrdered){
   if (!arriviOggi.length) throw new Error('nessun ospite da inviare');
   var arrivi = arriviOggi.map(function(g){ return buildIstatArrivo(g, allOrdered); });
@@ -3776,7 +3799,7 @@ async function inviaIstatArrivi(arriviOggi, allOrdered){
       var respP = await fetch(backendUrl('/api/istat/movimento'), {
         method: 'POST',
         headers: backendHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ data: dataPartenza.replace(/-/g,''), camereOccupate: 0, partenze: partenze })
+        body: JSON.stringify({ data: dataPartenza.replace(/-/g,''), camereOccupate: contaAppartamentiOccupatiData(dataPartenza), partenze: partenze })
       });
       var dataP = await respP.json();
       if (!respP.ok) throw new Error(dataP.error || 'errore invio partenza');
@@ -3886,7 +3909,7 @@ async function inviaGiorniMancantiIstat(giorni, btn){
       var resp = await fetch(backendUrl('/api/istat/movimento'), {
         method: 'POST',
         headers: backendHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ data: dISO.replace(/-/g,''), camereOccupate: 0, arrivi: [], partenze: [] })
+        body: JSON.stringify({ data: dISO.replace(/-/g,''), camereOccupate: contaAppartamentiOccupatiData(dISO), arrivi: [], partenze: [] })
       });
       var data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'errore');
@@ -3930,7 +3953,7 @@ async function segnalaArrivo(invioId, btn){
       headers: backendHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         data: dataArrivo.replace(/-/g,''),
-        camereOccupate: 1,
+        camereOccupate: contaAppartamentiOccupatiData(dataArrivo),
         arrivi: arrivi,
         prenotazioni: prenotazioni
       })
@@ -3956,7 +3979,7 @@ async function segnalaArrivo(invioId, btn){
         var respP = await fetch(backendUrl('/api/istat/movimento'), {
           method: 'POST',
           headers: backendHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({ data: dataPartenzaPresunta.replace(/-/g,''), camereOccupate: 0, partenze: partenze })
+          body: JSON.stringify({ data: dataPartenzaPresunta.replace(/-/g,''), camereOccupate: contaAppartamentiOccupatiData(dataPartenzaPresunta), partenze: partenze })
         });
         var dataP = await respP.json();
         if (!respP.ok) throw new Error(dataP.error || 'errore invio partenza');
@@ -4002,7 +4025,7 @@ async function segnalaPartenza(invioId, btn){
       headers: backendHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         data: dataPartenza.replace(/-/g,''),
-        camereOccupate: 0,
+        camereOccupate: contaAppartamentiOccupatiData(dataPartenza),
         partenze: partenze
       })
     });
@@ -4272,7 +4295,7 @@ async function eliminaArrivoIstat(invioId, btn){
     var resp = await fetch(backendUrl('/api/istat/movimento'), {
       method: 'POST',
       headers: backendHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ data: todayISO().replace(/-/g,''), camereOccupate: 0, rettifiche: rettifiche })
+      body: JSON.stringify({ data: todayISO().replace(/-/g,''), camereOccupate: contaAppartamentiOccupatiData(todayISO()), rettifiche: rettifiche })
     });
     var data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'errore eliminazione ISTAT');
