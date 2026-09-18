@@ -3909,7 +3909,7 @@ async function segnalaArrivo(invioId, btn){
   var suggerita = (iv.ospiti[0] && iv.ospiti[0].dataArrivo) || todayISO();
   var dataArrivo = prompt('Data di arrivo da segnalare (AAAA-MM-GG):', suggerita);
   if (!dataArrivo) return;
-  var out = btn.nextElementSibling;
+  var out = btn.parentElement.querySelector('.as-esito-istat') || btn.nextElementSibling;
   out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>invio in corso…</span>';
   try {
     var arrivi = iv.ospiti.map(function(o){ return buildIstatArrivo(o, iv.ospiti); });
