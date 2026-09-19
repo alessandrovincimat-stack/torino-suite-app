@@ -3926,8 +3926,31 @@ async function segnalaArrivo(invioId, btn){
   var dataArrivo = prompt('Data di arrivo da segnalare (AAAA-MM-GG):', suggerita);
   if (!dataArrivo) return;
   var out = btn.parentElement.querySelector('.as-esito-istat') || btn.nextElementSibling;
-  out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>invio in corso…</span>';
+  // Se l'arrivo era già stato inviato in precedenza (siamo in una CORREZIONE, non
+  // in un primo invio), un semplice reinvio con lo stesso idswh viene RIFIUTATO da
+  // ROSS1000 se nel frattempo è cambiato qualcosa di incompatibile — confermato il
+  // 18-19/09/2026 con l'errore "Sheet already registered with different
+  // Accommodation Type" dopo aver cambiato un ospite da familiare a membro gruppo.
+  // L'unico modo verificato che funziona sempre è eliminare prima il vecchio
+  // record e poi reinviarlo da zero: lo facciamo qui automaticamente, invece di
+  // richiedere all'utente il giro manuale "Elimina" + "Correggi/reinvia".
+  var eraGiaInviatoArrivo = !!iv.arrivoSegnalato;
+  out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>'+(eraGiaInviatoArrivo ? 'elimino la vecchia registrazione…' : 'invio in corso…')+'</span>';
   try {
+    if (eraGiaInviatoArrivo){
+      var rettificheArrivo = iv.ospiti.map(function(o){
+        return { tipo: 'eliminazione', idswh: o.id, tipoalloggiato: ruoloCode[o.ruolo] || '16', arrivo: dataArrivo.replace(/-/g,'') };
+      });
+      var respElimA = await fetch(backendUrl('/api/istat/movimento'), {
+        method: 'POST',
+        headers: backendHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ data: todayISO().replace(/-/g,''), camereOccupate: contaAppartamentiOccupatiData(todayISO()), rettifiche: rettificheArrivo })
+      });
+      var dataElimA = await respElimA.json();
+      if (!respElimA.ok) throw new Error('Eliminazione preliminare (arrivo) fallita: ' + (dataElimA.error || 'errore sconosciuto'));
+      out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>reinvio in corso…</span>';
+    }
+
     var arrivi = iv.ospiti.map(function(o){ return buildIstatArrivo(o, iv.ospiti); });
 
     // NOTA: non inviamo più un blocco "prenotazioni" qui — vedi la nota dettagliata
@@ -3948,7 +3971,7 @@ async function segnalaArrivo(invioId, btn){
     iv.arrivoSegnalato = true;
     await remoteStorage.set('as-invii', JSON.stringify(state.invii));
     await segnaIstatInviato(dataArrivo);
-    var msg = '<p class="as-ok">Arrivo segnalato correttamente.</p>';
+    var msg = '<p class="as-ok">'+(eraGiaInviatoArrivo ? 'Vecchia registrazione eliminata e arrivo reinviato correttamente.' : 'Arrivo segnalato correttamente.')+'</p>';
     if (data.elementiFalliti && data.elementiFalliti.length){
       msg += '<div class="as-err">⚠️ Il webservice ha rifiutato alcuni elementi: ' +
         data.elementiFalliti.map(function(f){ return escapeHtml(f.idswh + (f.errore ? ' — ' + f.errore : ' (nessun dettaglio errore fornito)')); }).join('; ') +
@@ -3960,6 +3983,19 @@ async function segnalaArrivo(invioId, btn){
     var dataPartenzaPresunta = calcolaDataPartenzaPresunta(dataArrivo, iv.ospiti[0] && iv.ospiti[0].permanenza);
     if (dataPartenzaPresunta){
       try {
+        var eraGiaInviataPartenza = !!iv.partenzaSegnalata;
+        if (eraGiaInviataPartenza){
+          var rettifichePartenza = iv.ospiti.map(function(o){
+            return { tipo: 'eliminazione', idswh: o.id, tipoalloggiato: ruoloCode[o.ruolo] || '16', arrivo: dataArrivo.replace(/-/g,'') };
+          });
+          var respElimP = await fetch(backendUrl('/api/istat/movimento'), {
+            method: 'POST',
+            headers: backendHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ data: todayISO().replace(/-/g,''), camereOccupate: contaAppartamentiOccupatiData(todayISO()), rettifiche: rettifichePartenza })
+          });
+          var dataElimP = await respElimP.json();
+          if (!respElimP.ok) throw new Error('Eliminazione preliminare (partenza) fallita: ' + (dataElimP.error || 'errore sconosciuto'));
+        }
         var partenze = iv.ospiti.map(function(o){ return { idswh: o.id, tipoalloggiato: ruoloCode[o.ruolo] || '16', arrivo: dataArrivo.replace(/-/g,'') }; });
         var respP = await fetch(backendUrl('/api/istat/movimento'), {
           method: 'POST',
@@ -4000,8 +4036,22 @@ async function segnalaPartenza(invioId, btn){
   var dataPartenza = prompt('Data di partenza effettiva (AAAA-MM-GG):', suggerita || todayISO());
   if (!dataPartenza) return;
   var out = btn.nextElementSibling;
-  out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>invio in corso…</span>';
+  var eraGiaInviata = !!iv.partenzaSegnalata;
+  out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>'+(eraGiaInviata ? 'elimino la vecchia registrazione…' : 'invio in corso…')+'</span>';
   try {
+    if (eraGiaInviata){
+      var rettificheP = iv.ospiti.map(function(o){
+        return { tipo: 'eliminazione', idswh: o.id, tipoalloggiato: ruoloCode[o.ruolo] || '16', arrivo: (o.dataArrivo||'').replace(/-/g,'') };
+      });
+      var respElim = await fetch(backendUrl('/api/istat/movimento'), {
+        method: 'POST',
+        headers: backendHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ data: todayISO().replace(/-/g,''), camereOccupate: contaAppartamentiOccupatiData(todayISO()), rettifiche: rettificheP })
+      });
+      var dataElim = await respElim.json();
+      if (!respElim.ok) throw new Error('Eliminazione preliminare fallita: ' + (dataElim.error || 'errore sconosciuto'));
+      out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>reinvio in corso…</span>';
+    }
     var partenze = iv.ospiti.map(function(o){
       return { idswh: o.id, tipoalloggiato: ruoloCode[o.ruolo] || '16', arrivo: (o.dataArrivo||'').replace(/-/g,'') };
     });
@@ -4019,7 +4069,7 @@ async function segnalaPartenza(invioId, btn){
     iv.partenzaSegnalata = true;
     await remoteStorage.set('as-invii', JSON.stringify(state.invii));
     await segnaIstatInviato(dataPartenza);
-    out.innerHTML = '<p class="as-ok">Partenza segnalata correttamente.</p>';
+    out.innerHTML = '<p class="as-ok">'+(eraGiaInviata ? 'Vecchia registrazione eliminata e partenza reinviata correttamente.' : 'Partenza segnalata correttamente.')+'</p>';
     render();
   } catch(e){
     out.innerHTML = '<div class="as-err">'+escapeHtml(e.message)+'</div>';
