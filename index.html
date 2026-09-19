@@ -3685,6 +3685,19 @@ function generaEInviaPanel(ordered, wrapEl){
   }
 }
 
+// Il webservice ISTAT rifiuta un arrivo se il comune di residenza è vuoto per un
+// ospite non residente all'estero (errore osservato: "Your municipality of
+// residence has not been entered..."). Capita soprattutto per ospiti aggiunti
+// manualmente (senza scansione documento), dove Stato di residenza viene
+// preimpostato a ITALIA ma il Comune resta vuoto se non lo si compila a mano.
+// Controlliamo QUI, prima di inviare, per dare subito un errore chiaro in
+// italiano invece di scoprirlo dopo dal rifiuto (in inglese) del webservice.
+function trovaOspitiConComuneResidenzaMancante(ospiti){
+  return (ospiti || []).filter(function(o){
+    return !o.residenzaEstero && (!o.comuneResidenzaNome || !o.comuneResidenzaNome.trim());
+  });
+}
+
 function buildIstatArrivo(g, allOrdered){
   var comune = g.nascitaEstero ? null : findByName(state.tables.comuni, g.comuneNascitaNome);
   var statoNascita = g.nascitaEstero ? findByName(state.tables.stati, g.statoNascitaNome) : italiaEntry();
@@ -3743,8 +3756,16 @@ function contaAppartamentiOccupatiData(dataISO){
   return n || 1;
 }
 
-async function inviaIstatArrivi(arriviOggi, allOrdered){
-  if (!arriviOggi.length) throw new Error('nessun ospite da inviare');
+async function inviaIstatArrivi(arriviOggiRichiesti, allOrdered){
+  if (!arriviOggiRichiesti.length) throw new Error('nessun ospite da inviare');
+  // Il webservice rifiuta un intero arrivo se manca il comune di residenza (per un
+  // non-residente estero): escludiamo QUI solo gli ospiti col problema, invece di
+  // bloccare l'invio di tutti gli altri arrivi della giornata per colpa di uno solo.
+  var esclusiComuneMancante = trovaOspitiConComuneResidenzaMancante(arriviOggiRichiesti);
+  var arriviOggi = arriviOggiRichiesti.filter(function(g){ return esclusiComuneMancante.indexOf(g) === -1; });
+  if (!arriviOggi.length){
+    throw new Error('Comune di residenza mancante per: ' + esclusiComuneMancante.map(function(o){ return o.cognome+' '+o.nome; }).join(', ') + '. Completa il dato prima di inviare (il webservice rifiuta l\'invio se manca).');
+  }
   var arrivi = arriviOggi.map(function(g){ return buildIstatArrivo(g, allOrdered); });
 
   // NOTA: qui NON inviamo un blocco "prenotazioni". Il tracciato ufficiale ROSS1000
@@ -3804,6 +3825,7 @@ async function inviaIstatArrivi(arriviOggi, allOrdered){
   }
   data.partenzeInviate = partenzeInviate;
   data.partenzeFallite = partenzeFallite;
+  data.esclusiComuneMancante = esclusiComuneMancante.map(function(o){ return o.cognome+' '+o.nome; });
   return data;
 }
 
@@ -3816,14 +3838,18 @@ async function inviaIstat(ordered, outEl, onSuccess){
   out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>invio in corso…</span>';
   try {
     var risultato = await inviaIstatArrivi(ordered, ordered);
-    var msg = '<p class="as-ok">Inviato correttamente a Piemonte Dati Turismo (' + ordered.length + ' arrivi';
+    var nInviati = ordered.length - (risultato.esclusiComuneMancante ? risultato.esclusiComuneMancante.length : 0);
+    var msg = '<p class="as-ok">Inviato correttamente a Piemonte Dati Turismo (' + nInviati + ' arrivi';
     if (risultato.partenzeInviate) msg += ', ' + risultato.partenzeInviate + ' partenze presunte';
     msg += ').</p>';
+    if (risultato.esclusiComuneMancante && risultato.esclusiComuneMancante.length){
+      msg += '<div class="as-err">⚠️ NON inviati (Comune di residenza mancante): ' + risultato.esclusiComuneMancante.map(escapeHtml).join(', ') + '. Apri la scheda di ciascuno, "Vedi tutti i dati salvati", e completa il Comune di residenza — poi invia di nuovo solo per loro.</div>';
+    }
     if (risultato.partenzeFallite && risultato.partenzeFallite.length){
       msg += '<div class="as-err">⚠️ Partenza presunta non inviata per: ' + risultato.partenzeFallite.map(function(f){ return toItDate(f.data)+' ('+escapeHtml(f.errore)+')'; }).join(', ') + '. Riprova più tardi o usa "Segnala partenza" in Archivio.</div>';
     }
     if (risultato.elementiFalliti && risultato.elementiFalliti.length){
-      msg += '<div class="as-err">⚠️ Il webservice ha rifiutato alcuni elementi (probabile causa del campo "Camere" vuoto su Storico ospiti): ' +
+      msg += '<div class="as-err">⚠️ Il webservice ha rifiutato alcuni elementi: ' +
         risultato.elementiFalliti.map(function(f){ return escapeHtml(f.idswh + (f.errore ? ' — ' + f.errore : ' (nessun dettaglio errore fornito)')); }).join('; ') +
         '. Puoi correggere manualmente da "Correggi/reinvia ISTAT" o dal portale.</div>';
     }
@@ -3937,6 +3963,10 @@ async function segnalaArrivo(invioId, btn){
   var eraGiaInviatoArrivo = !!iv.arrivoSegnalato;
   out.innerHTML = '<span class="as-warn"><span class="as-spin"></span>'+(eraGiaInviatoArrivo ? 'elimino la vecchia registrazione…' : 'invio in corso…')+'</span>';
   try {
+    var comuneMancanteArrivo = trovaOspitiConComuneResidenzaMancante(iv.ospiti);
+    if (comuneMancanteArrivo.length){
+      throw new Error('Comune di residenza mancante per: ' + comuneMancanteArrivo.map(function(o){ return o.cognome+' '+o.nome; }).join(', ') + '. Apri "Vedi tutti i dati salvati" per quell\'ospite e completa il Comune di residenza prima di inviare (il webservice rifiuta l\'invio se manca).');
+    }
     if (eraGiaInviatoArrivo){
       var rettificheArrivo = iv.ospiti.map(function(o){
         return { tipo: 'eliminazione', idswh: o.id, tipoalloggiato: ruoloCode[o.ruolo] || '16', arrivo: dataArrivo.replace(/-/g,'') };
