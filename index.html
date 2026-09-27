@@ -3221,13 +3221,25 @@ async function calcolaTassaSoggiorno(headId){
   var gruppo = datiGruppo.membri;
   var notti = parseInt(datiGruppo.permanenza, 10) || 0;
   var nottiTassate = cfgTassa.maxNotti ? Math.min(notti, cfgTassa.maxNotti) : notti;
-  var tassabili = 0, esenti = 0, mancantiDati = 0;
+  // Le esenzioni devono essere ESATTAMENTE le stesse della dichiarazione al
+  // Comune (calcolaRiepilogoTassa / calcolaDettaglioTassa): categorie speciali,
+  // minori, residenti a Torino. Prima qui si esentavano solo i minori, quindi a
+  // un residente o a un esente per categoria veniva addebitata in fattura
+  // un'imposta che poi non veniva dichiarata - e che l'ospite non deve.
+  var tassabili = 0, esenti = 0, esentiResidenti = 0, esentiSpeciali = 0, mancantiDati = 0;
   gruppo.forEach(function(g){
     if (!g.dataNascita) mancantiDati++;
+    var speciale = (g.categoriaSpecialeTassa || '').trim();
+    if (speciale && CATEGORIE_SPECIALI_ESENTI.indexOf(speciale) !== -1){ esentiSpeciali++; return; }
     var eta = calcolaEta(g.dataNascita, datiGruppo.dataArrivo);
     if (eta != null && eta < cfgTassa.eta) esenti++;
+    else if (isResidenteTorino(g)) esentiResidenti++;
     else tassabili++;
   });
+  var vociEsenti = [];
+  if (esenti) vociEsenti.push(esenti + ' minor' + (esenti===1?'e':'i') + ' (sotto ' + cfgTassa.eta + ' anni)');
+  if (esentiResidenti) vociEsenti.push(esentiResidenti + ' resident' + (esentiResidenti===1?'e':'i') + ' a Torino');
+  if (esentiSpeciali) vociEsenti.push(esentiSpeciali + ' per categoria');
   var totale = nottiTassate * tassabili * cfgTassa.importo;
   tassaInput.value = totale.toFixed(2);
   tassaInput.dataset.nostroCalcolo = totale.toFixed(2);
@@ -3235,13 +3247,13 @@ async function calcolaTassaSoggiorno(headId){
   tassaInput.dataset.quantita = String(nottiTassate * tassabili);
   tassaInput.dataset.prezzoUnitario = cfgTassa.importo.toFixed(2);
   tassaInput.dataset.dettaglio = nottiTassate + ' pernottament' + (nottiTassate===1?'o':'i') + ' tassat' + (nottiTassate===1?'o':'i') +
-    ' — ' + tassabili + ' adult' + (tassabili===1?'o':'i') +
-    (esenti ? ', ' + esenti + ' minor' + (esenti===1?'e':'i') + ' esent' + (esenti===1?'e':'i') + ' (sotto ' + cfgTassa.eta + ' anni)' : '');
+    ' — ' + tassabili + ' person' + (tassabili===1?'a':'e') + ' soggett' + (tassabili===1?'a':'e') +
+    (vociEsenti.length ? ', esenti: ' + vociEsenti.join(', ') : '');
   if (noteEl){
     var nota = nottiTassate + ' nott' + (nottiTassate===1?'e':'i') +
       (cfgTassa.maxNotti && notti > cfgTassa.maxNotti ? ' (di ' + notti + ', tetto massimo raggiunto)' : '') +
       ' × ' + tassabili + ' person' + (tassabili===1?'a':'e') + ' soggetta/e' +
-      (esenti ? ' (esenti sotto ' + cfgTassa.eta + ' anni: ' + esenti + ')' : '') +
+      (vociEsenti.length ? ' (esenti: ' + vociEsenti.join(', ') + ')' : '') +
       ' × €' + cfgTassa.importo.toFixed(2).replace('.', ',') +
       (mancantiDati ? ' — attenzione: manca la data di nascita di ' + mancantiDati + ' ospite/i, il calcolo potrebbe non essere accurato.' : '');
     noteEl.textContent = nota;
@@ -5042,7 +5054,12 @@ function primoGiornoMese(anno, mese){
 }
 function ultimoGiornoMese(anno, mese){
   var d = new Date(anno, mese + 1, 0);
-  return d.toISOString().slice(0, 10);
+  // Attenzione: new Date(anno, mese, giorno) costruisce una data LOCALE, mentre
+  // toISOString() la converte in UTC. In Italia (UTC+1/+2) la mezzanotte locale
+  // cade il giorno prima in UTC, quindi toISOString() restituiva il 30 invece
+  // del 31 (e il 28 invece del 29 negli anni bisestili), tagliando fuori
+  // l'ultimo giorno del mese da recupero schede, pulizie e fatture.
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
 function schedaFuoriTempoMassimo(b, oggiISO){
