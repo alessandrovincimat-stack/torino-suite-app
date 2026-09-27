@@ -1153,11 +1153,35 @@ function giorniIstatMancanti(){
 var ultimaVersioneGuestsNota = null; // ultimo contenuto di as-guests visto da questo dispositivo (solo per diagnostica)
 var guestsRimossiInQuestaSessione = []; // id espressamente rimossi/archiviati da qui, da non far "resuscitare" dalla fusione
 
+// Un guasto di rete può durare molte modifiche di fila: l'avviso si mostra una
+// volta sola e torna a comparire solo dopo che un salvataggio è riuscito.
+var avvisoSalvataggioMostrato = false;
+function segnalaProblemaSalvataggio(testo){
+  if (avvisoSalvataggioMostrato) return;
+  avvisoSalvataggioMostrato = true;
+  try { alert(testo); } catch(e){}
+}
+
 async function saveGuests(){
   try {
     var attuale = await remoteStorage.get('as-guests');
+    if (remoteStorage.ultimoErrore){
+      // Senza la versione che sta sul server non è possibile fondere: salvare
+      // adesso scriverebbe i soli ospiti di questo dispositivo, cancellando
+      // quelli inseriti nel frattempo dagli altri. Meglio non salvare e dirlo,
+      // che perdere dati di nascosto.
+      segnalaProblemaSalvataggio('Non riesco a leggere i dati dal server (' + remoteStorage.ultimoErrore + ').\n\nLe modifiche NON sono state salvate e restano solo su questo dispositivo: non chiudere la pagina, controlla la connessione e riprova.');
+      return;
+    }
     var remotiGrezzi = [];
-    try { if (attuale && attuale.value) remotiGrezzi = JSON.parse(attuale.value) || []; } catch(eParse){}
+    var lettoOk = true;
+    try { if (attuale && attuale.value) remotiGrezzi = JSON.parse(attuale.value) || []; } catch(eParse){ lettoOk = false; }
+    if (!lettoOk){
+      // Stessa situazione: il dato sul server c'è ma è illeggibile, quindi non
+      // sappiamo cosa conteneva e sovrascriverlo cancellerebbe il lavoro altrui.
+      segnalaProblemaSalvataggio('I dati sul server risultano illeggibili.\n\nLe modifiche NON sono state salvate, per non sovrascrivere quelle degli altri dispositivi. Segnala il problema prima di continuare.');
+      return;
+    }
 
     // Fusione, non sovrascrittura: parto dall'ultima versione presente sul server (che potrebbe
     // già includere ospiti aggiunti da un altro dispositivo dopo che questo ha caricato la
@@ -1181,8 +1205,16 @@ async function saveGuests(){
     state.guests = fuso;
     var daSalvare = JSON.stringify(state.guests);
     await remoteStorage.set('as-guests', daSalvare);
+    if (remoteStorage.ultimoErrore){
+      // Salvataggio non riuscito: NON azzero l'elenco delle rimozioni (vanno
+      // riapplicate al prossimo tentativo) e non segno come "nota" una versione
+      // che sul server non è mai arrivata.
+      segnalaProblemaSalvataggio('Salvataggio non riuscito (' + remoteStorage.ultimoErrore + ').\n\nLe modifiche restano solo su questo dispositivo: non chiudere la pagina, controlla la connessione e riprova.');
+      return;
+    }
     ultimaVersioneGuestsNota = daSalvare;
     guestsRimossiInQuestaSessione = [];
+    avvisoSalvataggioMostrato = false;
   } catch(e){}
 }
 async function saveTables(){
@@ -1293,16 +1325,24 @@ function backendHeaders(extra){
 }
 
 var remoteStorage = {
+  // get() e set() restituiscono null sia quando il dato non c'è sia quando la
+  // chiamata fallisce: chi chiama non può distinguere i due casi. ultimoErrore
+  // riporta il motivo dell'ULTIMA chiamata (null = andata a buon fine, oppure
+  // backend non configurato), e serve a saveGuests per non trasformare una
+  // fusione in una sovrascrittura quando la lettura non è riuscita.
+  ultimoErrore: null,
   async get(key){
+    remoteStorage.ultimoErrore = null;
     if (!state.backend.url) return null;
     try {
       var r = await fetch(backendUrl('/api/store?key='+encodeURIComponent(key)), { headers: backendHeaders(), cache: 'no-store' });
-      if (!r.ok) return null;
+      if (!r.ok){ remoteStorage.ultimoErrore = 'il server ha risposto ' + r.status; return null; }
       var d = await r.json();
       return (d && d.value != null) ? { key: key, value: d.value } : null;
-    } catch(e){ return null; }
+    } catch(e){ remoteStorage.ultimoErrore = e.message || 'connessione non riuscita'; return null; }
   },
   async set(key, value){
+    remoteStorage.ultimoErrore = null;
     if (!state.backend.url) return null;
     try {
       var r = await fetch(backendUrl('/api/store'), {
@@ -1311,8 +1351,9 @@ var remoteStorage = {
         body: JSON.stringify({ key: key, value: value }),
         cache: 'no-store'
       });
-      return r.ok ? { key: key, value: value } : null;
-    } catch(e){ return null; }
+      if (!r.ok){ remoteStorage.ultimoErrore = 'il server ha risposto ' + r.status; return null; }
+      return { key: key, value: value };
+    } catch(e){ remoteStorage.ultimoErrore = e.message || 'connessione non riuscita'; return null; }
   },
   async delete(key){
     if (!state.backend.url) return null;
