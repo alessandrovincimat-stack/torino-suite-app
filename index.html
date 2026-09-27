@@ -1471,7 +1471,7 @@ async function ocrDocument(files, guest){
           var coincide = nomeDocumento && nomePrenotazione && (nomePrenotazione.indexOf(guest.cognome ? guest.cognome.toLowerCase() : '###') !== -1 || nomeDocumento.indexOf(nomePrenotazione) !== -1 || nomePrenotazione.indexOf(nomeDocumento) !== -1);
           if (coincide){
             guest.indirizzoResidenza = datiSmoobu.address.street;
-            if (!guest.comuneResidenzaNome && datiSmoobu.address.location) guest.comuneResidenzaNome = datiSmoobu.address.location.toUpperCase();
+            if (!guest.comuneResidenzaNome && datiSmoobu.address.location) guest.comuneResidenzaNome = pulisciNomeComune(datiSmoobu.address.location);
           }
         }
       } catch(eSmoobuIndirizzo){}
@@ -3692,9 +3692,36 @@ function generaEInviaPanel(ordered, wrapEl){
 // preimpostato a ITALIA ma il Comune resta vuoto se non lo si compila a mano.
 // Controlliamo QUI, prima di inviare, per dare subito un errore chiaro in
 // italiano invece di scoprirlo dopo dal rifiuto (in inglese) del webservice.
+// Pulisce il nome del comune di residenza da scorie tipiche (soprattutto quando
+// arriva da Smoobu/Booking): CAP, sigla provincia tra parentesi, nomi in inglese.
+var ALIAS_COMUNI_ESTERI = { TURIN:'TORINO', MILAN:'MILANO', ROME:'ROMA', NAPLES:'NAPOLI', FLORENCE:'FIRENZE', VENICE:'VENEZIA', GENOA:'GENOVA', PADUA:'PADOVA', MANTUA:'MANTOVA', SYRACUSE:'SIRACUSA', LEGHORN:'LIVORNO' };
+function pulisciNomeComune(nome){
+  var n = String(nome || '').toUpperCase()
+    .replace(/\([^)]*\)/g, ' ')        // "TORINO (TO)" -> "TORINO"
+    .replace(/\b\d{5}\b/g, ' ')         // CAP
+    .replace(/\s+-?\s*[A-Z]{2}$/, function(m){ return /^\s+-?\s*(TO|MI|RM|NA|GE|FI|BO|VE|PD|VR|BS|BG|CN|AT|AL|NO|VC|BI|VB|AO)$/.test(m) ? '' : m; })
+    .replace(/[,;].*$/, '')               // "TORINO, ITALIA" -> "TORINO"
+    .replace(/\s+/g, ' ').trim();
+  return ALIAS_COMUNI_ESTERI[n] || n;
+}
+
+// Restituisce la voce di tabella (con il codice Polizia a 9 cifre) del comune di
+// residenza, o null se il nome non corrisponde a nessun comune noto.
+function risolviComuneResidenza(g){
+  if (!g || g.residenzaEstero) return null;
+  var nome = pulisciNomeComune(g.comuneResidenzaNome);
+  if (!nome) return null;
+  return findByName(state.tables.comuni, nome);
+}
+
+// Prima si controllava solo che il NOME non fosse vuoto: se il nome c'era ma non
+// corrispondeva a nessun comune in tabella (es. "Turin" o "10100 Torino (TO)" da
+// Smoobu) il codice partiva vuoto e il webservice rifiutava l'arrivo con
+// "municipality of residence has not been entered or does not match".
+// Ora il controllo verifica che il comune si traduca davvero in un codice.
 function trovaOspitiConComuneResidenzaMancante(ospiti){
   return (ospiti || []).filter(function(o){
-    return !o.residenzaEstero && (!o.comuneResidenzaNome || !o.comuneResidenzaNome.trim());
+    return !o.residenzaEstero && !risolviComuneResidenza(o);
   });
 }
 
@@ -3702,7 +3729,7 @@ function buildIstatArrivo(g, allOrdered){
   var comune = g.nascitaEstero ? null : findByName(state.tables.comuni, g.comuneNascitaNome);
   var statoNascita = g.nascitaEstero ? findByName(state.tables.stati, g.statoNascitaNome) : italiaEntry();
   var cittadinanza = findByName(state.tables.stati, g.cittadinanzaNome);
-  var comuneRes = g.residenzaEstero ? null : findByName(state.tables.comuni, g.comuneResidenzaNome);
+  var comuneRes = risolviComuneResidenza(g);
   var statoRes = g.residenzaEstero ? findByName(state.tables.stati, g.statoResidenzaNome) : italiaEntry();
   var isDependent = g.ruolo === 'familiare' || g.ruolo === 'membro';
   var head = isDependent ? allOrdered.find(function(x){ return x.id===g.groupOf; }) : null;
@@ -3764,7 +3791,7 @@ async function inviaIstatArrivi(arriviOggiRichiesti, allOrdered){
   var esclusiComuneMancante = trovaOspitiConComuneResidenzaMancante(arriviOggiRichiesti);
   var arriviOggi = arriviOggiRichiesti.filter(function(g){ return esclusiComuneMancante.indexOf(g) === -1; });
   if (!arriviOggi.length){
-    throw new Error('Comune di residenza mancante per: ' + esclusiComuneMancante.map(function(o){ return o.cognome+' '+o.nome; }).join(', ') + '. Completa il dato prima di inviare (il webservice rifiuta l\'invio se manca).');
+    throw new Error('Comune di residenza mancante o non riconosciuto per: ' + esclusiComuneMancante.map(function(o){ return o.cognome+' '+o.nome; }).join(', ') + '. Scegli il comune dall\'elenco a tendina prima di inviare (il webservice rifiuta l\'invio se il codice manca).');
   }
   var arrivi = arriviOggi.map(function(g){ return buildIstatArrivo(g, allOrdered); });
 
@@ -3965,7 +3992,7 @@ async function segnalaArrivo(invioId, btn){
   try {
     var comuneMancanteArrivo = trovaOspitiConComuneResidenzaMancante(iv.ospiti);
     if (comuneMancanteArrivo.length){
-      throw new Error('Comune di residenza mancante per: ' + comuneMancanteArrivo.map(function(o){ return o.cognome+' '+o.nome; }).join(', ') + '. Apri "Vedi tutti i dati salvati" per quell\'ospite e completa il Comune di residenza prima di inviare (il webservice rifiuta l\'invio se manca).');
+      throw new Error('Comune di residenza mancante o non riconosciuto per: ' + comuneMancanteArrivo.map(function(o){ return o.cognome+' '+o.nome+(o.comuneResidenzaNome ? ' ("'+o.comuneResidenzaNome+'")' : ''); }).join(', ') + '. Apri "Vedi tutti i dati salvati" per quell\'ospite e scegli il Comune di residenza dall\'elenco a tendina prima di inviare.');
     }
     if (eraGiaInviatoArrivo){
       var rettificheArrivo = iv.ospiti.map(function(o){
