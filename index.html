@@ -2364,9 +2364,10 @@ function getCanaleBooking(b){
   if (nome.indexOf('booking.com') !== -1) return 'booking';
   return 'altro';
 }
-// Serve anche al modulo pagamenti, che sta in un altro <script>: senza questa
-// riga ogni blocco dovrebbe tenersi la propria copia della stessa logica.
+// Servono anche al modulo pagamenti, che sta in un altro <script>: senza queste
+// righe ogni blocco dovrebbe tenersi la propria copia della stessa logica.
 window.getCanaleBooking = getCanaleBooking;
+window.dataLocaleISO = dataLocaleISO;
 
 function creaSchedaDaPrenotazioneSmoobu(b, capoId){
   var g = newGuest();
@@ -6200,6 +6201,11 @@ loadState().then(render);
 </script>
 <script>
 (function(){
+  // I due <script> di questo file sono racchiusi in funzioni separate e non si
+  // vedono fra loro: le funzioni condivise sono definite una volta sola nel
+  // blocco principale, che gira prima di questo, ed esposte su window.
+  var dataLocaleISO = window.dataLocaleISO;
+  var getCanaleBooking = window.getCanaleBooking;
   var switcher = document.getElementById('ts-switcher');
   var porteSection = document.getElementById('porte-section');
   var questuraSection = document.getElementById('questura-section');
@@ -6311,10 +6317,6 @@ async function pagStoreSet(key, value){
   } catch(e){ return false; }
 }
 
-// Definite nel blocco principale (vedi "canale di prenotazione"): i due <script>
-// sono racchiusi in funzioni separate e non si vedono fra loro, quindi la
-// versione unica viene esposta su window da chi la definisce per primo.
-var getCanaleBooking = window.getCanaleBooking;
 function trovaNomeAppartamento(b, listaAppartamenti){
   var appMatch = (listaAppartamenti||[]).find(function(a){ return a.smoobuId && b.apartment && String(a.smoobuId) === String(b.apartment.id); });
   return appMatch ? appMatch.nome : (b.apartment ? b.apartment.name : '');
