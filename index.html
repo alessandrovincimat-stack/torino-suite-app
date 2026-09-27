@@ -3031,7 +3031,7 @@ async function precompilaIndirizzoFattura(id, tipo){
   if (indirizzoInput && !indirizzoInput.value.trim() && g.indirizzoResidenza) indirizzoInput.value = g.indirizzoResidenza;
   if (cittaInput && !cittaInput.value.trim() && g.comuneResidenzaNome) cittaInput.value = g.comuneResidenzaNome;
   if (provInput && !provInput.value.trim() && g.comuneResidenzaNome){
-    var match = findByName(state.tables.comuni, g.comuneResidenzaNome);
+    var match = findByName(state.tables.comuni, pulisciNomeComune(g.comuneResidenzaNome));
     if (match && match.provincia) provInput.value = match.provincia;
   }
   await precompilaCapFattura(id);
@@ -3291,10 +3291,14 @@ function gruppiPerRiepilogoTassa(){
   return gruppi;
 }
 
+// I residenti nel Comune di Torino sono esenti dall'imposta di soggiorno.
+// Il confronto passa dalla stessa pulizia usata per l'ISTAT: senza, un ospite
+// registrato come "Turin", "Torino (TO)" o "10100 Torino" (nomi che arrivano
+// cosi' da Smoobu) non veniva riconosciuto come residente e si vedeva
+// conteggiare un'imposta che non deve pagare.
 function isResidenteTorino(m){
   if (m.residenzaEstero) return false;
-  var c = (m.comuneResidenzaNome || '').trim().toUpperCase();
-  return c === 'TORINO';
+  return pulisciNomeComune(m.comuneResidenzaNome) === 'TORINO';
 }
 
 async function calcolaRiepilogoTassa(anno, trimestre){
