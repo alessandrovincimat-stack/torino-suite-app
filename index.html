@@ -2337,6 +2337,37 @@ function applicaDatiArchivioOspite(id, o){
   saveGuests(); render();
 }
 
+// Il nome del campo con cui Smoobu riporta il canale non e' stabile fra le
+// versioni dell'API (channel-name, channelName, channel.name...). Invece di
+// indovinarne uno solo, si raccolgono TUTTE le chiavi che parlano di canale e
+// si cerca li' dentro. Si guardano solo le chiavi il cui NOME riguarda il
+// canale, non tutti i valori della prenotazione: una nota libera dell'ospite
+// che cita "airbnb" non deve far risultare esente chi invece deve pagare.
+function nomeCanaleBooking(b){
+  if (!b || typeof b !== 'object') return '';
+  var pezzi = [];
+  function aggiungi(v){
+    if (typeof v === 'string') pezzi.push(v);
+    else if (v && typeof v === 'object' && typeof v.name === 'string') pezzi.push(v.name);
+  }
+  aggiungi(b['channel-name']); aggiungi(b.channelName); aggiungi(b.channel);
+  Object.keys(b).forEach(function(k){
+    if (/channel|canale|source|portal|ota/i.test(k)) aggiungi(b[k]);
+  });
+  return pezzi.join(' ').toLowerCase();
+}
+function getCanaleBooking(b){
+  var nome = nomeCanaleBooking(b);
+  if (nome.indexOf('airbnb') !== -1) return 'airbnb';
+  // Attenzione: controllare solo "booking" matcherebbe anche "Direct booking"
+  // (prenotazione diretta), che NON e' Booking.com. Serve "booking.com" specifico.
+  if (nome.indexOf('booking.com') !== -1) return 'booking';
+  return 'altro';
+}
+// Serve anche al modulo pagamenti, che sta in un altro <script>: senza questa
+// riga ogni blocco dovrebbe tenersi la propria copia della stessa logica.
+window.getCanaleBooking = getCanaleBooking;
+
 function creaSchedaDaPrenotazioneSmoobu(b, capoId){
   var g = newGuest();
   g.dataArrivo = b.arrival;
@@ -6280,33 +6311,10 @@ async function pagStoreSet(key, value){
   } catch(e){ return false; }
 }
 
-// Il nome del campo con cui Smoobu riporta il canale non e' stabile fra le
-// versioni dell'API (channel-name, channelName, channel.name...). Invece di
-// indovinarne uno solo, si raccolgono TUTTE le chiavi che parlano di canale e
-// si cerca li' dentro. Si guardano solo le chiavi il cui NOME riguarda il
-// canale, non tutti i valori della prenotazione: una nota libera dell'ospite
-// che cita "airbnb" non deve far risultare esente chi invece deve pagare.
-function nomeCanaleBooking(b){
-  if (!b || typeof b !== 'object') return '';
-  var pezzi = [];
-  function aggiungi(v){
-    if (typeof v === 'string') pezzi.push(v);
-    else if (v && typeof v === 'object' && typeof v.name === 'string') pezzi.push(v.name);
-  }
-  aggiungi(b['channel-name']); aggiungi(b.channelName); aggiungi(b.channel);
-  Object.keys(b).forEach(function(k){
-    if (/channel|canale|source|portal|ota/i.test(k)) aggiungi(b[k]);
-  });
-  return pezzi.join(' ').toLowerCase();
-}
-function getCanaleBooking(b){
-  var nome = nomeCanaleBooking(b);
-  if (nome.indexOf('airbnb') !== -1) return 'airbnb';
-  // Attenzione: controllare solo "booking" matcherebbe anche "Direct booking"
-  // (prenotazione diretta), che NON e' Booking.com. Serve "booking.com" specifico.
-  if (nome.indexOf('booking.com') !== -1) return 'booking';
-  return 'altro';
-}
+// Definite nel blocco principale (vedi "canale di prenotazione"): i due <script>
+// sono racchiusi in funzioni separate e non si vedono fra loro, quindi la
+// versione unica viene esposta su window da chi la definisce per primo.
+var getCanaleBooking = window.getCanaleBooking;
 function trovaNomeAppartamento(b, listaAppartamenti){
   var appMatch = (listaAppartamenti||[]).find(function(a){ return a.smoobuId && b.apartment && String(a.smoobuId) === String(b.apartment.id); });
   return appMatch ? appMatch.nome : (b.apartment ? b.apartment.name : '');
