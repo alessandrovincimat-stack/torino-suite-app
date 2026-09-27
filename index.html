@@ -1371,8 +1371,13 @@ var remoteStorage = {
   }
 };
 
+// Protegge un testo prima di inserirlo nell'HTML. Include le VIRGOLETTE: senza
+// di quelle un valore finito dentro un attributo (value="...") puo' chiudere
+// l'attributo e far eseguire codice. I nomi degli ospiti arrivano da Smoobu,
+// cioe' li sceglie chi prenota, quindi non sono da considerare attendibili.
 function escapeHtml(s){
-  return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 function parseCsv(text, kind){
@@ -1607,7 +1612,7 @@ function buildGuestCardHtml(g, extraPrimaDiGenera){
   var html = '';
 
   html += '<div class="as-guest" data-id="'+g.id+'">';
-  html += '<div class="as-guest-head"><div><span class="as-name">'+(g.cognome||g.nome? (g.cognome+' '+g.nome).trim() : 'Nuovo ospite')+'</span><span class="as-role">'+roleLabel(g.ruolo)+'</span>'+faseBadge+'</div>' +
+  html += '<div class="as-guest-head"><div><span class="as-name">'+escapeHtml(g.cognome||g.nome? (g.cognome+' '+g.nome).trim() : 'Nuovo ospite')+'</span><span class="as-role">'+roleLabel(g.ruolo)+'</span>'+faseBadge+'</div>' +
           (g.ocrPending? '<span class="as-warn"><span class="as-spin"></span>estrazione in corso… <button class="as-remove" data-remove="'+g.id+'">annulla</button></span>' : '<button class="as-remove" data-remove="'+g.id+'">rimuovi</button>') +
           '</div>';
 
@@ -1634,8 +1639,8 @@ function buildGuestCardHtml(g, extraPrimaDiGenera){
     });
     html += '</select></div>';
   } else {
-    html += '<div class="as-field"><label>Data arrivo</label><input type="date" data-f="dataArrivo" data-id="'+g.id+'" value="'+g.dataArrivo+'"></div>';
-    html += '<div class="as-field"><label>Giorni permanenza</label><input type="number" min="1" max="30" data-f="permanenza" data-id="'+g.id+'" value="'+g.permanenza+'"></div>';
+    html += '<div class="as-field"><label>Data arrivo</label><input type="date" data-f="dataArrivo" data-id="'+g.id+'" value="'+escapeHtml(g.dataArrivo)+'"></div>';
+    html += '<div class="as-field"><label>Giorni permanenza</label><input type="number" min="1" max="30" data-f="permanenza" data-id="'+g.id+'" value="'+escapeHtml(g.permanenza)+'"></div>';
     html += '<div class="as-field"><label>Appartamento</label><select data-f="idAppartamento" data-id="'+g.id+'"><option value="">—</option>' +
       state.tables.appartamenti.map(function(a){ return '<option value="'+a.id+'" '+(g.idAppartamento===a.id?'selected':'')+'>'+a.nome+'</option>'; }).join('') +
       '</select></div>';
@@ -1643,31 +1648,31 @@ function buildGuestCardHtml(g, extraPrimaDiGenera){
   html += '</div>';
 
   html += '<div class="as-row">';
-  html += '<div class="as-field"><label>Cognome</label><input data-f="cognome" data-id="'+g.id+'" value="'+g.cognome+'"></div>';
-  html += '<div class="as-field"><label>Nome</label><input data-f="nome" data-id="'+g.id+'" value="'+g.nome+'"></div>';
+  html += '<div class="as-field"><label>Cognome</label><input data-f="cognome" data-id="'+g.id+'" value="'+escapeHtml(g.cognome)+'"></div>';
+  html += '<div class="as-field"><label>Nome</label><input data-f="nome" data-id="'+g.id+'" value="'+escapeHtml(g.nome)+'"></div>';
   html += '<div class="as-field"><label>Sesso</label><select data-f="sesso" data-id="'+g.id+'"><option value="M" '+(g.sesso==='M'?'selected':'')+'>M</option><option value="F" '+(g.sesso==='F'?'selected':'')+'>F</option></select></div>';
-  html += '<div class="as-field"><label>Data nascita</label><input type="date" data-f="dataNascita" data-id="'+g.id+'" value="'+g.dataNascita+'"></div>';
+  html += '<div class="as-field"><label>Data nascita</label><input type="date" data-f="dataNascita" data-id="'+g.id+'" value="'+escapeHtml(g.dataNascita)+'"></div>';
   html += '</div>';
 
   html += '<div class="as-row">';
   html += '<div class="as-field"><label>Nato/a all\'estero?</label><select data-f="nascitaEstero" data-id="'+g.id+'"><option value="false" '+(!g.nascitaEstero?'selected':'')+'>No, in Italia</option><option value="true" '+(g.nascitaEstero?'selected':'')+'>Sì</option></select></div>';
   if (g.nascitaEstero){
-    html += '<div class="as-field"><label>Stato di nascita</label><input list="dl-stati" data-f="statoNascitaNome" data-id="'+g.id+'" value="'+g.statoNascitaNome+'"></div>';
+    html += '<div class="as-field"><label>Stato di nascita</label><input list="dl-stati" data-f="statoNascitaNome" data-id="'+g.id+'" value="'+escapeHtml(g.statoNascitaNome)+'"></div>';
   } else {
-    html += '<div class="as-field"><label>Comune di nascita</label><input list="dl-comuni" data-f="comuneNascitaNome" data-id="'+g.id+'" value="'+g.comuneNascitaNome+'"></div>';
+    html += '<div class="as-field"><label>Comune di nascita</label><input list="dl-comuni" data-f="comuneNascitaNome" data-id="'+g.id+'" value="'+escapeHtml(g.comuneNascitaNome)+'"></div>';
   }
-  html += '<div class="as-field"><label>Cittadinanza</label><input list="dl-stati" data-f="cittadinanzaNome" data-id="'+g.id+'" value="'+g.cittadinanzaNome+'"></div>';
+  html += '<div class="as-field"><label>Cittadinanza</label><input list="dl-stati" data-f="cittadinanzaNome" data-id="'+g.id+'" value="'+escapeHtml(g.cittadinanzaNome)+'"></div>';
   html += '</div>';
 
   if (!isDependent){
     html += '<div class="as-row">';
-    html += '<div class="as-field"><label>Tipo documento</label><input list="dl-doc" data-f="tipoDocumentoNome" data-id="'+g.id+'" value="'+g.tipoDocumentoNome+'"></div>';
-    html += '<div class="as-field"><label>Numero documento</label><input data-f="numeroDocumento" data-id="'+g.id+'" value="'+g.numeroDocumento+'"></div>';
+    html += '<div class="as-field"><label>Tipo documento</label><input list="dl-doc" data-f="tipoDocumentoNome" data-id="'+g.id+'" value="'+escapeHtml(g.tipoDocumentoNome)+'"></div>';
+    html += '<div class="as-field"><label>Numero documento</label><input data-f="numeroDocumento" data-id="'+g.id+'" value="'+escapeHtml(g.numeroDocumento)+'"></div>';
     html += '<div class="as-field"><label>Data di scadenza documento</label><input type="date" data-f="dataScadenzaDocumento" data-id="'+g.id+'" value="'+(g.dataScadenzaDocumento||'')+'"></div>';
     var avvisoScadenza = verificaScadenzaDocumento(g);
     if (avvisoScadenza) html += '<div class="as-err">⚠️ '+escapeHtml(avvisoScadenza)+'</div>';
     html += '<div class="as-field"><label>Rilascio all\'estero?</label><select data-f="rilascioEstero" data-id="'+g.id+'"><option value="false" '+(!g.rilascioEstero?'selected':'')+'>No, in Italia</option><option value="true" '+(g.rilascioEstero?'selected':'')+'>Sì</option></select></div>';
-    html += '<div class="as-field"><label>Luogo rilascio</label><input list="'+(g.rilascioEstero?'dl-stati':'dl-comuni')+'" data-f="luogoRilascioNome" data-id="'+g.id+'" value="'+g.luogoRilascioNome+'"></div>';
+    html += '<div class="as-field"><label>Luogo rilascio</label><input list="'+(g.rilascioEstero?'dl-stati':'dl-comuni')+'" data-f="luogoRilascioNome" data-id="'+g.id+'" value="'+escapeHtml(g.luogoRilascioNome)+'"></div>';
     html += '</div>';
   }
 
@@ -1675,9 +1680,9 @@ function buildGuestCardHtml(g, extraPrimaDiGenera){
   html += '<div class="as-row" style="margin-top:8px;">';
   html += '<div class="as-field"><label>Residente all\'estero?</label><select data-f="residenzaEstero" data-id="'+g.id+'"><option value="false" '+(!g.residenzaEstero?'selected':'')+'>No, in Italia</option><option value="true" '+(g.residenzaEstero?'selected':'')+'>Sì</option></select></div>';
   if (g.residenzaEstero){
-    html += '<div class="as-field"><label>Stato di residenza</label><input list="dl-stati" data-f="statoResidenzaNome" data-id="'+g.id+'" value="'+g.statoResidenzaNome+'"></div>';
+    html += '<div class="as-field"><label>Stato di residenza</label><input list="dl-stati" data-f="statoResidenzaNome" data-id="'+g.id+'" value="'+escapeHtml(g.statoResidenzaNome)+'"></div>';
   } else {
-    html += '<div class="as-field"><label>Comune di residenza</label><input list="dl-comuni" data-f="comuneResidenzaNome" data-id="'+g.id+'" value="'+g.comuneResidenzaNome+'"></div>';
+    html += '<div class="as-field"><label>Comune di residenza</label><input list="dl-comuni" data-f="comuneResidenzaNome" data-id="'+g.id+'" value="'+escapeHtml(g.comuneResidenzaNome)+'"></div>';
   }
   html += '</div>';
   html += '<div class="as-field"><label>Indirizzo di residenza (via e civico) — per la fattura</label><input data-f="indirizzoResidenza" data-id="'+g.id+'" value="'+(g.indirizzoResidenza||'')+'"></div>';
@@ -2395,7 +2400,7 @@ function renderSmoobuBox(box, bookings){
       var stato;
       if (r.invioCollegato){
         var classeStato = r.invioCollegato.manuale ? 'as-info' : 'as-ok';
-        var nomiInviati = r.invioCollegato.ospiti.filter(function(o){return o.smoobuBookingId===String(b.id);}).map(function(o){return (o.cognome+' '+o.nome).trim();}).join(', ');
+        var nomiInviati = r.invioCollegato.ospiti.filter(function(o){return o.smoobuBookingId===String(b.id);}).map(function(o){return escapeHtml((o.cognome+' '+o.nome).trim());}).join(', ');
         stato = '<p class="'+classeStato+'" style="margin:4px 0 0;">Già inviata alla Questura (' + nomiInviati + ')' + (r.invioCollegato.manuale ? ' — altri canali' : '') + '</p>';
         stato += r.invioCollegato.arrivoSegnalato
           ? '<p class="'+classeStato+'" style="margin:4px 0 0;">Arrivo + partenza presunta segnalati (ISTAT)' + (r.invioCollegato.manuale ? ' — altri canali' : '') + '</p>'
@@ -2418,7 +2423,7 @@ function renderSmoobuBox(box, bookings){
         }
         var faseRiepilogo = capo.istatArrivoOk ? '✅ ISTAT OK · ❌ Questura KO' : '🆕 Da avviare';
         stato = '<details style="margin-top:6px;" data-smoobu-details="'+b.id+'"'+aperto+'><summary style="cursor:pointer;color:var(--brass);font-size:13px;font-weight:600;">▸ ' +
-          r.collegate.length + ' scheda/e: ' + r.collegate.map(function(g){ return (g.cognome+' '+g.nome).trim() || '(dati da inserire)'; }).join(', ') +
+          r.collegate.length + ' scheda/e: ' + r.collegate.map(function(g){ return escapeHtml((g.cognome+' '+g.nome).trim()) || '(dati da inserire)'; }).join(', ') +
           ' — ' + faseRiepilogo +
           '</summary><div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);">' +
           corpoSchede +
