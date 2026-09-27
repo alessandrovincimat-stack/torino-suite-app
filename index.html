@@ -971,7 +971,14 @@ var state = { guests: [], tables: { comuni: [], stati: [], documenti: [], appart
 
 function uid(){ return 'g' + Math.random().toString(36).slice(2,9); }
 
-function todayISO(){ var d=new Date(); return d.toISOString().slice(0,10); }
+// Converte una data nel giorno di CALENDARIO LOCALE (aaaa-mm-gg).
+// Non si puo' usare toISOString(), che lavora in UTC: in Italia fra mezzanotte
+// e le 02:00 restituisce il giorno precedente, quindi un check-in fatto all'una
+// di notte finirebbe registrato con la data di ieri.
+function dataLocaleISO(d){
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function todayISO(){ return dataLocaleISO(new Date()); }
 
 async function loadState(){
   try {
@@ -2133,7 +2140,7 @@ async function renderOggi(){
   if (!el) return;
   var oggiISO = todayISO();
   var domaniD = new Date(); domaniD.setDate(domaniD.getDate() + 1);
-  var domaniISO = domaniD.toISOString().slice(0, 10);
+  var domaniISO = dataLocaleISO(domaniD);
 
   var prenotazioniArrivo = [];
   var prenotazioniPartenza = [];
@@ -2221,9 +2228,9 @@ function renderOspiti(){
   html += '<div class="as-card"><button class="as-btn ghost" id="as-add-manual" style="width:100%;">+ Aggiungi ospite</button></div>';
 
   var inizioFinestraD = new Date(); inizioFinestraD.setDate(inizioFinestraD.getDate() - 2);
-  var oggiFinestraISO = inizioFinestraD.toISOString().slice(0,10);
+  var oggiFinestraISO = dataLocaleISO(inizioFinestraD);
   var fineFinestraD = new Date(); fineFinestraD.setDate(fineFinestraD.getDate() + 7);
-  var fineFinestraISO = fineFinestraD.toISOString().slice(0,10);
+  var fineFinestraISO = dataLocaleISO(fineFinestraD);
   var guestsSenzaPrenotazione = state.guests.filter(function(g){
     if (!state.backend.url || !g.smoobuBookingId) return true;
     // Se ha una prenotazione Smoobu ma l'arrivo è fuori dalla finestra mostrata sopra
@@ -2488,8 +2495,8 @@ async function caricaArriviSmoobu(forceRefresh){
     var oggi = new Date();
     var da2GiorniFa = new Date(); da2GiorniFa.setDate(da2GiorniFa.getDate() - 2);
     var tra7 = new Date(); tra7.setDate(tra7.getDate() + 7);
-    var from = da2GiorniFa.toISOString().slice(0,10);
-    var to = tra7.toISOString().slice(0,10);
+    var from = dataLocaleISO(da2GiorniFa);
+    var to = dataLocaleISO(tra7);
     var controller = new AbortController();
     var timeoutId = setTimeout(function(){ controller.abort(); }, 15000);
     var resp = await fetch(backendUrl('/api/smoobu/reservations?arrivalFrom='+from+'&arrivalTo='+to), { headers: backendHeaders(), signal: controller.signal });
@@ -3666,7 +3673,7 @@ function generaEInviaPanel(ordered, wrapEl){
     var blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
-    var stamp = new Date().toISOString().slice(0,10).replace(/-/g,'');
+    var stamp = dataLocaleISO(new Date()).replace(/-/g,'');
     a.href = url;
     a.download = 'alloggiati_torinosuite_' + stamp + '.txt';
     a.click();
@@ -5231,7 +5238,7 @@ async function renderArchivioRecuperoSchede(el){
     var finoAPartenza = new Date(aData + 'T00:00:00'); finoAPartenza.setDate(finoAPartenza.getDate() + 30);
     var [respArr, respDep] = await Promise.all([
       fetch(backendUrl('/api/smoobu/reservations?arrivalFrom=' + da + '&arrivalTo=' + aData), { headers: backendHeaders() }),
-      fetch(backendUrl('/api/smoobu/reservations?departureFrom=' + da + '&departureTo=' + finoAPartenza.toISOString().slice(0,10)), { headers: backendHeaders() })
+      fetch(backendUrl('/api/smoobu/reservations?departureFrom=' + da + '&departureTo=' + dataLocaleISO(finoAPartenza)), { headers: backendHeaders() })
     ]);
     var dataArr = await respArr.json();
     var dataDep = await respDep.json();
@@ -5761,7 +5768,7 @@ async function cercaPrenotazioniPerNome(query){
   var oggi = new Date();
   var da6mesiFa = new Date(oggi); da6mesiFa.setMonth(da6mesiFa.getMonth() - 6);
   var tra6mesi = new Date(oggi); tra6mesi.setMonth(tra6mesi.getMonth() + 6);
-  var resp = await fetch(backendUrl('/api/smoobu/reservations?departureFrom=' + da6mesiFa.toISOString().slice(0,10) + '&departureTo=' + tra6mesi.toISOString().slice(0,10)), { headers: backendHeaders() });
+  var resp = await fetch(backendUrl('/api/smoobu/reservations?departureFrom=' + dataLocaleISO(da6mesiFa) + '&departureTo=' + dataLocaleISO(tra6mesi)), { headers: backendHeaders() });
   var data = await resp.json();
   if (!resp.ok) throw new Error(data.error || 'errore nella ricerca');
   var q = normalizzaNome(query);
@@ -6296,7 +6303,7 @@ async function caricaPrenotazioniPagamenti(){
   var oggi = new Date();
   var da = new Date(oggi); da.setDate(da.getDate() - 30);
   var a = new Date(oggi); a.setDate(a.getDate() + 60);
-  var daISO = da.toISOString().slice(0,10), aISO = a.toISOString().slice(0,10);
+  var daISO = dataLocaleISO(da), aISO = dataLocaleISO(a);
   var controller = new AbortController();
   var timeoutId = setTimeout(function(){ controller.abort(); }, 15000);
   try {
@@ -6342,7 +6349,7 @@ window.addEventListener('message', function(evento){
 });
 async function segnaPagamento(bookingId, stato, extra, btnEl){
   if (btnEl) btnEl.disabled = true;
-  await setStatoPagamento(bookingId, Object.assign({ stato: stato, data: new Date().toISOString().slice(0,10) }, extra||{}));
+  await setStatoPagamento(bookingId, Object.assign({ stato: stato, data: dataLocaleISO(new Date()) }, extra||{}));
   renderPagamenti();
 }
 async function creaLinkPagamento(b, btnEl){
@@ -6386,7 +6393,7 @@ async function creaLinkPagamento(b, btnEl){
       stato: 'link-in-attesa',
       linkId: data.id,
       importo: importoCent / 100,
-      data: new Date().toISOString().slice(0,10)
+      data: dataLocaleISO(new Date())
     });
   } catch(e){
     if (btnEl){ btnEl.disabled = false; btnEl.textContent = 'Crea link di pagamento'; }
