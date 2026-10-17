@@ -80,7 +80,7 @@
 </head>
 <body>
 <div id="pull-refresh-indicator" style="position:fixed;top:0;left:0;right:0;text-align:center;padding:10px 8px;font-size:13px;color:var(--brass);background:var(--bg);transform:translateY(-100%);z-index:99999;border-bottom:1px solid var(--border);">↓ Trascina per aggiornare</div>
-<div class="ts-switcher" id="ts-switcher"><button class="ts-switch-btn" id="ts-btn-porte">Gestione porte</button><button class="ts-switch-btn ts-active" id="ts-btn-questura">Questura e ISTAT</button><button class="ts-switch-btn" id="ts-btn-archivio">Archivio</button><button class="ts-switch-btn" id="ts-btn-fatture">Fatture</button><button class="ts-switch-btn" id="ts-btn-tassa">Tassa di soggiorno</button><button class="ts-switch-btn" id="ts-btn-impostazioni" style="font-size:16px;">🔒</button><button class="ts-switch-btn" id="ts-btn-booking">Pagamenti</button></div><div id="booking-section" style="display:none;color:var(--text);background:var(--bg);max-width:960px;margin:0 auto;font-family:'Helvetica Neue',Arial,sans-serif;padding:16px;"><div class="as-tabs" id="pag-subtabs"><div class="as-tab" data-pagsubtab="da-incassare">Da incassare</div><div class="as-tab" data-pagsubtab="ok">Pagamenti OK</div></div><div id="pag-content"></div></div><div id="porte-section">
+<div class="ts-switcher" id="ts-switcher"><button class="ts-switch-btn" id="ts-btn-porte">Gestione porte</button><button class="ts-switch-btn ts-active" id="ts-btn-questura">Questura e ISTAT</button><button class="ts-switch-btn" id="ts-btn-archivio">Archivio</button><button class="ts-switch-btn" id="ts-btn-fatture">Fatture</button><button class="ts-switch-btn" id="ts-btn-tassa">Tassa di soggiorno</button><button class="ts-switch-btn" id="ts-btn-impostazioni" style="font-size:16px;">🔒</button><button class="ts-switch-btn" id="ts-btn-booking">Pagamenti</button><button class="ts-switch-btn" id="ts-btn-prezzi">Prezzi</button></div><div id="booking-section" style="display:none;color:var(--text);background:var(--bg);max-width:960px;margin:0 auto;font-family:'Helvetica Neue',Arial,sans-serif;padding:16px;"><div class="as-tabs" id="pag-subtabs"><div class="as-tab" data-pagsubtab="da-incassare">Da incassare</div><div class="as-tab" data-pagsubtab="ok">Pagamenti OK</div></div><div id="pag-content"></div></div><div id="prezzi-section" style="display:none;color:var(--text);background:var(--bg);max-width:960px;margin:0 auto;font-family:'Helvetica Neue',Arial,sans-serif;padding:16px;"><div id="prz-content"></div></div><div id="porte-section">
 <div id="root"></div>
 </div>
 <div id="fatture-section" style="display:none;">
@@ -6218,7 +6218,7 @@ loadState().then(render);
   var btnArchivio = document.getElementById('ts-btn-archivio');
   var btnFatture = document.getElementById('ts-btn-fatture');
   var btnTassa = document.getElementById('ts-btn-tassa');
-  var btnImpostazioni = document.getElementById('ts-btn-impostazioni'); var bookingSection = document.getElementById('booking-section'); var btnBooking = document.getElementById('ts-btn-booking');
+  var btnImpostazioni = document.getElementById('ts-btn-impostazioni'); var bookingSection = document.getElementById('booking-section'); var btnBooking = document.getElementById('ts-btn-booking'); var prezziSection = document.getElementById('prezzi-section'); var btnPrezzi = document.getElementById('ts-btn-prezzi');
 
   var sezioni = [
     { div: porteSection, btn: btnPorte },
@@ -6226,7 +6226,7 @@ loadState().then(render);
     { div: archivioSection, btn: btnArchivio },
     { div: fattureSection, btn: btnFatture },
     { div: tassaSection, btn: btnTassa },
-    { div: impostazioniSection, btn: btnImpostazioni }, { div: bookingSection, btn: btnBooking }
+    { div: impostazioniSection, btn: btnImpostazioni }, { div: bookingSection, btn: btnBooking }, { div: prezziSection, btn: btnPrezzi }
   ];
 
   function mostra(indice){
@@ -6239,20 +6239,21 @@ loadState().then(render);
     if (indice === 4 && typeof renderTassaTab === 'function') renderTassaTab();
     if (indice === 5 && typeof renderImpostazioniTab === 'function') renderImpostazioniTab();
     if (indice === 6 && typeof renderPagamenti === 'function') renderPagamenti();
+    if (indice === 7 && typeof renderPrezzi === 'function') renderPrezzi();
   }
   function showPorte(){ mostra(0); }
   function showQuestura(){ mostra(1); }
   function showArchivio(){ mostra(2); }
   function showFatture(){ mostra(3); }
   function showTassa(){ mostra(4); }
-  function showImpostazioni(){ mostra(5); } function showBooking(){ mostra(6); }
+  function showImpostazioni(){ mostra(5); } function showBooking(){ mostra(6); } function showPrezzi(){ mostra(7); }
 
   btnPorte.onclick = showPorte;
   btnQuestura.onclick = showQuestura;
   btnArchivio.onclick = showArchivio;
   btnFatture.onclick = showFatture;
   btnTassa.onclick = showTassa;
-  btnImpostazioni.onclick = showImpostazioni; if (btnBooking) btnBooking.onclick = showBooking;
+  btnImpostazioni.onclick = showImpostazioni; if (btnBooking) btnBooking.onclick = showBooking; if (btnPrezzi) btnPrezzi.onclick = showPrezzi;
 
 // ===== Sezione Pagamenti =====
 // Completamente autonoma: usa solo window.storage (globale, agganciato esplicitamente
@@ -6595,6 +6596,109 @@ async function renderPagamentiAsync(el){
  }
 }
 window.renderPagamenti = renderPagamenti;
+
+// ===== Sezione Prezzi (2026-10-17) =====
+// SOLA REGISTRAZIONE: mostra le proposte del motore prezzi e salva le decisioni di Ale sul backend (/api/prezzi).
+// NON scrive su Smoobu. Usa pagFetch (backend e chiave gia' salvati in Impostazioni > Backend).
+var przD = null, przFiltro = 'da', przAlloggio = '', przVisibili = 40;
+function przEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function przDataIt(d){ var x = new Date(d + 'T12:00:00'); var g = ['dom','lun','mar','mer','gio','ven','sab'][x.getDay()]; return g + ' ' + String(x.getDate()).padStart(2,'0') + '/' + String(x.getMonth()+1).padStart(2,'0') + '/' + x.getFullYear(); }
+function przN(v){ return v == null ? '—' : v; }
+async function przApi(p, opt){
+  var r = await pagFetch('/api/prezzi' + p, opt || {});
+  if (r.status === 401) throw new Error('chiave non valida: controlla Impostazioni > Backend');
+  var j = {}; try { j = await r.json(); } catch(e){}
+  if (!r.ok) throw new Error(j.error || ('errore ' + r.status));
+  return j;
+}
+async function renderPrezzi(){
+  var el = document.getElementById('prz-content');
+  if (!el) return;
+  el.innerHTML = '<p class="as-sub">Caricamento proposte…</p>';
+  try {
+    var backend = await pagGetBackend();
+    if (!backend.url) { el.innerHTML = '<div class="as-err">Backend non configurato (vai in Impostazioni).</div>'; return; }
+    var l = await przApi('');
+    if (!l.giorni.length) { el.innerHTML = '<p class="as-sub">Nessuna proposta pubblicata.</p>'; return; }
+    przD = await przApi('/' + l.giorni[0].id);
+    przVisibili = 40;
+    przDisegna();
+  } catch(e){ el.innerHTML = '<div class="as-err">Prezzi: ' + przEsc(e.message) + '</div>'; }
+}
+function przPassa(r){
+  if (przAlloggio && r.alloggio !== przAlloggio) return false;
+  if (przFiltro === 'da') return !r.decisione && !r.nuovo;
+  if (przFiltro === 'ok') return !r.decisione && r.richiede_ok_ale;
+  if (przFiltro === 'nuove') return !r.decisione && r.nuovo;
+  if (przFiltro === 'decise') return !!r.decisione;
+  return true;
+}
+function przCard(r, i){
+  var d = r.decisione, v = r.variazione_pct;
+  var h = '<div class="as-booking" data-przi="' + i + '"><div><b>' + przEsc(r.alloggio) + '</b> · ' + przEsc(przDataIt(r.data)) + ' · tra ' + r.anticipo_gg + ' gg</div>';
+  h += '<div style="font-size:22px;font-weight:600;margin:6px 0 2px;"><span style="color:var(--text-muted);font-weight:400;">' + przN(r.prezzo_attuale) + ' →</span> ' + przN(r.prezzo_proposto) + ' €';
+  if (v != null && !r.nuovo) h += '<span style="font-size:14px;margin-left:8px;color:' + (v < 0 ? '#d9786a' : '#7fbf8f') + ';">' + (v > 0 ? '+' : '') + String(v).replace('.', ',') + '%</span>';
+  h += '</div><div class="as-sub" style="margin:0;">';
+  var tag = [];
+  if (r.nuovo) tag.push('notte nuova');
+  if (r.richiede_ok_ale) (r.motivo_ok || []).forEach(function(m){ tag.push('ok: ' + m); });
+  if (r.picco) tag.push('picco');
+  if (r.orfana) tag.push('notte orfana');
+  if (r.permanenza_proposta !== r.permanenza_attuale) tag.push('permanenza ' + przN(r.permanenza_attuale) + ' → ' + przN(r.permanenza_proposta));
+  if (tag.length) h += '<span style="color:var(--brass);">' + przEsc(tag.join(' · ')) + '</span><br>';
+  h += przEsc(r.motivo) + (r.vincoli && r.vincoli.length ? ' · ' + przEsc(r.vincoli.join('; ')) : '') + '</div>';
+  if (d) {
+    var t = d.azione === 'approva' ? 'Approvata ' + d.prezzo_deciso + ' €' : (d.azione === 'rifiuta' ? 'Rifiutata' : 'Modificata a ' + d.prezzo_deciso + ' €');
+    h += '<p class="as-ok" style="margin:6px 0 0;">' + t + ' — ' + przEsc(new Date(d.quando).toLocaleString('it-IT')) + '</p>';
+    h += '<button class="as-btn ghost" data-przazione="cambia" style="margin-top:6px;">Cambia decisione</button>';
+  } else {
+    h += '<button class="as-btn" data-przazione="approva" style="margin-top:6px;">Approva</button> <button class="as-btn secondary" data-przazione="modifica" style="margin-top:6px;">Modifica</button> <button class="as-btn ghost" data-przazione="rifiuta" style="margin-top:6px;">Rifiuta</button>';
+  }
+  return h + '<div class="as-err" id="przerr' + i + '" style="display:none;"></div></div>';
+}
+function przDisegna(){
+  var el = document.getElementById('prz-content');
+  var R = przD.righe;
+  var lista = R.filter(przPassa);
+  var dec = R.filter(function(r){ return r.decisione; }).length;
+  var h = '<p class="as-sub">Proposte del ' + przEsc(przDataIt(przD.id)) + (przD.meta.generato ? ' · aggiornate ' + przEsc(new Date(przD.meta.generato).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'})) : '') + '. <b>Solo registrazione: nulla viene scritto su Smoobu.</b> I prezzi approvati vanno ancora applicati a mano.</p>';
+  (przD.meta.avvisi || []).filter(function(a){ return /ATTENZIONE/.test(a); }).forEach(function(a){ h += '<div class="as-err">' + przEsc(a) + '</div>'; });
+  h += '<p class="as-sub">Da decidere: <b>' + R.filter(function(r){ return !r.decisione && !r.nuovo; }).length + '</b> · Chiedono il tuo ok: <b>' + R.filter(function(r){ return !r.decisione && r.richiede_ok_ale; }).length + '</b> · Notti nuove: <b>' + R.filter(function(r){ return !r.decisione && r.nuovo; }).length + '</b> · Decise: <b>' + dec + '</b></p>';
+  var T = [['da','Da decidere'],['ok','Richiedono ok'],['nuove','Notti nuove'],['decise','Decise'],['tutte','Tutte']];
+  h += '<div class="as-tabs" style="flex-wrap:wrap;">' + T.map(function(t){ return '<div class="as-tab' + (t[0] === przFiltro ? ' active' : '') + '" data-przfiltro="' + t[0] + '">' + t[1] + '</div>'; }).join('') + '</div>';
+  var al = []; R.forEach(function(r){ if (al.indexOf(r.alloggio) < 0) al.push(r.alloggio); });
+  h += '<select id="prz-al" style="width:100%;min-height:44px;font-size:16px;margin:10px 0;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 10px;"><option value="">Tutti gli alloggi</option>' + al.map(function(a){ return '<option' + (a === przAlloggio ? ' selected' : '') + '>' + przEsc(a) + '</option>'; }).join('') + '</select>';
+  h += lista.length ? lista.slice(0, przVisibili).map(function(r){ return przCard(r, R.indexOf(r)); }).join('') : '<p class="as-sub">Nessuna notte in questo elenco.</p>';
+  if (lista.length > przVisibili) h += '<button class="as-btn secondary" id="prz-piu">Mostra altre (' + (lista.length - przVisibili) + ')</button>';
+  h += '<p class="as-sub" style="margin-top:16px;">Ordine: notti più vicine per prime, poi quelle che chiedono il tuo ok. “Modifica”: multiplo di 5, non sotto il marginale, non oltre 3 volte il listino.</p>';
+  el.innerHTML = h;
+  el.querySelectorAll('[data-przfiltro]').forEach(function(b){ b.onclick = function(){ przFiltro = b.getAttribute('data-przfiltro'); przVisibili = 40; przDisegna(); }; });
+  var sel = document.getElementById('prz-al'); if (sel) sel.onchange = function(){ przAlloggio = sel.value; przVisibili = 40; przDisegna(); };
+  var piu = document.getElementById('prz-piu'); if (piu) piu.onclick = function(){ przVisibili += 40; przDisegna(); };
+  el.querySelectorAll('[data-przazione]').forEach(function(b){ b.onclick = function(){ przAzione(+b.closest('[data-przi]').getAttribute('data-przi'), b.getAttribute('data-przazione'), b); }; });
+}
+async function przSalva(i, body){
+  var r = przD.righe[i], e = document.getElementById('przerr' + i);
+  try {
+    var j = await przApi('/decisione', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ giorno: przD.id, alloggio: r.alloggio, data: r.data }, body)) });
+    r.decisione = { azione: j.decisione.azione, prezzo_deciso: j.decisione.prezzo_deciso, quando: j.decisione.quando };
+    przDisegna();
+  } catch(err){ if (e) { e.style.display = 'block'; e.textContent = err.message; } }
+}
+function przAzione(i, a, btn){
+  var r = przD.righe[i];
+  if (a === 'approva') return przSalva(i, { azione: 'approva' });
+  if (a === 'rifiuta') return przSalva(i, { azione: 'rifiuta' });
+  if (a === 'cambia') { r.decisione = null; return przDisegna(); }
+  var c = btn.closest('[data-przi]');
+  if (c.querySelector('.prz-md')) return;
+  var m = document.createElement('div'); m.className = 'prz-md'; m.style.cssText = 'display:flex;gap:8px;margin-top:8px;align-items:center;';
+  m.innerHTML = '<input type="number" inputmode="numeric" step="5" min="0" placeholder="prezzo (multiplo di 5)" value="' + przEsc(r.prezzo_proposto || '') + '" style="flex:1;min-height:44px;font-size:16px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 10px;"><button class="as-btn">Salva</button>';
+  c.appendChild(m);
+  m.querySelector('button').onclick = function(){ przSalva(i, { azione: 'modifica', prezzo: m.querySelector('input').value }); };
+  m.querySelector('input').focus();
+}
+window.renderPrezzi = renderPrezzi;
 
 
   var root = document.getElementById('root');
