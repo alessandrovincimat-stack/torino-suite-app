@@ -6650,17 +6650,17 @@ function przCard(r, i){
   if (d) {
     var t = d.azione === 'approva' ? 'Approvata ' + d.prezzo_deciso + ' €' : (d.azione === 'rifiuta' ? 'Rifiutata' : 'Modificata a ' + d.prezzo_deciso + ' €');
     h += '<p class="as-ok" style="margin:6px 0 0;">' + t + ' — ' + przEsc(new Date(d.quando).toLocaleString('it-IT')) + '</p>';
-    var sc = r.scrittura, abil = przD.scrittura && przD.scrittura.abilitata, bt = '<button class="as-btn ghost" data-przazione="cambia" style="margin-top:6px;">Cambia decisione</button>';
+    var sc = r.scrittura, abil = przD.scrittura && przD.scrittura.abilitata, bt = '', cambia = '<button class="as-btn ghost" data-przazione="cambia" style="margin-top:6px;">Cambia decisione</button>';
     if (d.azione !== 'rifiuta') {
-      if (sc && sc.stato === 'scritta') { h += '<p class="as-ok" style="margin:6px 0 0;">Scritta su Smoobu: ' + przEsc(sc.prezzo) + ' € (prima ' + przEsc(sc.prima) + ' €)</p>'; bt += ' <button class="as-btn secondary" data-przazione="annulla" style="margin-top:6px;">Annulla scrittura</button>'; }
+      if (sc && sc.stato === 'scritta') { h += '<p class="as-ok" style="margin:6px 0 0;">Scritta su Smoobu: ' + przEsc(sc.prezzo) + ' € (prima ' + przEsc(sc.prima) + ' €)</p>'; bt += '<button class="as-btn secondary" data-przazione="annulla" style="margin-top:6px;">Annulla scrittura</button> '; }
       else if (sc && sc.stato === 'da_verificare') h += '<div class="as-err" style="display:block;">Da verificare su Smoobu: controlla la notte a mano</div>';
       else {
         if (sc && sc.stato === 'annullata') h += '<p class="as-sub" style="margin:6px 0 0;">Scrittura annullata (prezzo di prima rimesso)</p>';
         if (sc && sc.stato === 'errore') h += '<div class="as-err" style="display:block;">Ultimo tentativo di scrittura fallito</div>';
-        if (abil) bt += ' <button class="as-btn" data-przazione="scrivi" style="margin-top:6px;">Scrivi su Smoobu</button>';
+        if (abil) bt += '<button class="as-btn" data-przazione="scrivi" style="margin-top:6px;">Scrivi ' + przEsc(d.prezzo_deciso) + ' € su Smoobu</button> ';
       }
     }
-    h += bt;
+    h += bt + cambia;
   } else {
     h += '<button class="as-btn" data-przazione="approva" style="margin-top:6px;">Approva</button> <button class="as-btn secondary" data-przazione="modifica" style="margin-top:6px;">Modifica</button> <button class="as-btn ghost" data-przazione="rifiuta" style="margin-top:6px;">Rifiuta</button>';
   }
@@ -6671,7 +6671,7 @@ function przDisegna(){
   var R = przD.righe;
   var lista = R.filter(przPassa);
   var dec = R.filter(function(r){ return r.decisione; }).length;
-  var h = '<p class="as-sub">Proposte del ' + przEsc(przDataIt(przD.id)) + (przD.meta.generato ? ' · aggiornate ' + przEsc(new Date(przD.meta.generato).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'})) : '') + '. ' + (przD.scrittura && przD.scrittura.abilitata ? '<b>Scrittura su Smoobu attiva:</b> dopo aver approvato una notte tocca “Scrivi su Smoobu” e poi tocca di nuovo lo stesso pulsante per confermare. Una notte per volta, solo se in Smoobu il prezzo è ancora quello visto dal motore. Oggi scritte ' + przD.scrittura.usate + ' su ' + przD.scrittura.limite + '.' : '<b>Solo registrazione: nulla viene scritto su Smoobu.</b> I prezzi approvati vanno applicati a mano.') + '</p>';
+  var h = '<p class="as-sub">Proposte del ' + przEsc(przDataIt(przD.id)) + (przD.meta.generato ? ' · aggiornate ' + przEsc(new Date(przD.meta.generato).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'})) : '') + '. ' + (przD.scrittura && przD.scrittura.abilitata ? '<b>Scrittura su Smoobu attiva:</b> dopo aver approvato una notte il primo tocco su Approva salva la decisione, il secondo tocco, nello stesso punto, scrive su Smoobu. Una notte per volta, solo se in Smoobu il prezzo è ancora quello visto dal motore. Oggi scritte ' + przD.scrittura.usate + ' su ' + przD.scrittura.limite + '.' : '<b>Solo registrazione: nulla viene scritto su Smoobu.</b> I prezzi approvati vanno applicati a mano.') + '</p>';
   (przD.meta.avvisi || []).filter(function(a){ return /ATTENZIONE/.test(a); }).forEach(function(a){ h += '<div class="as-err">' + przEsc(a) + '</div>'; });
   h += '<p class="as-sub">Da decidere: <b>' + R.filter(function(r){ return !r.decisione && !r.nuovo; }).length + '</b> · Chiedono il tuo ok: <b>' + R.filter(function(r){ return !r.decisione && r.richiede_ok_ale; }).length + '</b> · Notti nuove: <b>' + R.filter(function(r){ return !r.decisione && r.nuovo; }).length + '</b> · Decise: <b>' + dec + '</b></p>';
   var T = [['da','Da decidere'],['ok','Richiedono ok'],['nuove','Notti nuove'],['decise','Decise'],['tutte','Tutte']];
@@ -6685,6 +6685,7 @@ function przDisegna(){
   el.querySelectorAll('[data-przfiltro]').forEach(function(b){ b.onclick = function(){ przFiltro = b.getAttribute('data-przfiltro'); przVisibili = 40; przDisegna(); }; });
   var sel = document.getElementById('prz-al'); if (sel) sel.onchange = function(){ przAlloggio = sel.value; przVisibili = 40; przDisegna(); };
   var piu = document.getElementById('prz-piu'); if (piu) piu.onclick = function(){ przVisibili += 40; przDisegna(); };
+  el.querySelectorAll('[data-przazione="scrivi"]').forEach(function(b){ b.disabled = true; setTimeout(function(){ if (b.isConnected && b.textContent.indexOf('Scrivo') < 0) b.disabled = false; }, 1200); });
   el.querySelectorAll('[data-przazione]').forEach(function(b){ b.onclick = function(){ przAzione(+b.closest('[data-przi]').getAttribute('data-przi'), b.getAttribute('data-przazione'), b); }; });
 }
 async function przSalva(i, body){
@@ -6700,7 +6701,8 @@ function przAzione(i, a, btn){
   if (a === 'approva') return przSalva(i, { azione: 'approva' });
   if (a === 'rifiuta') return przSalva(i, { azione: 'rifiuta' });
   if (a === 'cambia') { r.decisione = null; return przDisegna(); }
-  if (a === 'scrivi' || a === 'annulla') return przScrivi(i, a, btn);
+  if (a === 'scrivi') return przInvia(i, a, btn);
+  if (a === 'annulla') return przScrivi(i, a, btn);
   var c = btn.closest('[data-przi]');
   if (c.querySelector('.prz-md')) return;
   var m = document.createElement('div'); m.className = 'prz-md'; m.style.cssText = 'display:flex;gap:8px;margin-top:8px;align-items:center;';
@@ -6708,6 +6710,16 @@ function przAzione(i, a, btn){
   c.appendChild(m);
   m.querySelector('button').onclick = function(){ przSalva(i, { azione: 'modifica', prezzo: m.querySelector('input').value }); };
   m.querySelector('input').focus();
+}
+// Un tocco approva, il secondo tocco (stesso punto, pulsante col prezzo) scrive; Annulla resta a doppio tocco.
+function przInvia(i, a, btn){
+  var r = przD.righe[i], e = document.getElementById('przerr' + i), etichetta = btn.textContent;
+  if (btn.disabled) return;
+  btn.disabled = true; btn.textContent = 'Scrivo su Smoobu…';
+  przApi('/scrivi', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ giorno: przD.id, alloggio: r.alloggio, data: r.data }) })
+    .then(function(){ return przApi('/' + przD.id); })
+    .then(function(n){ przD = n; przDisegna(); })
+    .catch(function(err){ btn.disabled = false; btn.textContent = etichetta; if (e) { e.style.display = 'block'; e.textContent = err.message; } });
 }
 // Doppio tocco: il primo tocco cambia l'etichetta dello stesso pulsante (con prezzo e notte), il secondo entro 7 secondi invia. Poi torna com'era.
 function przScrivi(i, a, btn){
