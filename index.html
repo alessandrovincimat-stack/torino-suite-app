@@ -6598,8 +6598,8 @@ async function renderPagamentiAsync(el){
 window.renderPagamenti = renderPagamenti;
 
 // ===== Sezione Prezzi (2026-10-17) =====
-// SOLA REGISTRAZIONE: mostra le proposte del motore prezzi e salva le decisioni di Ale sul backend (/api/prezzi).
-// NON scrive su Smoobu. Usa pagFetch (backend e chiave gia' salvati in Impostazioni > Backend).
+// Mostra le proposte del motore prezzi, salva le decisioni di Ale e (dal 21/10/2026) scrive UNA notte per volta su Smoobu dopo DOPPIO TOCCO
+// sullo stesso pulsante (il backend controlla prezzo attuale, limite 30 al giorno e registra ogni scrittura). Usa pagFetch (backend e chiave gia' salvati in Impostazioni > Backend).
 var przD = null, przFiltro = 'da', przAlloggio = '', przVisibili = 40;
 function przEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function przDataIt(d){ var x = new Date(d + 'T12:00:00'); var g = ['dom','lun','mar','mer','gio','ven','sab'][x.getDay()]; return g + ' ' + String(x.getDate()).padStart(2,'0') + '/' + String(x.getMonth()+1).padStart(2,'0') + '/' + x.getFullYear(); }
@@ -6650,7 +6650,17 @@ function przCard(r, i){
   if (d) {
     var t = d.azione === 'approva' ? 'Approvata ' + d.prezzo_deciso + ' €' : (d.azione === 'rifiuta' ? 'Rifiutata' : 'Modificata a ' + d.prezzo_deciso + ' €');
     h += '<p class="as-ok" style="margin:6px 0 0;">' + t + ' — ' + przEsc(new Date(d.quando).toLocaleString('it-IT')) + '</p>';
-    h += '<button class="as-btn ghost" data-przazione="cambia" style="margin-top:6px;">Cambia decisione</button>';
+    var sc = r.scrittura, abil = przD.scrittura && przD.scrittura.abilitata, bt = '<button class="as-btn ghost" data-przazione="cambia" style="margin-top:6px;">Cambia decisione</button>';
+    if (d.azione !== 'rifiuta') {
+      if (sc && sc.stato === 'scritta') { h += '<p class="as-ok" style="margin:6px 0 0;">Scritta su Smoobu: ' + przEsc(sc.prezzo) + ' € (prima ' + przEsc(sc.prima) + ' €)</p>'; bt += ' <button class="as-btn secondary" data-przazione="annulla" style="margin-top:6px;">Annulla scrittura</button>'; }
+      else if (sc && sc.stato === 'da_verificare') h += '<div class="as-err" style="display:block;">Da verificare su Smoobu: controlla la notte a mano</div>';
+      else {
+        if (sc && sc.stato === 'annullata') h += '<p class="as-sub" style="margin:6px 0 0;">Scrittura annullata (prezzo di prima rimesso)</p>';
+        if (sc && sc.stato === 'errore') h += '<div class="as-err" style="display:block;">Ultimo tentativo di scrittura fallito</div>';
+        if (abil) bt += ' <button class="as-btn" data-przazione="scrivi" style="margin-top:6px;">Scrivi su Smoobu</button>';
+      }
+    }
+    h += bt;
   } else {
     h += '<button class="as-btn" data-przazione="approva" style="margin-top:6px;">Approva</button> <button class="as-btn secondary" data-przazione="modifica" style="margin-top:6px;">Modifica</button> <button class="as-btn ghost" data-przazione="rifiuta" style="margin-top:6px;">Rifiuta</button>';
   }
@@ -6661,7 +6671,7 @@ function przDisegna(){
   var R = przD.righe;
   var lista = R.filter(przPassa);
   var dec = R.filter(function(r){ return r.decisione; }).length;
-  var h = '<p class="as-sub">Proposte del ' + przEsc(przDataIt(przD.id)) + (przD.meta.generato ? ' · aggiornate ' + przEsc(new Date(przD.meta.generato).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'})) : '') + '. <b>Solo registrazione: nulla viene scritto su Smoobu.</b> I prezzi approvati vanno ancora applicati a mano.</p>';
+  var h = '<p class="as-sub">Proposte del ' + przEsc(przDataIt(przD.id)) + (przD.meta.generato ? ' · aggiornate ' + przEsc(new Date(przD.meta.generato).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'})) : '') + '. ' + (przD.scrittura && przD.scrittura.abilitata ? '<b>Scrittura su Smoobu attiva:</b> dopo aver approvato una notte tocca “Scrivi su Smoobu” e poi tocca di nuovo lo stesso pulsante per confermare. Una notte per volta, solo se in Smoobu il prezzo è ancora quello visto dal motore. Oggi scritte ' + przD.scrittura.usate + ' su ' + przD.scrittura.limite + '.' : '<b>Solo registrazione: nulla viene scritto su Smoobu.</b> I prezzi approvati vanno applicati a mano.') + '</p>';
   (przD.meta.avvisi || []).filter(function(a){ return /ATTENZIONE/.test(a); }).forEach(function(a){ h += '<div class="as-err">' + przEsc(a) + '</div>'; });
   h += '<p class="as-sub">Da decidere: <b>' + R.filter(function(r){ return !r.decisione && !r.nuovo; }).length + '</b> · Chiedono il tuo ok: <b>' + R.filter(function(r){ return !r.decisione && r.richiede_ok_ale; }).length + '</b> · Notti nuove: <b>' + R.filter(function(r){ return !r.decisione && r.nuovo; }).length + '</b> · Decise: <b>' + dec + '</b></p>';
   var T = [['da','Da decidere'],['ok','Richiedono ok'],['nuove','Notti nuove'],['decise','Decise'],['tutte','Tutte']];
@@ -6690,6 +6700,7 @@ function przAzione(i, a, btn){
   if (a === 'approva') return przSalva(i, { azione: 'approva' });
   if (a === 'rifiuta') return przSalva(i, { azione: 'rifiuta' });
   if (a === 'cambia') { r.decisione = null; return przDisegna(); }
+  if (a === 'scrivi' || a === 'annulla') return przScrivi(i, a, btn);
   var c = btn.closest('[data-przi]');
   if (c.querySelector('.prz-md')) return;
   var m = document.createElement('div'); m.className = 'prz-md'; m.style.cssText = 'display:flex;gap:8px;margin-top:8px;align-items:center;';
@@ -6697,6 +6708,24 @@ function przAzione(i, a, btn){
   c.appendChild(m);
   m.querySelector('button').onclick = function(){ przSalva(i, { azione: 'modifica', prezzo: m.querySelector('input').value }); };
   m.querySelector('input').focus();
+}
+// Doppio tocco: il primo tocco cambia l'etichetta dello stesso pulsante (con prezzo e notte), il secondo entro 7 secondi invia. Poi torna com'era.
+function przScrivi(i, a, btn){
+  var r = przD.righe[i], e = document.getElementById('przerr' + i);
+  var etichetta = btn.getAttribute('data-orig') || btn.textContent;
+  if (btn.getAttribute('data-pronto') !== '1') {
+    btn.setAttribute('data-orig', etichetta); btn.setAttribute('data-pronto', '1');
+    btn.textContent = a === 'scrivi' ? 'Tocca ancora: scrivo ' + r.decisione.prezzo_deciso + ' € (ora ' + r.prezzo_attuale + ' €)' : 'Tocca ancora: rimetto ' + (r.scrittura ? r.scrittura.prima : '') + ' €';
+    btn.style.background = '#b4532a'; btn.style.color = '#fff';
+    if (e) { e.style.display = 'none'; e.textContent = ''; }
+    setTimeout(function(){ if (btn.isConnected && btn.getAttribute('data-pronto') === '1') { btn.setAttribute('data-pronto', '0'); btn.textContent = etichetta; btn.style.background = ''; btn.style.color = ''; } }, 7000);
+    return;
+  }
+  btn.disabled = true; btn.setAttribute('data-pronto', '0'); btn.textContent = 'Scrivo su Smoobu…';
+  przApi(a === 'scrivi' ? '/scrivi' : '/annulla', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ giorno: przD.id, alloggio: r.alloggio, data: r.data }) })
+    .then(function(){ return przApi('/' + przD.id); })
+    .then(function(n){ przD = n; przDisegna(); })
+    .catch(function(err){ btn.disabled = false; btn.textContent = etichetta; btn.style.background = ''; btn.style.color = ''; if (e) { e.style.display = 'block'; e.textContent = err.message; } });
 }
 window.renderPrezzi = renderPrezzi;
 
