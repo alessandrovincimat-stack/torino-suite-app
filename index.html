@@ -6627,11 +6627,8 @@ async function renderPrezzi(){
 }
 function przPassa(r){
   if (przAlloggio && r.alloggio !== przAlloggio) return false;
-  if (przFiltro === 'da') return !r.decisione && !r.nuovo;
-  if (przFiltro === 'ok') return !r.decisione && r.richiede_ok_ale;
-  if (przFiltro === 'nuove') return !r.decisione && r.nuovo;
   if (przFiltro === 'decise') return !!r.decisione;
-  return true;
+  return !r.decisione && (!przSoloOk || r.richiede_ok_ale);
 }
 function przCard(r, i){
   var d = r.decisione, v = r.variazione_pct;
@@ -6667,7 +6664,7 @@ function przCard(r, i){
   return h + '<div class="as-err" id="przerr' + i + '" style="display:none;"></div></div>';
 }
 // ---- Grafica calendario (23/10/2026): stessa logica di prima (decisioni, doppio tocco, scrittura), solo la vista cambia ----
-var przVista = 'cal', przMese = '', przSel = null, przIdx = {};
+var przVista = 'cal', przMese = '', przSel = null, przIdx = {}, przSoloOk = false;
 var PRZ_ORDINE = ['Carlo Alberto','Vittorio','Carlo Felice','San Carlo','Carignano','Casa Borgone'];
 var PRZ_GG3 = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
 var PRZ_MESI_L = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
@@ -6722,12 +6719,13 @@ function przCalendario(){
   h += '<details style="margin-bottom:8px;"><summary class="as-sub" style="cursor:pointer;">Legenda colori</summary><p class="as-sub">Verde: il prezzo sale · Rosso: scende · Blu: notte nuova · Bordo rosso: chiede il tuo ok · ✓ ok: approvata · Verde pieno: scritta su Smoobu · 2n: permanenza minima · cella vuota: nessuna proposta.</p></details>';
   var p = przMese.split('-'), y = +p[0], m = +p[1], n = new Date(y, m, 0).getDate();
   var th = '<th class="nome"></th>', body = '', al = [];
-  for (var d = 1; d <= n; d++) { var w = new Date(y, m - 1, d).getDay(); th += '<th class="h' + (w === 5 || w === 6 ? ' we' : '') + '">' + PRZ_GG3[w] + '<b>' + d + '</b></th>'; }
+  var oggiD = new Date(), oggiM = oggiD.getFullYear() + '-' + String(oggiD.getMonth() + 1).padStart(2, '0'), d0 = (przMese === oggiM) ? oggiD.getDate() : 1;
+  for (var d = d0; d <= n; d++) { var w = new Date(y, m - 1, d).getDay(); th += '<th class="h' + (w === 5 || w === 6 ? ' we' : '') + '">' + PRZ_GG3[w] + '<b>' + d + '</b></th>'; }
   przD.righe.forEach(function(r){ if (al.indexOf(r.alloggio) < 0) al.push(r.alloggio); });
   al.sort(function(a, b){ return PRZ_ORDINE.indexOf(a) - PRZ_ORDINE.indexOf(b); });
   al.forEach(function(a){
     body += '<tr><th class="nome">' + przEsc(a) + '</th>';
-    for (var d = 1; d <= n; d++) {
+    for (var d = d0; d <= n; d++) {
       var dd = przMese + '-' + String(d).padStart(2, '0'), w = new Date(y, m - 1, d).getDay(), i = przIdx[a + '|' + dd];
       var c = przCella(i == null ? null : przD.righe[i]);
       if (w === 5 || w === 6) c = c.replace('class="pz-c', 'class="pz-c we');
@@ -6768,9 +6766,11 @@ function przDisegna(centra){
     if (i != null) { aperto = true; h += '<div style="height:46vh;"></div><div class="pz-sheet"><div class="in"><div class="hd"><div data-przprox="1">Prossima da decidere →</div><div data-przchiudi="1">Chiudi ✕</div></div>' + przCard(R[i], i) + '</div></div>'; }
   } else {
     var lista = R.filter(przPassa);
-    var T = [['da','Da decidere'],['ok','Richiedono ok'],['nuove','Notti nuove'],['decise','Decise'],['tutte','Tutte']];
+    var T = [['da','Da decidere'],['decise','Decise']];
+    if (przFiltro !== 'decise') przFiltro = 'da';
     h += '<div class="as-tabs" style="flex-wrap:wrap;">' + T.map(function(t){ return '<div class="as-tab' + (t[0] === przFiltro ? ' active' : '') + '" data-przfiltro="' + t[0] + '">' + t[1] + '</div>'; }).join('') + '</div>';
     var al = []; R.forEach(function(r){ if (al.indexOf(r.alloggio) < 0) al.push(r.alloggio); });
+    if (przFiltro === 'da') h += '<label style="display:flex;align-items:center;gap:10px;margin:10px 0 0;min-height:44px;color:var(--text);font-size:15px;"><input type="checkbox" id="prz-solook" style="width:22px;height:22px;"' + (przSoloOk ? ' checked' : '') + '> Solo quelle che chiedono il mio ok</label>';
     h += '<select id="prz-al" style="width:100%;min-height:44px;font-size:16px;margin:10px 0;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 10px;"><option value="">Tutti gli alloggi</option>' + al.map(function(a){ return '<option' + (a === przAlloggio ? ' selected' : '') + '>' + przEsc(a) + '</option>'; }).join('') + '</select>';
     h += lista.length ? lista.slice(0, przVisibili).map(function(r){ return przCard(r, R.indexOf(r)); }).join('') : '<p class="as-sub">Nessuna notte in questo elenco.</p>';
     if (lista.length > przVisibili) h += '<button class="as-btn secondary" id="prz-piu">Mostra altre (' + (lista.length - przVisibili) + ')</button>';
@@ -6783,6 +6783,7 @@ function przDisegna(centra){
   var px = el.querySelector('[data-przprox]'); if (px) px.onclick = przProssima;
   var ch = el.querySelector('[data-przchiudi]'); if (ch) ch.onclick = function(){ przSel = null; przDisegna(); };
   el.querySelectorAll('[data-przfiltro]').forEach(function(b){ b.onclick = function(){ przFiltro = b.getAttribute('data-przfiltro'); przVisibili = 40; przDisegna(); }; });
+  var so = document.getElementById('prz-solook'); if (so) so.onchange = function(){ przSoloOk = so.checked; przVisibili = 40; przDisegna(); };
   var sel = document.getElementById('prz-al'); if (sel) sel.onchange = function(){ przAlloggio = sel.value; przVisibili = 40; przDisegna(); };
   var piu = document.getElementById('prz-piu'); if (piu) piu.onclick = function(){ przVisibili += 40; przDisegna(); };
   el.querySelectorAll('[data-przazione="scrivi"]').forEach(function(b){ b.disabled = true; setTimeout(function(){ if (b.isConnected && b.textContent.indexOf('Scrivo') < 0) b.disabled = false; }, 1200); });
