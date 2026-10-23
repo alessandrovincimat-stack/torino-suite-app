@@ -6644,6 +6644,8 @@ function przCard(r, i){
   if (r.permanenza_proposta !== r.permanenza_attuale) tag.push('permanenza ' + przN(r.permanenza_attuale) + ' → ' + przN(r.permanenza_proposta));
   if (tag.length) h += '<span style="color:var(--brass);">' + przEsc(tag.join(' · ')) + '</span><br>';
   h += przEsc(r.motivo) + (r.vincoli && r.vincoli.length ? ' · ' + przEsc(r.vincoli.join('; ')) : '') + '</div>';
+  if (r.lettura === 'mezzogiorno (rivista)') h += '<p class="as-sub" style="margin:4px 0 0;color:var(--brass);">Rivista a mezzogiorno (al mattino era ' + przN(r.proposta_mattino) + ' €)</p>';
+  else if (r.lettura === 'mezzogiorno (rifatta)') h += '<p class="as-sub" style="margin:4px 0 0;color:var(--brass);">Rifatta a mezzogiorno: il prezzo in Smoobu era cambiato dal mattino</p>';
   if (d) {
     var t = d.azione === 'approva' ? 'Approvata ' + d.prezzo_deciso + ' €' : (d.azione === 'rifiuta' ? 'Rifiutata' : 'Modificata a ' + d.prezzo_deciso + ' €');
     h += '<p class="as-ok" style="margin:6px 0 0;">' + t + ' — ' + przEsc(new Date(d.quando).toLocaleString('it-IT')) + '</p>';
