@@ -3969,9 +3969,8 @@ async function inviaIstatArrivi(arriviOggiRichiesti, allOrdered){
     if (idArrivoRifiutato[g.id]) return; // arrivo rifiutato: la partenza non troverebbe l'abbinamento
     var dataPartenza = calcolaDataPartenzaPresunta(g.dataArrivo, g.permanenza);
     if (!dataPartenza) return;
-    // il movimento di partenza non puo' precedere l'arrivo registrato (oggi): se la partenza
-    // reale e' gia' passata, si registra con la data di invio e si segnala da correggere a mano
-    if (dataPartenza < oggiISO) { dataPartenza = oggiISO; partenzeSpostate.push({ id: g.id, nome: ((g.cognome||'')+' '+(g.nome||'')).trim() }); }
+    // il movimento di partenza non puo' precedere l'arrivo registrato
+    // partenza gia' trascorsa: accettata dal portale con la sua data reale (prova 12/11/2026: arrivo 09/11, partenza 11/11)
     if (dataPartenza < effArrivo[g.id]) dataPartenza = effArrivo[g.id];
     if (!gruppiPerPartenza[dataPartenza]) gruppiPerPartenza[dataPartenza] = [];
     gruppiPerPartenza[dataPartenza].push(g);
