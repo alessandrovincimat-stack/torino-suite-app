@@ -1140,6 +1140,7 @@ async function loadState(){
   } catch(e){}
 }
 async function segnaIstatInviato(dataISO){
+  if (dataISO > todayISO()) return; // le date future (partenze presunte) non devono saltare i giorni "mancanti"
   if (!state.istatUltimaData || dataISO > state.istatUltimaData){
     state.istatUltimaData = dataISO;
     try { await remoteStorage.set('as-istat-ultima-data', dataISO); } catch(e){}
@@ -3854,10 +3855,12 @@ function buildIstatArrivo(g, allOrdered){
 
 function calcolaDataPartenzaPresunta(dataArrivoISO, permanenza){
   if (!dataArrivoISO) return null;
-  var d = new Date(dataArrivoISO);
-  if (isNaN(d.getTime())) return null;
-  d.setDate(d.getDate() + (parseInt(permanenza, 10) || 0));
-  return d.toISOString().slice(0, 10);
+  var mm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dataArrivoISO);
+  if (!mm) return null;
+  var n = parseInt(permanenza, 10);
+  if (!(n >= 1)) return null; // permanenza mancante/0: nessuna partenza inventata
+  // calcolo in UTC puro: niente slittamenti per ora legale
+  return new Date(Date.UTC(+mm[1], +mm[2] - 1, +mm[3] + n)).toISOString().slice(0, 10);
 }
 
 // Il manuale ufficiale ROSS1000 lega "camere occupate" alla sezione "Gestione
@@ -3918,14 +3921,27 @@ async function inviaIstatArrivi(arriviOggiRichiesti, allOrdered){
   var data = await resp.json();
   if (!resp.ok) throw new Error(data.error || 'errore invio ISTAT');
   await segnaIstatInviato(todayISO());
+  // REGOLA (12/11/2026): l'<arrivo> non ha data propria: sul portale vale la data del movimento
+  // (= oggi, giorno di invio; le date passate via web service vengono scartate in silenzio).
+  // Quindi la partenza DEVE citare come arrivo la data di invio, non quella reale, altrimenti
+  // il portale non trova l'abbinamento e la scarta (causa delle 14 schede senza partenza).
+  var idArrivoRifiutato = {};
+  (data.elementiFalliti || []).forEach(function(f){ idArrivoRifiutato[f.idswh] = true; });
+  var oggiISO = todayISO();
+  data.arriviInRitardo = arriviOggi.filter(function(g){ return g.dataArrivo && g.dataArrivo < oggiISO && !idArrivoRifiutato[g.id]; })
+    .map(function(g){ return { id: g.id, nome: ((g.cognome||'')+' '+(g.nome||'')).trim(), dataArrivo: g.dataArrivo }; });
 
   // NOTA: la partenza presunta va inviata separatamente, con la SUA data (futura, diversa
   // da quella di arrivo) — il campo "data" di ogni movimento rappresenta un singolo giorno,
   // quindi arrivo e partenza (giorni diversi) non possono condividere la stessa chiamata.
   var gruppiPerPartenza = {};
   arriviOggi.forEach(function(g){
+    if (idArrivoRifiutato[g.id]) return; // arrivo rifiutato: la partenza non troverebbe l'abbinamento
     var dataPartenza = calcolaDataPartenzaPresunta(g.dataArrivo, g.permanenza);
     if (!dataPartenza) return;
+    // il movimento di partenza non puo' precedere l'arrivo registrato (oggi): se la partenza
+    // reale e' gia' passata, si registra con la data di invio e si segnala da correggere a mano
+    if (dataPartenza < oggiISO) dataPartenza = oggiISO;
     if (!gruppiPerPartenza[dataPartenza]) gruppiPerPartenza[dataPartenza] = [];
     gruppiPerPartenza[dataPartenza].push(g);
   });
@@ -3934,7 +3950,7 @@ async function inviaIstatArrivi(arriviOggiRichiesti, allOrdered){
   for (var dataPartenza in gruppiPerPartenza){
     var ospitiGruppo = gruppiPerPartenza[dataPartenza];
     var partenze = ospitiGruppo.map(function(g){
-      return { idswh: g.id, tipoalloggiato: ruoloCode[g.ruolo] || '16', arrivo: (g.dataArrivo||'').replace(/-/g,'') };
+      return { idswh: g.id, tipoalloggiato: ruoloCode[g.ruolo] || '16', arrivo: oggiISO.replace(/-/g,'') };
     });
     try {
       var respP = await fetch(backendUrl('/api/istat/movimento'), {
@@ -3944,7 +3960,12 @@ async function inviaIstatArrivi(arriviOggiRichiesti, allOrdered){
       });
       var dataP = await respP.json();
       if (!respP.ok) throw new Error(dataP.error || 'errore invio partenza');
-      partenzeInviate += ospitiGruppo.length;
+      // Esito REALE per elemento (prima: "inviata" se l'HTTP era ok, anche se il portale scartava)
+      var partenzeRifiutate = (dataP.risultatiPartenze || []).filter(function(r){ return !r.successo; });
+      partenzeInviate += Math.max(0, ospitiGruppo.length - partenzeRifiutate.length);
+      if (partenzeRifiutate.length){
+        partenzeFallite.push({ data: dataPartenza, errore: 'rifiutata dal portale: ' + partenzeRifiutate.map(function(r){ return r.idswh + (r.errore ? ' ' + r.errore : ''); }).join('; ') });
+      }
       await segnaIstatInviato(dataPartenza);
     } catch(ePartenza){
       partenzeFallite.push({ data: dataPartenza, errore: ePartenza.message });
@@ -3966,7 +3987,8 @@ async function inviaIstat(ordered, outEl, onSuccess){
   try {
     var risultato = await inviaIstatArrivi(ordered, ordered);
     var nInviati = ordered.length - (risultato.esclusiComuneMancante ? risultato.esclusiComuneMancante.length : 0);
-    var msg = '<p class="as-ok">Inviato correttamente a Piemonte Dati Turismo (' + nInviati + ' arrivi';
+    var haErrori = !!((risultato.elementiFalliti && risultato.elementiFalliti.length) || (risultato.partenzeFallite && risultato.partenzeFallite.length));
+    var msg = '<p class="' + (haErrori ? 'as-warn' : 'as-ok') + '">' + (haErrori ? 'Invio a Piemonte Dati Turismo completato CON ERRORI (' : 'Inviato correttamente a Piemonte Dati Turismo (') + nInviati + ' arrivi';
     if (risultato.partenzeInviate) msg += ', ' + risultato.partenzeInviate + ' partenze presunte';
     msg += ').</p>';
     if (risultato.esclusiComuneMancante && risultato.esclusiComuneMancante.length){
@@ -3980,8 +4002,11 @@ async function inviaIstat(ordered, outEl, onSuccess){
         risultato.elementiFalliti.map(function(f){ return escapeHtml(f.idswh + (f.errore ? ' — ' + f.errore : ' (nessun dettaglio errore fornito)')); }).join('; ') +
         '. Puoi correggere manualmente da "Correggi/reinvia ISTAT" o dal portale.</div>';
     }
+    if (risultato.arriviInRitardo && risultato.arriviInRitardo.length){
+      msg += '<div class="as-warn">⚠️ Invio in ritardo: sul portale ROSS1000 questi ospiti risultano con data di arrivo ODIERNA (il web service non accetta date passate). Correggi a mano la data di arrivo (e di partenza) in Storico ospiti: ' + risultato.arriviInRitardo.map(function(a){ return escapeHtml(a.nome) + ' (arrivo reale ' + toItDate(a.dataArrivo) + ')'; }).join(', ') + '.</div>';
+    }
     out.innerHTML = msg;
-    if (onSuccess) onSuccess({ arrivoOk: true, partenzaOk: !!(risultato.partenzeInviate && (!risultato.partenzeFallite || !risultato.partenzeFallite.length)) });
+    if (onSuccess) onSuccess({ arrivoOk: !(risultato.elementiFalliti && risultato.elementiFalliti.length), partenzaOk: !!(risultato.partenzeInviate && (!risultato.partenzeFallite || !risultato.partenzeFallite.length)) });
   } catch(e){
     out.innerHTML = '<div class="as-err">'+escapeHtml(e.message)+'</div>';
   }
