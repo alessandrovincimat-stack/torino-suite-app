@@ -3909,39 +3909,70 @@ async function inviaIstatArrivi(arriviOggiRichiesti, allOrdered){
   // è altrimenti compilabile solo a mano dal portale. Inviare una "prenotazione"
   // per ogni arrivo, come si faceva qui prima, creava solo record fittizi e
   // scollegati nel sistema, senza risolvere nulla.
-  var resp = await fetch(backendUrl('/api/istat/movimento'), {
-    method: 'POST',
-    headers: backendHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({
-      data: todayISO().replace(/-/g,''),
-      camereOccupate: new Set(arriviOggi.map(function(g){ return g.idAppartamento; })).size,
-      arrivi: arrivi
-    })
-  });
-  var data = await resp.json();
-  if (!resp.ok) throw new Error(data.error || 'errore invio ISTAT');
-  await segnaIstatInviato(todayISO());
-  // REGOLA (12/11/2026): l'<arrivo> non ha data propria: sul portale vale la data del movimento
-  // (= oggi, giorno di invio; le date passate via web service vengono scartate in silenzio).
-  // Quindi la partenza DEVE citare come arrivo la data di invio, non quella reale, altrimenti
-  // il portale non trova l'abbinamento e la scarta (causa delle 14 schede senza partenza).
-  var idArrivoRifiutato = {};
-  (data.elementiFalliti || []).forEach(function(f){ idArrivoRifiutato[f.idswh] = true; });
+  // REGOLA (12/11/2026): nel tracciato ROSS1000 l'<arrivo> non ha data propria: vale la data del
+  // movimento che lo contiene, e la partenza deve citare quella stessa data. Prove sul portale
+  // (12/11/2026, ospiti fittizi poi eliminati): arrivo con data reale accettato e registrato a
+  // 1, 3, 7 e 12 giorni di ritardo, con partenza abbinata. Oltre il limite (non verificato: un
+  // invio a 20 giorni era stato scartato) si usa la data odierna, come prima, e si avvisa.
   var oggiISO = todayISO();
-  data.arriviInRitardo = arriviOggi.filter(function(g){ return g.dataArrivo && g.dataArrivo < oggiISO && !idArrivoRifiutato[g.id]; })
+  var LIMITE_RITARDO_GIORNI = 10;
+  var effArrivo = {};
+  var gruppiPerArrivo = {};
+  arriviOggi.forEach(function(g){
+    var d = /^\d{4}-\d{2}-\d{2}$/.test(g.dataArrivo || '') ? g.dataArrivo : oggiISO;
+    var ritardo = Math.round((Date.parse(oggiISO) - Date.parse(d)) / 864e5);
+    var eff = (ritardo >= 0 && ritardo <= LIMITE_RITARDO_GIORNI) ? d : oggiISO;
+    effArrivo[g.id] = eff;
+    if (!gruppiPerArrivo[eff]) gruppiPerArrivo[eff] = [];
+    gruppiPerArrivo[eff].push(g);
+  });
+  var data = { ok: true, elementiFalliti: [], risultatiArrivi: [] };
+  var idArrivoRifiutato = {};
+  var erroriArrivi = [];
+  var arriviMovimentiOk = 0;
+  var dateArrivo = Object.keys(gruppiPerArrivo).sort();
+  for (var ia = 0; ia < dateArrivo.length; ia++){
+    var dArrivo = dateArrivo[ia];
+    var gruppoArr = gruppiPerArrivo[dArrivo];
+    try {
+      var respA = await fetch(backendUrl('/api/istat/movimento'), {
+        method: 'POST',
+        headers: backendHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          data: dArrivo.replace(/-/g,''),
+          camereOccupate: Math.max(new Set(gruppoArr.map(function(g){ return g.idAppartamento; })).size, contaAppartamentiOccupatiData(dArrivo)),
+          arrivi: gruppoArr.map(function(g){ return buildIstatArrivo(g, allOrdered); })
+        })
+      });
+      var dataA = await respA.json();
+      if (!respA.ok) throw new Error(dataA.error || 'errore invio ISTAT');
+      arriviMovimentiOk++;
+      (dataA.risultatiArrivi || []).forEach(function(r){ data.risultatiArrivi.push(r); });
+      (dataA.elementiFalliti || []).forEach(function(f){ data.elementiFalliti.push(f); idArrivoRifiutato[f.idswh] = true; });
+      await segnaIstatInviato(dArrivo);
+    } catch(eArrivo){
+      erroriArrivi.push(toItDate(dArrivo) + ': ' + eArrivo.message);
+      gruppoArr.forEach(function(g){ idArrivoRifiutato[g.id] = true; });
+    }
+  }
+  if (!arriviMovimentiOk) throw new Error(erroriArrivi.join(' | ') || 'errore invio ISTAT');
+  data.erroriArrivi = erroriArrivi;
+  data.arriviInRitardo = arriviOggi.filter(function(g){ return !idArrivoRifiutato[g.id] && g.dataArrivo && effArrivo[g.id] !== g.dataArrivo; })
     .map(function(g){ return { id: g.id, nome: ((g.cognome||'')+' '+(g.nome||'')).trim(), dataArrivo: g.dataArrivo }; });
 
   // NOTA: la partenza presunta va inviata separatamente, con la SUA data (futura, diversa
   // da quella di arrivo) — il campo "data" di ogni movimento rappresenta un singolo giorno,
   // quindi arrivo e partenza (giorni diversi) non possono condividere la stessa chiamata.
   var gruppiPerPartenza = {};
+  var partenzeSpostate = [];
   arriviOggi.forEach(function(g){
     if (idArrivoRifiutato[g.id]) return; // arrivo rifiutato: la partenza non troverebbe l'abbinamento
     var dataPartenza = calcolaDataPartenzaPresunta(g.dataArrivo, g.permanenza);
     if (!dataPartenza) return;
     // il movimento di partenza non puo' precedere l'arrivo registrato (oggi): se la partenza
     // reale e' gia' passata, si registra con la data di invio e si segnala da correggere a mano
-    if (dataPartenza < oggiISO) dataPartenza = oggiISO;
+    if (dataPartenza < oggiISO) { dataPartenza = oggiISO; partenzeSpostate.push({ id: g.id, nome: ((g.cognome||'')+' '+(g.nome||'')).trim() }); }
+    if (dataPartenza < effArrivo[g.id]) dataPartenza = effArrivo[g.id];
     if (!gruppiPerPartenza[dataPartenza]) gruppiPerPartenza[dataPartenza] = [];
     gruppiPerPartenza[dataPartenza].push(g);
   });
@@ -3950,7 +3981,7 @@ async function inviaIstatArrivi(arriviOggiRichiesti, allOrdered){
   for (var dataPartenza in gruppiPerPartenza){
     var ospitiGruppo = gruppiPerPartenza[dataPartenza];
     var partenze = ospitiGruppo.map(function(g){
-      return { idswh: g.id, tipoalloggiato: ruoloCode[g.ruolo] || '16', arrivo: oggiISO.replace(/-/g,'') };
+      return { idswh: g.id, tipoalloggiato: ruoloCode[g.ruolo] || '16', arrivo: effArrivo[g.id].replace(/-/g,'') };
     });
     try {
       var respP = await fetch(backendUrl('/api/istat/movimento'), {
@@ -3973,6 +4004,7 @@ async function inviaIstatArrivi(arriviOggiRichiesti, allOrdered){
   }
   data.partenzeInviate = partenzeInviate;
   data.partenzeFallite = partenzeFallite;
+  data.partenzeSpostate = partenzeSpostate;
   data.esclusiComuneMancante = esclusiComuneMancante.map(function(o){ return o.cognome+' '+o.nome; });
   return data;
 }
@@ -4003,7 +4035,10 @@ async function inviaIstat(ordered, outEl, onSuccess){
         '. Puoi correggere manualmente da "Correggi/reinvia ISTAT" o dal portale.</div>';
     }
     if (risultato.arriviInRitardo && risultato.arriviInRitardo.length){
-      msg += '<div class="as-warn">⚠️ Invio in ritardo: sul portale ROSS1000 questi ospiti risultano con data di arrivo ODIERNA (il web service non accetta date passate). Correggi a mano la data di arrivo (e di partenza) in Storico ospiti: ' + risultato.arriviInRitardo.map(function(a){ return escapeHtml(a.nome) + ' (arrivo reale ' + toItDate(a.dataArrivo) + ')'; }).join(', ') + '.</div>';
+      msg += '<div class="as-warn">⚠️ Arrivo troppo vecchio per l\'invio automatico: sul portale ROSS1000 questi ospiti risultano con data di arrivo ODIERNA. Correggi la data di arrivo (e di partenza) in Storico ospiti: ' + risultato.arriviInRitardo.map(function(a){ return escapeHtml(a.nome) + ' (arrivo reale ' + toItDate(a.dataArrivo) + ')'; }).join(', ') + '.</div>';
+    }
+    if (risultato.partenzeSpostate && risultato.partenzeSpostate.length){
+      msg += '<div class="as-warn">⚠️ Partenza già trascorsa: registrata con data odierna per ' + risultato.partenzeSpostate.map(function(a){ return escapeHtml(a.nome); }).join(', ') + '. Se serve, correggi la data di partenza in Storico ospiti.</div>';
     }
     out.innerHTML = msg;
     if (onSuccess) onSuccess({ arrivoOk: !(risultato.elementiFalliti && risultato.elementiFalliti.length), partenzaOk: !!(risultato.partenzeInviate && (!risultato.partenzeFallite || !risultato.partenzeFallite.length)) });
