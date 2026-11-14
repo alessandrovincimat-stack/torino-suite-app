@@ -6217,7 +6217,37 @@ document.getElementById('imp-sblocca').onclick = function(){
   }
 };
 
-loadState().then(render);
+/* Posizione di lettura: quando si esce dall'app (es. per prendere una foto da WhatsApp) iOS
+   puo' scaricare la pagina e ricaricarla al ritorno, che ripartiva dall'alto. Salvo scheda
+   attiva e punto di scorrimento all'uscita e li ripristino al ritorno (entro 20 minuti). */
+var CHIAVE_POSIZIONE_USCITA = 'ts-posizione-uscita';
+function salvaPosizioneUscita(){
+  try {
+    var att = document.querySelector('#ts-switcher .ts-active');
+    localStorage.setItem(CHIAVE_POSIZIONE_USCITA, JSON.stringify({
+      y: window.scrollY || document.documentElement.scrollTop || 0,
+      btn: att ? att.id : '', t: Date.now()
+    }));
+  } catch(eSalva){}
+}
+document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'hidden') salvaPosizioneUscita(); });
+window.addEventListener('pagehide', salvaPosizioneUscita);
+function ripristinaPosizioneUscita(){
+  try {
+    var raw = localStorage.getItem(CHIAVE_POSIZIONE_USCITA);
+    if (!raw) return;
+    localStorage.removeItem(CHIAVE_POSIZIONE_USCITA);
+    var pos = JSON.parse(raw);
+    if (!pos || Date.now() - pos.t > 20 * 60 * 1000 || !(pos.y > 50)) return;
+    if (pos.btn){ var b = document.getElementById(pos.btn); if (b && !b.classList.contains('ts-active')) b.click(); }
+    var fermato = false;
+    window.addEventListener('touchstart', function(){ fermato = true; }, { once: true, passive: true });
+    [0, 250, 700, 1500, 3000].forEach(function(ms){
+      setTimeout(function(){ if (!fermato) window.scrollTo(0, pos.y); }, ms);
+    });
+  } catch(eRipr){}
+}
+loadState().then(function(){ render(); setTimeout(ripristinaPosizioneUscita, 300); });
 
 (function(){
   var indicator = document.getElementById('pull-refresh-indicator');
