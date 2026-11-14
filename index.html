@@ -1611,12 +1611,21 @@ function buildGuestCardHtml(g, extraPrimaDiGenera){
   }
   var capiOptions = getCapiOptions();
   var html = '';
+  // Scheda comprimibile quando i dati sono completi. All'apertura della pagina le schede
+  // complete partono chiuse; quelle nuove o in modifica restano aperte (niente chiusure a sorpresa).
+  var guestCompleto = !g.ocrPending && validateGuest(g).length === 0;
+  if (guestCompressi[g.id] === undefined) guestCompressi[g.id] = (guestPrimoCaricamento && guestCompleto);
+  var guestChiuso = guestCompleto && guestCompressi[g.id] === true;
 
   html += '<div class="as-guest" data-id="'+g.id+'">';
   html += '<div class="as-guest-head"><div><span class="as-name">'+escapeHtml(g.cognome||g.nome? (g.cognome+' '+g.nome).trim() : 'Nuovo ospite')+'</span><span class="as-role">'+roleLabel(g.ruolo)+'</span>'+faseBadge+'</div>' +
           (g.ocrPending? '<span class="as-warn"><span class="as-spin"></span>estrazione in corso… <button class="as-remove" data-remove="'+g.id+'">annulla</button></span>' : '<button class="as-remove" data-remove="'+g.id+'">rimuovi</button>') +
           '</div>';
 
+  if (guestCompleto){
+    html += '<button type="button" class="as-btn ghost" data-guest-toggle="'+g.id+'" style="margin:0 0 8px;font-size:14px;">'+(guestChiuso ? '▸ Espandi i dati' : '▾ Comprimi i dati')+'</button>';
+  }
+  html += '<div data-guest-campi="'+g.id+'"'+(guestChiuso ? ' style="display:none;"' : '')+'>';
   if (!g.ocrPending){
     html += '<div class="as-field" style="position:relative;margin-bottom:10px;"><label>Ospite già registrato? Cerca per cognome</label>' +
       '<input type="text" data-cerca-archivio="'+g.id+'" placeholder="Scrivi almeno 2 lettere del cognome…" autocomplete="off">' +
@@ -1711,6 +1720,7 @@ function buildGuestCardHtml(g, extraPrimaDiGenera){
     '</select></div>';
   html += '</div></details>';
 
+  html += '</div>';
   var problems = validateGuest(g);
   if (problems.length) html += '<div class="as-err">' + problems.join(' · ') + '</div>';
   else html += '<div class="as-ok">Dati completi</div>';
@@ -1727,6 +1737,17 @@ function buildGuestCardHtml(g, extraPrimaDiGenera){
 }
 
 function attachGuestHandlers(root){
+  root.querySelectorAll('[data-guest-toggle]').forEach(function(btn){
+    btn.onclick = function(){
+      var gid = btn.getAttribute('data-guest-toggle');
+      var campi = root.querySelector('[data-guest-campi="'+gid+'"]');
+      if (!campi) return;
+      var chiudi = campi.style.display !== 'none';
+      campi.style.display = chiudi ? 'none' : '';
+      guestCompressi[gid] = chiudi;
+      btn.textContent = chiudi ? '▸ Espandi i dati' : '▾ Comprimi i dati';
+    };
+  });
   root.querySelectorAll('[data-remove]').forEach(function(btn){
     btn.onclick = function(){
       var id = btn.getAttribute('data-remove');
@@ -2272,6 +2293,9 @@ function renderOspiti(){
 }
 
 var smoobuDetailsAperti = {};
+var guestCompressi = {};
+var guestPrimoCaricamento = true;
+setTimeout(function(){ guestPrimoCaricamento = false; }, 4000);
 var smoobuMostraEscluse = false;
 
 var smoobuCache = null;
