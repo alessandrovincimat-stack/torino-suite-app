@@ -4672,11 +4672,30 @@ function renderArchivioDocumenti(el){
   html += '</div>';
   el.innerHTML = html;
 
+  // Caricamento "pigro": la miniatura si scarica solo quando entra nello schermo.
+  // Prima ogni render scaricava le foto di TUTTI i documenti (centinaia, anche con la
+  // scheda Archivio nascosta), saturando la connessione e bloccando estrazione e salvataggi.
+  var cacheFoto = window.__asFotoCache = window.__asFotoCache || {};
+  var cacheFotoChiavi = window.__asFotoCacheChiavi = window.__asFotoCacheChiavi || [];
+  function caricaMiniatura(img){
+    var kk = img.getAttribute('data-photo');
+    if (cacheFoto[kk]){ img.src = 'data:image/jpeg;base64,' + cacheFoto[kk]; return; }
+    remoteStorage.get(kk).then(function(res){
+      if (res && res.value){
+        img.src = 'data:image/jpeg;base64,' + res.value;
+        cacheFoto[kk] = res.value; cacheFotoChiavi.push(kk);
+        while (cacheFotoChiavi.length > 30){ delete cacheFoto[cacheFotoChiavi.shift()]; }
+      }
+    }).catch(function(){});
+  }
+  var osservatoreFoto = (typeof IntersectionObserver !== 'undefined') ? new IntersectionObserver(function(voci){
+    voci.forEach(function(v){
+      if (v.isIntersecting){ osservatoreFoto.unobserve(v.target); caricaMiniatura(v.target); }
+    });
+  }, { rootMargin: '200px' }) : null;
   el.querySelectorAll('img[data-photo]').forEach(function(img){
     var key = img.getAttribute('data-photo');
-    remoteStorage.get(key).then(function(res){
-      if (res && res.value) img.src = 'data:image/jpeg;base64,' + res.value;
-    }).catch(function(){});
+    if (osservatoreFoto) osservatoreFoto.observe(img); else caricaMiniatura(img);
     img.onclick = function(){
       remoteStorage.get(key).then(function(res){
         if (res && res.value){
