@@ -3906,8 +3906,8 @@ function contaAppartamentiOccupatiData(dataISO){
       }
     });
   });
-  var n = Object.keys(appartamenti).length;
-  return n || 1;
+  // Nessun appartamento occupato = 0 (giorno vuoto o di sola partenza): un 1 forzato crea l'incongruenza camere>0 con presenze 0.
+  return Object.keys(appartamenti).length;
 }
 
 async function inviaIstatArrivi(arriviOggiRichiesti, allOrdered){
