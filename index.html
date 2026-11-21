@@ -6276,7 +6276,7 @@ async function chiamaAdmin(percorso, corpo){
 function sbloccaAdmin(){
   adminUnlocked = true;
   var btnTop = document.getElementById('ts-btn-impostazioni');
-  if (btnTop) btnTop.textContent = '⚙️';
+  if (btnTop) btnTop.innerHTML = window.TS_ICONA_IMPOSTAZIONI || '⚙️';
   if (adminDaCambiare) currentSubtab = 'diagnostica';
   renderImpostazioniTab();
 }
@@ -7302,7 +7302,7 @@ window.renderPrezzi = renderPrezzi;
 /* Aggiornamento automatico (21/11/2026): l'app salvata sul telefono puo' restare alla versione vecchia per la cache.
    All'apertura e ogni volta che torna in primo piano controlla se su GitHub c'e' una versione nuova e si ricarica da sola. */
 (function(){
-  var VERSIONE_APP = '2026-11-21-r6';
+  var VERSIONE_APP = '2026-11-21-r7';
   window.VERSIONE_APP = VERSIONE_APP;
   var inCorso = false;
   function controlla(){
@@ -7400,10 +7400,21 @@ grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:6px!important;paddin
   var SEZIONI = ['porte-section', 'questura-section', 'archivio-section', 'fatture-section', 'tassa-section', 'impostazioni-section', 'booking-section', 'prezzi-section'];
   VECCHI.forEach(function(n){ var b = $('ts-btn-' + n); if (b) b.classList.add('ts-vecchio'); });
 
+  // Icone disegnate (21/11): stesso tratto per tutte, bianche sulla barra, marroni quando la voce e' attiva
+  var SVG = function(d){ return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>'; };
+  var ICONE = {
+    ospiti: SVG('<path d="M3.5 18.5h17"/><path d="M5 18.5a7 7 0 0 1 14 0"/><path d="M12 11.5v0"/><path d="M12 8.5v3"/><path d="M10 8.5h4"/>'),
+    incassi: SVG('<circle cx="12" cy="12" r="8.5"/><path d="M15.2 8.8a4.3 4.3 0 1 0 0 6.4"/><path d="M7.3 10.8h5.4"/><path d="M7.3 13.4h5.4"/>'),
+    prezzi: SVG('<path d="M4 19.5h16"/><path d="M5 15.5l4-4.5 3.5 2.5L19 7"/><path d="M15 7h4v4"/>'),
+    alloggi: SVG('<path d="M3.8 11.2L12 4l8.2 7.2"/><path d="M6 9.6V20h12V9.6"/><path d="M10 20v-5h4v5"/>')
+  };
+  window.TS_ICONA_LUCCHETTO = SVG('<rect x="5" y="11" width="14" height="9" rx="2.2"/><path d="M8.2 11V8a3.8 3.8 0 0 1 7.6 0v3"/>');
+  window.TS_ICONA_IMPOSTAZIONI = SVG('<path d="M4 7h9"/><path d="M17 7h3"/><circle cx="15" cy="7" r="2"/><path d="M4 12h3"/><path d="M11 12h9"/><circle cx="9" cy="12" r="2"/><path d="M4 17h11"/><path d="M19 17h1"/><circle cx="17" cy="17" r="2"/>');
+  (function(){ var bi = $('ts-btn-impostazioni'); if (bi) bi.innerHTML = /⚙/.test(bi.textContent) ? window.TS_ICONA_IMPOSTAZIONI : window.TS_ICONA_LUCCHETTO; })();
   var btns = {};
   Object.keys(GRUPPI).forEach(function(k){
     var g = GRUPPI[k], b = document.createElement('button');
-    b.className = 'ts-switch-btn ts-gruppo'; b.id = 'ts-g-' + k; b.setAttribute('data-l', g.l); b.setAttribute('aria-label', g.l); b.textContent = g.i;
+    b.className = 'ts-switch-btn ts-gruppo'; b.id = 'ts-g-' + k; b.setAttribute('data-l', g.l); b.setAttribute('aria-label', g.l); b.innerHTML = ICONE[k];
     b.onclick = function(){ vai(k, ultimo[k] || (g.seg[0] ? g.seg[0][0] : null)); };
     sw.appendChild(b); btns[k] = b;
   });
@@ -7493,7 +7504,11 @@ grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:6px!important;paddin
 .ts-vecchio,.porte-scelta{display:none!important}
 .ts-switcher{grid-template-columns:repeat(4,minmax(0,1fr))!important}
 @media (min-width:700px){.ts-switcher{grid-template-columns:repeat(4,minmax(0,1fr))!important}}
-.ts-gruppo{min-height:54px!important}
+.ts-gruppo{min-height:56px!important;gap:5px!important}
+.ts-gruppo svg{width:27px;height:27px;display:block}
+.ts-gruppo.ts-active{color:#6b5440!important}
+#ts-btn-impostazioni svg{width:19px;height:19px;display:block}
+#ts-btn-impostazioni.ts-active{color:#6b5440!important}
 .ts-sotto{grid-column:1/-1;display:flex;gap:3px;background:rgba(0,0,0,.2);border-radius:12px;padding:3px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .ts-sotto::-webkit-scrollbar{display:none}
 .ts-seg{flex:1 0 auto;border:0;background:none;color:rgba(255,255,255,.88);font:600 13.5px -apple-system,system-ui,sans-serif;border-radius:9px;min-height:36px;padding:0 10px;white-space:nowrap;cursor:pointer}
