@@ -7148,6 +7148,81 @@ window.renderPrezzi = renderPrezzi;
   };
 })();
 </script>
+<script>
+/* Face ID / Touch ID allo sblocco (21/11/2026).
+   Usa le passkey del telefono (WebAuthn, autenticatore della piattaforma con verifica biometrica obbligatoria).
+   Il PIN resta come riserva. La passkey vive solo sul telefono: niente viene inviato al server.
+   Dopo il riconoscimento il codice di sblocco (gia' salvato su questo telefono) viene "digitato" sul tastierino. */
+(function(){
+  var K_CRED = 'torino-suite:faceid-cred', K_NO = 'torino-suite:faceid-no', K_PIN = 'torino-suite:app-lock-code';
+  var root = document.getElementById('root');
+  if (!root || !window.PublicKeyCredential || !navigator.credentials) return;
+  function get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
+  function set(k, v){ try { localStorage.setItem(k, v); } catch(e){} }
+  function del(k){ try { localStorage.removeItem(k); } catch(e){} }
+  function b64(buf){ return btoa(String.fromCharCode.apply(null, new Uint8Array(buf))); }
+  function unb64(s){ var b = atob(s), a = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+  function caso(n){ var a = new Uint8Array(n); crypto.getRandomValues(a); return a; }
+  var disponibile = null;
+  PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(function(ok){ disponibile = ok; controlla(); }).catch(function(){ disponibile = false; });
+
+  function digitaPin(){
+    var pin = get(K_PIN) || '0000';
+    var tasti = Array.prototype.slice.call(root.querySelectorAll('.lock-key'));
+    pin.split('').forEach(function(c, i){
+      setTimeout(function(){ var t = tasti.find(function(k){ return k.textContent.trim() === c; }); if (t) t.click(); }, i * 60);
+    });
+  }
+  function sblocca(btn){
+    var id = get(K_CRED); if (!id) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Riconoscimento…'; }
+    navigator.credentials.get({ publicKey: { challenge: caso(32), allowCredentials: [{ type: 'public-key', id: unb64(id) }], userVerification: 'required', timeout: 60000 } })
+      .then(function(c){ if (c) digitaPin(); })
+      .catch(function(e){ if (btn) { btn.disabled = false; btn.textContent = 'Riprova con Face ID'; } })
+      ;
+  }
+  function attiva(banner){
+    navigator.credentials.create({ publicKey: {
+      rp: { name: 'Torino Suite' },
+      user: { id: caso(16), name: 'torinosuite', displayName: 'Torino Suite' },
+      challenge: caso(32),
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'preferred' },
+      timeout: 60000, attestation: 'none'
+    } }).then(function(c){
+      set(K_CRED, b64(c.rawId)); del(K_NO);
+      banner.innerHTML = '<span>Face ID attivo: al prossimo accesso basta guardare il telefono.</span>';
+      setTimeout(function(){ banner.remove(); }, 3500);
+    }).catch(function(){ banner.querySelector('span').textContent = 'Attivazione annullata. Puoi riprovare.'; });
+  }
+  function bannerAttivazione(){
+    if (document.getElementById('faceid-banner')) return;
+    var d = document.createElement('div'); d.id = 'faceid-banner';
+    d.innerHTML = '<span>Vuoi entrare con Face ID invece del codice?</span><button class="fi-si">Attiva</button><button class="fi-no">No</button>';
+    document.body.appendChild(d);
+    d.querySelector('.fi-si').onclick = function(){ attiva(d); };
+    d.querySelector('.fi-no').onclick = function(){ set(K_NO, '1'); d.remove(); };
+  }
+  var avviato = false;
+  function controlla(){
+    if (disponibile === null) return;
+    var lock = root.querySelector('.lock-screen');
+    if (lock && disponibile && get(K_CRED) && !lock.querySelector('#faceid-btn')) {
+      var b = document.createElement('button'); b.id = 'faceid-btn'; b.type = 'button'; b.textContent = '🙂 Sblocca con Face ID';
+      b.onclick = function(){ sblocca(b); };
+      var tastierino = lock.querySelector('.lock-keypad');
+      if (tastierino) tastierino.parentNode.insertBefore(b, tastierino); else lock.appendChild(b);
+      // su iPhone la richiesta parte da sola solo dopo un tocco: proviamo, se il sistema la blocca resta il pulsante
+      if (!avviato) { avviato = true; setTimeout(function(){ sblocca(b); }, 300); }
+    }
+    if (!lock && root.querySelector('.app-root') && disponibile && !get(K_CRED) && !get(K_NO)) bannerAttivazione();
+  }
+  new MutationObserver(controlla).observe(root, { childList: true, subtree: true });
+  controlla();
+  // per disattivare: Impostazioni del telefono > Password, oppure da qui
+  window.disattivaFaceId = function(){ del(K_CRED); del(K_NO); };
+})();
+</script>
 <style id="tema-2026-11-21">
 /* Tema chiaro (21/11/2026) nello stile della pagina Clima: fondo caldo chiaro, schede bianche, marrone Torino Suite.
    Se il telefono e' in modalita' scura si passa da soli ai colori scuri. Le icone restano quelle di prima. */
@@ -7200,6 +7275,14 @@ grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:6px!important;paddin
 /* Schermata di sblocco: tasti chiari come il resto */
 .lock-key{background:var(--surface)!important;color:var(--text)!important;text-shadow:none!important;border:1px solid var(--border)!important;box-shadow:0 1px 3px rgba(0,0,0,.08)!important}
 .lock-key:active{color:var(--brass)!important}
+/* Face ID */
+#faceid-btn{display:block;margin:6px auto 18px;border:0;border-radius:14px;min-height:50px;padding:0 22px;background:var(--brass);color:var(--on-brass);font:600 16px -apple-system,system-ui,sans-serif}
+#faceid-btn:disabled{opacity:.6}
+#faceid-banner{position:fixed;left:12px;right:12px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:60;display:flex;align-items:center;gap:8px;background:var(--text);color:var(--bg);border-radius:16px;padding:12px 14px;font:15px -apple-system,system-ui,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+#faceid-banner span{flex:1}
+#faceid-banner button{border:0;border-radius:10px;min-height:38px;padding:0 12px;font:600 14px -apple-system,system-ui,sans-serif}
+#faceid-banner .fi-si{background:var(--bg);color:var(--text)}
+#faceid-banner .fi-no{background:transparent;color:var(--bg);opacity:.8}
 </style>
 </body>
 
