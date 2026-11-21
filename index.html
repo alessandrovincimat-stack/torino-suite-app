@@ -80,7 +80,7 @@
 </head>
 <body>
 <div id="pull-refresh-indicator" style="position:fixed;top:0;left:0;right:0;text-align:center;padding:10px 8px;font-size:13px;color:var(--brass);background:var(--bg);transform:translateY(-100%);z-index:99999;border-bottom:1px solid var(--border);">↓ Trascina per aggiornare</div>
-<div class="ts-switcher" id="ts-switcher"><button class="ts-switch-btn" id="ts-btn-porte">Gestione porte</button><button class="ts-switch-btn ts-active" id="ts-btn-questura">Questura e ISTAT</button><button class="ts-switch-btn" id="ts-btn-archivio">Archivio</button><button class="ts-switch-btn" id="ts-btn-fatture">Fatture</button><button class="ts-switch-btn" id="ts-btn-tassa">Tassa di soggiorno</button><button class="ts-switch-btn" id="ts-btn-impostazioni" style="font-size:16px;">🔒</button><button class="ts-switch-btn" id="ts-btn-booking">Pagamenti</button><button class="ts-switch-btn" id="ts-btn-prezzi">Prezzi</button></div><div id="booking-section" style="display:none;color:var(--text);background:var(--bg);max-width:960px;margin:0 auto;font-family:'Helvetica Neue',Arial,sans-serif;padding:16px;"><div class="as-tabs" id="pag-subtabs"><div class="as-tab" data-pagsubtab="da-incassare">Da incassare</div><div class="as-tab" data-pagsubtab="ok">Pagamenti OK</div></div><div id="pag-content"></div></div><div id="prezzi-section" style="display:none;color:var(--text);background:var(--bg);max-width:960px;margin:0 auto;font-family:'Helvetica Neue',Arial,sans-serif;padding:16px;"><div id="prz-content"></div></div><div id="porte-section">
+<div class="ts-switcher" id="ts-switcher"><button class="ts-switch-btn" id="ts-btn-porte">Gestione porte</button><button class="ts-switch-btn ts-active" id="ts-btn-questura">Questura e ISTAT</button><button class="ts-switch-btn" id="ts-btn-archivio">Archivio</button><button class="ts-switch-btn" id="ts-btn-fatture">Fatture</button><button class="ts-switch-btn" id="ts-btn-tassa">Tassa di soggiorno</button><button class="ts-switch-btn" id="ts-btn-impostazioni" style="font-size:16px;">🔒</button><button class="ts-switch-btn" id="ts-btn-booking">Pagamenti</button><button class="ts-switch-btn" id="ts-btn-prezzi">Prezzi</button><button class="ts-switch-btn" id="ts-btn-riscaldamento">Riscaldamento</button></div><div id="booking-section" style="display:none;color:var(--text);background:var(--bg);max-width:960px;margin:0 auto;font-family:'Helvetica Neue',Arial,sans-serif;padding:16px;"><div class="as-tabs" id="pag-subtabs"><div class="as-tab" data-pagsubtab="da-incassare">Da incassare</div><div class="as-tab" data-pagsubtab="ok">Pagamenti OK</div></div><div id="pag-content"></div></div><div id="prezzi-section" style="display:none;color:var(--text);background:var(--bg);max-width:960px;margin:0 auto;font-family:'Helvetica Neue',Arial,sans-serif;padding:16px;"><div id="prz-content"></div></div><div id="porte-section">
 <div id="root"></div>
 </div>
 <div id="fatture-section" style="display:none;">
@@ -7107,6 +7107,22 @@ window.renderPrezzi = renderPrezzi;
   }
   checkUnlocked();
   new MutationObserver(checkUnlocked).observe(root, { childList: true, subtree: true });
+})();
+</script>
+<script>
+/* Riscaldamento (2026-11-21): apre la pagina del server gia' autenticata. La chiave viaggia nel frammento #k=
+   (non arriva al server, non finisce nei log) e la pagina la toglie subito dall'indirizzo. */
+(function(){
+  var btn = document.getElementById('ts-btn-riscaldamento');
+  if (!btn) return;
+  btn.onclick = async function(){
+    var cfg = null;
+    try { var b = await window.storage.get('as-backend', false); cfg = (b && b.value) ? JSON.parse(b.value) : null; } catch(e){}
+    if (!cfg || !cfg.url) { alert('Configura prima il backend in Impostazioni (lucchetto) > Backend.'); return; }
+    var url = String(cfg.url).replace(/\/$/, '') + '/riscaldamento' + (cfg.secret ? '#k=' + encodeURIComponent(cfg.secret) : '');
+    var w = window.open(url, '_blank');
+    if (!w) location.href = url;
+  };
 })();
 </script>
 </body>
