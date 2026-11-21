@@ -7223,6 +7223,26 @@ window.renderPrezzi = renderPrezzi;
   window.disattivaFaceId = function(){ del(K_CRED); del(K_NO); };
 })();
 </script>
+<script>
+/* Aggiornamento automatico (21/11/2026): l'app salvata sul telefono puo' restare alla versione vecchia per la cache.
+   All'apertura e ogni volta che torna in primo piano controlla se su GitHub c'e' una versione nuova e si ricarica da sola. */
+(function(){
+  var VERSIONE_APP = '2026-11-21-r3';
+  window.VERSIONE_APP = VERSIONE_APP;
+  var inCorso = false;
+  function controlla(){
+    if (inCorso || !navigator.onLine) return; inCorso = true;
+    fetch(location.pathname + '?nocache=' + Date.now(), { cache: 'no-store' })
+      .then(function(r){ return r.ok ? r.text() : ''; })
+      .then(function(t){
+        var m = t.match(/VERSIONE_APP = '([^']+)'/);
+        if (m && m[1] !== VERSIONE_APP) location.replace(location.pathname + '?v=' + encodeURIComponent(m[1]));
+      }).catch(function(){}).then(function(){ inCorso = false; });
+  }
+  setTimeout(controlla, 3000);
+  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') controlla(); });
+})();
+</script>
 <style id="tema-2026-11-21">
 /* Tema chiaro (21/11/2026) nello stile della pagina Clima: fondo caldo chiaro, schede bianche, marrone Torino Suite.
    Se il telefono e' in modalita' scura si passa da soli ai colori scuri. Le icone restano quelle di prima. */
