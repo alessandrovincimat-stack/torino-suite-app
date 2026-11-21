@@ -104,11 +104,13 @@
 </div>
 <div id="imp-unlocked" style="display:none;">
   <div class="as-tabs" id="imp-subtabs">
-    <div class="as-tab" data-impsubtab="backend">Server</div>
+    <div class="as-tab" data-impsubtab="backend">Collegamenti</div>
     <div class="as-tab" data-impsubtab="tabelle">Tabelle</div>
     <div class="as-tab" data-impsubtab="genera">File</div>
     <div class="as-tab" data-impsubtab="link">Portali</div>
+    <div class="as-tab" data-impsubtab="diagnostica">Diagnostica</div>
   </div>
+  <div id="tab-diagnostica" class="as-hidden"></div>
   <div id="tab-tabelle" class="as-hidden"></div>
   <div id="tab-genera" class="as-hidden"></div>
   <div id="tab-backend" class="as-hidden"></div>
@@ -2222,8 +2224,7 @@ async function renderOggi(){
       ? '<p style="color:var(--danger);margin:8px 0 0;">⚠️ ' + schedeUrgentiN + ' scheda/e con arrivo già avvenuto non ancora inviata/e — vedi sotto in "Prossimi arrivi".</p>'
       : '<p class="as-ok" style="margin:8px 0 0;">Nessuna scheda in ritardo.</p>') +
     '</div>';
-  html += '<div class="as-card"><p class="as-title" style="font-size:16px;">Tassa di soggiorno</p>' +
-    '<p class="as-sub">Prossima dichiarazione Soggiornamo: <strong>' + scadenza.label + '</strong> (tra ' + scadenza.giorni + ' giorni).</p></div>';
+  if (scadenza.giorni <= 10) html += '<div class="as-card"><p class="as-warn" style="margin:0;">🏛️ Dichiarazione Soggiornamo: <strong>' + scadenza.label + '</strong> (tra ' + scadenza.giorni + ' giorni) — Incassi › Tassa.</p></div>';
 
   el.innerHTML = html;
 
@@ -2242,9 +2243,12 @@ async function renderOggi(){
         { nome: 'Soggiornamo', ok: !!(dataStato.SOGGIORNIAMO_UTENTE && dataStato.SOGGIORNIAMO_PASSWORD) },
         { nome: 'Riscaldamento Honeywell', ok: !!(dataStato.TCC_USERNAME && dataStato.TCC_PASSWORD) }
       ];
-      statusBox.innerHTML = '<p class="as-title" style="font-size:16px;">Stato integrazioni</p>' +
-        righeStato.map(function(r){ return '<div style="padding:4px 0;">' + (r.ok ? '✅' : '⚠️') + ' ' + r.nome + (r.ok ? '' : ' — credenziali mancanti') + '</div>'; }).join('') +
-        '<p class="as-sub" style="margin-top:6px;">Verifica solo che i dati siano stati inseriti, non che siano ancora validi presso il servizio.</p>';
+      // Menu 2026-11-21: in Oggi compare solo se manca qualcosa; l'elenco completo e' in Impostazioni > Diagnostica
+      var mancantiStato = righeStato.filter(function(r){ return !r.ok; });
+      if (!mancantiStato.length){ statusBox.className = ''; statusBox.innerHTML = ''; }
+      else statusBox.innerHTML = '<p class="as-title" style="font-size:16px;">Collegamenti da completare</p>' +
+        mancantiStato.map(function(r){ return '<div style="padding:4px 0;">⚠️ ' + r.nome + ' — credenziali mancanti</div>'; }).join('') +
+        '<p class="as-sub" style="margin-top:6px;">Impostazioni › Collegamenti.</p>';
     } catch(eStato){
       statusBox.innerHTML = '<p class="as-title" style="font-size:16px;">Stato integrazioni</p><div class="as-err">Impossibile verificare: '+eStato.message+'</div>';
     }
@@ -4372,7 +4376,7 @@ function renderArchivio(){
     html += '<div class="as-field"><input id="as-archivio-search" placeholder="Cerca per nome o cognome…"></div>';
   }
 
-  if (state.backend.url && state.istatUltimaData){
+  if (state.backend.url && state.istatUltimaData && (!window.archivioTabs || window.archivioTabs.indexOf('istat-ok') >= 0)){
     var mancanti = giorniIstatMancanti();
     if (mancanti.length){
       html += '<div class="as-card">' +
@@ -4384,12 +4388,12 @@ function renderArchivio(){
     }
   }
 
-  html += '<div class="as-tabs" id="arch-subtabs">' +
-    '<div class="as-tab" data-archsubtab="documenti">Documenti</div>' +
-    '<div class="as-tab" data-archsubtab="istat-ok">Inviati</div>' +
-    '<div class="as-tab" data-archsubtab="fatture-emesse">Fatture</div>' +
-    '<div class="as-tab" data-archsubtab="recupero">Controllo</div>' +
-    '<div class="as-tab" data-archsubtab="pulizie">Pulizie</div>' +
+  // Menu 2026-11-21: l'archivio e' diviso fra Ospiti > Storico (Documenti, Inviati, Pulizie) e Incassi (Fatture emesse, Controllo mese).
+  var TABS_ARCH = [['documenti','Documenti'],['istat-ok','Inviati'],['pulizie','Pulizie'],['fatture-emesse','Fatture emesse'],['recupero','Controllo mese']]
+    .filter(function(x){ return !window.archivioTabs || window.archivioTabs.indexOf(x[0]) >= 0; });
+  if (!TABS_ARCH.some(function(x){ return x[0] === archivioSubtabAttivo; })) archivioSubtabAttivo = TABS_ARCH[0][0];
+  html += '<div class="as-tabs" id="arch-subtabs"' + (TABS_ARCH.length < 2 ? ' style="display:none"' : '') + '>' +
+    TABS_ARCH.map(function(x){ return '<div class="as-tab" data-archsubtab="'+x[0]+'">'+x[1]+'</div>'; }).join('') +
     '</div><div id="arch-content"></div>';
 
   el.innerHTML = html;
@@ -6216,7 +6220,8 @@ function switchImpSubtab(name){
   else if (name === 'genera') renderGenera();
   else if (name === 'backend') renderBackend();
   else if (name === 'link') renderLink();
-  ['tabelle','genera','backend','link'].forEach(function(n){
+  else if (name === 'diagnostica') renderDiagnostica();
+  ['tabelle','genera','backend','link','diagnostica'].forEach(function(n){
     var el = document.getElementById('tab-'+n);
     if (el) el.classList.toggle('as-hidden', n !== name);
   });
@@ -6241,18 +6246,88 @@ function renderImpostazioniTab(){
 }
 window.renderImpostazioniTab = renderImpostazioniTab;
 
+// Codice amministratore (audit 21/11/2026): non e' piu' scritto qui. Lo verifica il server (POST /api/admin/verifica),
+// con blocco dopo 5 tentativi sbagliati. Senza server configurato (primo avvio) la sezione si apre per poterlo collegare.
+var adminDaCambiare = false;
+function finestraCodiceAdmin(titolo, campi, conferma){
+  var ov = document.createElement('div'); ov.className = 'adm-ov';
+  ov.innerHTML = '<div class="adm-box" role="dialog" aria-modal="true"><p class="as-title" style="font-size:18px;margin-bottom:12px;">' + titolo + '</p>' +
+    campi.map(function(c){ return '<label class="as-sub" style="display:block;margin:0 0 4px;">' + c.l + '</label><input class="adm-in" data-k="' + c.k + '" type="password" inputmode="numeric" autocomplete="off" maxlength="12">'; }).join('') +
+    '<div class="adm-err" style="display:none"></div><div class="adm-row"><button class="as-btn ghost" data-a="no">Annulla</button><button class="as-btn" data-a="ok">Conferma</button></div></div>';
+  document.body.appendChild(ov);
+  var ins = ov.querySelectorAll('.adm-in'), err = ov.querySelector('.adm-err'), ok = ov.querySelector('[data-a="ok"]');
+  setTimeout(function(){ ins[0].focus(); }, 50);
+  function chiudi(){ ov.remove(); }
+  ov.querySelector('[data-a="no"]').onclick = chiudi;
+  ins.forEach(function(i){ i.onkeydown = function(e){ if (e.key === 'Enter') ok.click(); }; });
+  ok.onclick = async function(){
+    var v = {}; ins.forEach(function(i){ v[i.getAttribute('data-k')] = i.value.trim(); });
+    ok.disabled = true; err.style.display = 'none';
+    try { await conferma(v); chiudi(); }
+    catch(e){ err.textContent = e.message; err.style.display = 'block'; ok.disabled = false; ins[0].select(); }
+  };
+}
+async function chiamaAdmin(percorso, corpo){
+  var r = await fetch(backendUrl(percorso), { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, backendHeaders()), body: JSON.stringify(corpo) });
+  var d = {}; try { d = await r.json(); } catch(e){}
+  if (!r.ok) throw new Error(d.error || ('errore ' + r.status));
+  return d;
+}
+function sbloccaAdmin(){
+  adminUnlocked = true;
+  var btnTop = document.getElementById('ts-btn-impostazioni');
+  if (btnTop) btnTop.textContent = '⚙️';
+  if (adminDaCambiare) currentSubtab = 'diagnostica';
+  renderImpostazioniTab();
+}
 document.getElementById('imp-sblocca').onclick = function(){
-  var code = prompt('Codice amministratore');
-  if (code === null) return;
-  if (code.trim() === '050808'){
-    adminUnlocked = true;
-    var btnTop = document.getElementById('ts-btn-impostazioni');
-    if (btnTop) btnTop.textContent = '⚙️';
-    renderImpostazioniTab();
-  } else {
-    alert('Codice errato');
-  }
+  if (!state.backend.url){ sbloccaAdmin(); return; }
+  finestraCodiceAdmin('Codice amministratore', [{ k: 'codice', l: 'Inserisci il codice' }], async function(v){
+    if (!v.codice) throw new Error('Inserisci il codice');
+    var d = await chiamaAdmin('/api/admin/verifica', { codice: v.codice });
+    adminDaCambiare = !!d.daCambiare;
+    sbloccaAdmin();
+  });
 };
+async function apriPaginaServer(percorso){
+  if (!state.backend.url){ alert('Configura prima il collegamento al server.'); return; }
+  var url = state.backend.url.replace(/\/$/, '') + percorso + (state.backend.secret ? '#k=' + encodeURIComponent(state.backend.secret) : '');
+  var w = window.open(url, '_blank'); if (!w) location.href = url;
+}
+async function renderDiagnostica(){
+  var el = document.getElementById('tab-diagnostica');
+  if (!el) return;
+  el.innerHTML = (adminDaCambiare ? '<div class="as-card" style="border-color:var(--warn)"><p class="as-warn" style="margin:0 0 8px;font-weight:600;">Cambia il codice amministratore</p><p class="as-sub" style="margin:0;">Il codice attuale era scritto nel codice pubblico dell\'app: va sostituito con uno nuovo (6-12 cifre).</p></div>' : '') +
+    '<div class="as-card"><p class="as-title" style="font-size:16px;">Codice amministratore</p><p class="as-sub">Verificato dal server; 5 tentativi sbagliati bloccano per 15 minuti.</p><button class="as-btn secondary" id="diag-codice">Cambia codice</button></div>' +
+    '<div class="as-card" id="diag-stato"><p class="as-title" style="font-size:16px;">Stato collegamenti</p><p class="as-sub"><span class="as-spin"></span> verifica in corso…</p></div>' +
+    '<div class="as-card"><p class="as-title" style="font-size:16px;">Dispositivi (strumenti di prova)</p>' +
+    '<p class="as-sub">Pagine tecniche del server: non servono nell\'uso di tutti i giorni.</p>' +
+    '<div class="as-row" style="flex-wrap:wrap;gap:8px;"><button class="as-btn secondary" id="diag-radio">📡 Ponte radio Evohome</button>' +
+    '<button class="as-btn secondary" id="diag-tutto">🧾 Registro eventi completo</button></div></div>';
+  document.getElementById('diag-radio').onclick = function(){ apriPaginaServer('/dispositivi?vista=radio'); };
+  document.getElementById('diag-tutto').onclick = function(){ apriPaginaServer('/dispositivi?vista=tutto'); };
+  document.getElementById('diag-codice').onclick = function(){
+    if (!state.backend.url){ alert('Configura prima il collegamento al server.'); return; }
+    finestraCodiceAdmin('Cambia codice amministratore', [{ k: 'attuale', l: 'Codice attuale' }, { k: 'nuovo', l: 'Nuovo codice (6-12 cifre)' }, { k: 'ripeti', l: 'Ripeti il nuovo codice' }], async function(v){
+      if (!/^[0-9]{6,12}$/.test(v.nuovo)) throw new Error('Il nuovo codice deve avere da 6 a 12 cifre');
+      if (v.nuovo !== v.ripeti) throw new Error('I due codici nuovi non coincidono');
+      await chiamaAdmin('/api/admin/codice', { attuale: v.attuale, nuovo: v.nuovo });
+      adminDaCambiare = false; alert('Codice cambiato.'); renderDiagnostica();
+    });
+  };
+  var box = document.getElementById('diag-stato');
+  if (!state.backend.url){ box.innerHTML = '<p class="as-title" style="font-size:16px;">Stato collegamenti</p><p class="as-sub">Server non configurato.</p>'; return; }
+  try {
+    var r = await fetch(backendUrl('/api/settings'), { headers: backendHeaders() });
+    var d = await r.json(); if (!r.ok) throw new Error(d.error || 'errore');
+    var righe = [
+      ['Smoobu', d.SMOOBU_API_KEY && d.SMOOBU_API_SECRET], ['Fatture in Cloud', d.FIC_ACCESS_TOKEN && d.FIC_COMPANY_ID],
+      ['ISTAT (Piemonte Dati Turismo)', d.ISTAT_UTENTE && d.ISTAT_PASSWORD], ['Soggiornamo', d.SOGGIORNIAMO_UTENTE && d.SOGGIORNIAMO_PASSWORD],
+      ['Riscaldamento Honeywell', d.TCC_USERNAME && d.TCC_PASSWORD]];
+    box.innerHTML = '<p class="as-title" style="font-size:16px;">Stato collegamenti</p>' + righe.map(function(x){ return '<div style="padding:4px 0;">' + (x[1] ? '✅' : '⚠️') + ' ' + x[0] + (x[1] ? '' : ' — credenziali mancanti') + '</div>'; }).join('') +
+      '<p class="as-sub" style="margin-top:6px;">Verifica solo che i dati siano stati inseriti, non che siano ancora validi presso il servizio.</p>';
+  } catch(e){ box.innerHTML = '<p class="as-title" style="font-size:16px;">Stato collegamenti</p><div class="as-err">Impossibile verificare: ' + e.message + '</div>'; }
+}
 
 /* Posizione di lettura: quando si esce dall'app (es. per prendere una foto da WhatsApp) iOS
    puo' scaricare la pagina e ricaricarla al ritorno, che ripartiva dall'alto. Salvo scheda
@@ -7131,7 +7206,7 @@ window.renderPrezzi = renderPrezzi;
   btn.onclick = async function(){
     var cfg = null;
     try { var b = await window.storage.get('as-backend', false); cfg = (b && b.value) ? JSON.parse(b.value) : null; } catch(e){}
-    if (!cfg || !cfg.url) { alert('Configura prima il server in Impostazioni (🔒) > Server.'); return; }
+    if (!cfg || !cfg.url) { alert('Configura prima il server in Impostazioni › Collegamenti.'); return; }
     var url = String(cfg.url).replace(/\/$/, '') + '/riscaldamento' + (cfg.secret ? '#k=' + encodeURIComponent(cfg.secret) : '');
     var w = window.open(url, '_blank');
     if (!w) location.href = url;
@@ -7141,7 +7216,7 @@ window.renderPrezzi = renderPrezzi;
     ev.preventDefault();
     var cfg = null;
     try { var b = await window.storage.get('as-backend', false); cfg = (b && b.value) ? JSON.parse(b.value) : null; } catch(e){}
-    if (!cfg || !cfg.url) { alert('Configura prima il server in Impostazioni (🔒) > Server.'); return; }
+    if (!cfg || !cfg.url) { alert('Configura prima il server in Impostazioni › Collegamenti.'); return; }
     var url = String(cfg.url).replace(/\/$/, '') + '/dispositivi?vista=porte' + (cfg.secret ? '#k=' + encodeURIComponent(cfg.secret) : '');
     var w = window.open(url, '_blank');
     if (!w) location.href = url;
@@ -7227,7 +7302,7 @@ window.renderPrezzi = renderPrezzi;
 /* Aggiornamento automatico (21/11/2026): l'app salvata sul telefono puo' restare alla versione vecchia per la cache.
    All'apertura e ogni volta che torna in primo piano controlla se su GitHub c'e' una versione nuova e si ricarica da sola. */
 (function(){
-  var VERSIONE_APP = '2026-11-21-r3';
+  var VERSIONE_APP = '2026-11-21-r4';
   window.VERSIONE_APP = VERSIONE_APP;
   var inCorso = false;
   function controlla(){
@@ -7303,6 +7378,134 @@ grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:6px!important;paddin
 #faceid-banner button{border:0;border-radius:10px;min-height:38px;padding:0 12px;font:600 14px -apple-system,system-ui,sans-serif}
 #faceid-banner .fi-si{background:var(--bg);color:var(--text)}
 #faceid-banner .fi-no{background:transparent;color:var(--bg);opacity:.8}
+</style>
+<script>
+/* Menu a 5 voci (audit 21/11/2026): Ospiti, Incassi, Prezzi, Alloggi + Impostazioni in alto.
+   I vecchi pulsanti restano nascosti nel DOM: il codice esistente (mostra(), posizione all'uscita, Face ID) continua a usarli.
+   Porte GEVA, Riscaldamento e Condizionatori si aprono dentro l'app (pagine del server in un riquadro, chiave nel frammento #k=). */
+(function(){
+  function $(id){ return document.getElementById(id); }
+  var sw = $('ts-switcher'); if (!sw) return;
+  var GRUPPI = {
+    ospiti:  { l: 'Ospiti',  i: '🛎️', seg: [['oggi', 'Oggi e schedine'], ['storico', 'Storico']] },
+    incassi: { l: 'Incassi', i: '💶', seg: [['pagamenti', 'Pagamenti'], ['fatture', 'Fatture'], ['tassa', 'Tassa'], ['controllo', 'Controllo mese']] },
+    prezzi:  { l: 'Prezzi',  i: '📈', seg: [] },
+    alloggi: { l: 'Alloggi', i: '🏠', seg: [['porte', 'Porte'], ['riscaldamento', 'Riscaldamento'], ['condizionatori', 'Condizionatori']] }
+  };
+  var PILLOLE = {
+    'incassi/fatture': [['da-fare', 'Da emettere'], ['emesse', 'Emesse']],
+    'alloggi/porte': [['dierre', 'Codici attuali (Dierre)'], ['geva', 'Nuovo sistema GEVA']]
+  };
+  var VECCHI = ['questura', 'tassa', 'archivio', 'booking', 'fatture', 'prezzi', 'porte', 'riscaldamento'];
+  var SEZIONI = ['porte-section', 'questura-section', 'archivio-section', 'fatture-section', 'tassa-section', 'impostazioni-section', 'booking-section', 'prezzi-section'];
+  VECCHI.forEach(function(n){ var b = $('ts-btn-' + n); if (b) b.classList.add('ts-vecchio'); });
+
+  var btns = {};
+  Object.keys(GRUPPI).forEach(function(k){
+    var g = GRUPPI[k], b = document.createElement('button');
+    b.className = 'ts-switch-btn ts-gruppo'; b.id = 'ts-g-' + k; b.setAttribute('data-l', g.l); b.setAttribute('aria-label', g.l); b.textContent = g.i;
+    b.onclick = function(){ vai(k, ultimo[k] || (g.seg[0] ? g.seg[0][0] : null)); };
+    sw.appendChild(b); btns[k] = b;
+  });
+  var sotto = document.createElement('div'); sotto.id = 'ts-sotto'; sotto.className = 'ts-sotto'; sotto.style.display = 'none'; sw.appendChild(sotto);
+  var pill = document.createElement('div'); pill.id = 'ts-pill'; pill.className = 'as-tabs ts-pill'; pill.style.display = 'none';
+  sw.parentNode.insertBefore(pill, sw.nextSibling);
+  var frameSec = document.createElement('div'); frameSec.id = 'ts-frame-sec'; frameSec.style.display = 'none';
+  frameSec.innerHTML = '<iframe id="ts-frame" title="Alloggi"></iframe><p class="as-sub" id="ts-frame-err" style="display:none;padding:16px"></p>';
+  pill.parentNode.insertBefore(frameSec, pill.nextSibling);
+
+  var ultimo = {}, ultimaPillola = {}, inCorso = false;
+
+  function segna(g, s, p){
+    Object.keys(btns).forEach(function(k){ btns[k].classList.toggle('ts-active', k === g); });
+    var gr = GRUPPI[g];
+    sotto.innerHTML = ''; sotto.style.display = (gr && gr.seg.length > 1) ? '' : 'none';
+    if (gr) gr.seg.forEach(function(x){
+      var t = document.createElement('button'); t.className = 'ts-seg' + (x[0] === s ? ' on' : ''); t.textContent = x[1];
+      t.onclick = function(){ vai(g, x[0]); }; sotto.appendChild(t);
+    });
+    var pl = PILLOLE[g + '/' + s];
+    pill.innerHTML = ''; pill.style.display = pl ? '' : 'none';
+    if (pl) pl.forEach(function(x){
+      var t = document.createElement('div'); t.className = 'as-tab' + (x[0] === p ? ' active' : ''); t.textContent = x[1];
+      t.onclick = function(){ vai(g, s, x[0]); }; pill.appendChild(t);
+    });
+  }
+  function nascondiSezioni(){
+    SEZIONI.forEach(function(id){ var d = $(id); if (d) d.style.display = 'none'; });
+    VECCHI.concat(['impostazioni']).forEach(function(n){ var b = $('ts-btn-' + n); if (b) b.classList.remove('ts-active'); });
+  }
+  function clic(n){ var b = $('ts-btn-' + n); if (b) b.click(); }
+  function archivio(schede){ window.archivioTabs = schede; clic('archivio'); }
+  async function riquadro(percorso){
+    nascondiSezioni(); frameSec.style.display = 'block';
+    var f = $('ts-frame'), err = $('ts-frame-err'), cfg = null;
+    try { var b = await window.storage.get('as-backend', false); cfg = (b && b.value) ? JSON.parse(b.value) : null; } catch(e){}
+    if (!cfg || !cfg.url){ f.style.display = 'none'; err.style.display = 'block'; err.textContent = 'Configura prima il server in Impostazioni › Collegamenti.'; return; }
+    err.style.display = 'none'; f.style.display = 'block';
+    f.style.height = Math.max(420, window.innerHeight - sw.getBoundingClientRect().bottom - (pill.style.display === 'none' ? 0 : pill.offsetHeight + 12) - 4) + 'px';
+    f.src = String(cfg.url).replace(/\/$/, '') + percorso + (percorso.indexOf('?') >= 0 ? '&' : '?') + 'app=1' + (cfg.secret ? '#k=' + encodeURIComponent(cfg.secret) : '');
+  }
+  function vai(g, s, p){
+    var pl = PILLOLE[g + '/' + s];
+    if (pl && !p) p = ultimaPillola[g + '/' + s] || pl[0][0];
+    if (pl) ultimaPillola[g + '/' + s] = p;
+    if (s) ultimo[g] = s;
+    inCorso = true;
+    try {
+      segna(g, s, p);
+      frameSec.style.display = 'none'; window.archivioTabs = null;
+      var k = g + '/' + (s || '') + (p ? '/' + p : '');
+      if (k === 'ospiti/oggi') clic('questura');
+      else if (k === 'ospiti/storico') archivio(['documenti', 'istat-ok', 'pulizie']);
+      else if (k === 'incassi/pagamenti') clic('booking');
+      else if (k === 'incassi/fatture/da-fare') clic('fatture');
+      else if (k === 'incassi/fatture/emesse') archivio(['fatture-emesse']);
+      else if (k === 'incassi/tassa') clic('tassa');
+      else if (k === 'incassi/controllo') archivio(['recupero']);
+      else if (g === 'prezzi') clic('prezzi');
+      else if (k === 'alloggi/porte/dierre') clic('porte');
+      else if (k === 'alloggi/porte/geva') riquadro('/dispositivi?vista=porte');
+      else if (k === 'alloggi/riscaldamento') riquadro('/riscaldamento');
+      else if (k === 'alloggi/condizionatori') riquadro('/dispositivi?vista=split');
+    } finally { inCorso = false; oss.takeRecords(); }
+    try { window.scrollTo(0, 0); } catch(e){}
+  }
+  // Impostazioni (pulsante in alto) e ripristini fatti dal codice esistente: la barra si allinea al pulsante vecchio attivo
+  var DA_VECCHIO = { questura: ['ospiti', 'oggi'], tassa: ['incassi', 'tassa'], archivio: ['ospiti', 'storico'], booking: ['incassi', 'pagamenti'],
+    fatture: ['incassi', 'fatture', 'da-fare'], prezzi: ['prezzi', null], porte: ['alloggi', 'porte', 'dierre'], impostazioni: [null, null] };
+  function allinea(){
+    if (inCorso) return;
+    var att = Object.keys(DA_VECCHIO).filter(function(n){ var b = $('ts-btn-' + n); return b && b.classList.contains('ts-active'); })[0];
+    if (!att) return;
+    var m = DA_VECCHIO[att]; frameSec.style.display = 'none';
+    if (att === 'archivio' && !window.archivioTabs){ window.archivioTabs = ['documenti', 'istat-ok', 'pulizie']; if (window.renderArchivio) window.renderArchivio(); }
+    segna(m[0], m[1], m[2]);
+  }
+  var oss = new MutationObserver(allinea);
+  Object.keys(DA_VECCHIO).forEach(function(n){ var b = $('ts-btn-' + n); if (b) oss.observe(b, { attributes: true, attributeFilter: ['class'] }); });
+  allinea();
+  if (!Object.keys(btns).some(function(k){ return btns[k].classList.contains('ts-active'); }) && !($('ts-btn-impostazioni') || {}).classList.contains('ts-active')) segna('ospiti', 'oggi');
+  window.tsVai = vai;
+})();
+</script>
+<style id="menu-2026-11-21">
+.ts-vecchio,.porte-scelta{display:none!important}
+.ts-switcher{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+@media (min-width:700px){.ts-switcher{grid-template-columns:repeat(4,minmax(0,1fr))!important}}
+.ts-gruppo{min-height:54px!important}
+.ts-sotto{grid-column:1/-1;display:flex;gap:3px;background:rgba(0,0,0,.2);border-radius:12px;padding:3px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.ts-sotto::-webkit-scrollbar{display:none}
+.ts-seg{flex:1 0 auto;border:0;background:none;color:rgba(255,255,255,.88);font:600 13.5px -apple-system,system-ui,sans-serif;border-radius:9px;min-height:36px;padding:0 10px;white-space:nowrap;cursor:pointer}
+.ts-seg.on{background:#fff;color:#6b5440}
+.ts-pill{max-width:928px;margin:12px auto 0!important;width:calc(100% - 32px)}
+#ts-frame-sec{max-width:960px;margin:12px auto 0}
+#ts-frame{width:100%;border:0;display:block;background:var(--bg)}
+.adm-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100000;display:flex;align-items:center;justify-content:center;padding:20px}
+.adm-box{background:var(--surface);color:var(--text);border-radius:18px;padding:20px;width:100%;max-width:360px;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+.adm-in{width:100%;box-sizing:border-box;font-size:22px;letter-spacing:4px;text-align:center;padding:10px;border:1px solid var(--border);border-radius:12px;background:var(--bg);color:var(--text);margin-bottom:12px}
+.adm-err{color:var(--danger);font-size:14px;margin:-4px 0 10px}
+.adm-row{display:flex;gap:8px;justify-content:flex-end}
 </style>
 </body>
 
