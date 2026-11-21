@@ -7302,7 +7302,7 @@ window.renderPrezzi = renderPrezzi;
 /* Aggiornamento automatico (21/11/2026): l'app salvata sul telefono puo' restare alla versione vecchia per la cache.
    All'apertura e ogni volta che torna in primo piano controlla se su GitHub c'e' una versione nuova e si ricarica da sola. */
 (function(){
-  var VERSIONE_APP = '2026-11-21-r4';
+  var VERSIONE_APP = '2026-11-21-r6';
   window.VERSIONE_APP = VERSIONE_APP;
   var inCorso = false;
   function controlla(){
@@ -7506,6 +7506,21 @@ grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:6px!important;paddin
 .adm-in{width:100%;box-sizing:border-box;font-size:22px;letter-spacing:4px;text-align:center;padding:10px;border:1px solid var(--border);border-radius:12px;background:var(--bg);color:var(--text);margin-bottom:12px}
 .adm-err{color:var(--danger);font-size:14px;margin:-4px 0 10px}
 .adm-row{display:flex;gap:8px;justify-content:flex-end}
+/* Porte Dierre: la testata era scura (vecchio tema) con testo scuro sopra: ora chiara come il resto */
+#porte-section .topbar{background:var(--bg)!important;position:static!important;padding:14px 20px 12px!important;border-bottom:0!important;backdrop-filter:none!important}
+#porte-section .brand-title{color:var(--text)!important}
+#porte-section .brand-eyebrow{color:var(--text-muted)!important}
+#porte-section .add-btn{background:var(--surface)!important;color:var(--text)!important;border:1px solid var(--border)!important;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+/* Leggibilita' (Ale 21/11): un solo carattere di sistema ovunque, niente corsivi/serif/monospazio decorativi,
+   testi secondari piu' scuri, titoli piu' netti */
+:root{--text-muted:#5c5248;--muted:#5c5248}
+@media (prefers-color-scheme:dark){:root{--text-muted:#c2b7aa;--muted:#c2b7aa}}
+body *:not(code):not(pre):not(kbd){font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Arial,sans-serif!important}
+#porte-section .brand-eyebrow{letter-spacing:.5px!important;font-size:12px!important;font-weight:600!important;text-transform:uppercase}
+#porte-section .brand-title{font-size:28px!important;font-weight:700!important;letter-spacing:0!important;line-height:1.15!important}
+#root h1,#root h2,#root h3,#root .door-name,#root [class*="title"]{letter-spacing:0!important;font-weight:700!important}
+.as-sub{font-size:14.5px!important;line-height:1.45}
+.as-title{letter-spacing:0!important}
 </style>
 </body>
 
