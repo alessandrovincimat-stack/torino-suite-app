@@ -7302,7 +7302,7 @@ window.renderPrezzi = renderPrezzi;
 /* Aggiornamento automatico (21/11/2026): l'app salvata sul telefono puo' restare alla versione vecchia per la cache.
    All'apertura e ogni volta che torna in primo piano controlla se su GitHub c'e' una versione nuova e si ricarica da sola. */
 (function(){
-  var VERSIONE_APP = '2026-11-21-r7';
+  var VERSIONE_APP = '2026-11-22-r8';
   window.VERSIONE_APP = VERSIONE_APP;
   var inCorso = false;
   function controlla(){
@@ -7455,7 +7455,7 @@ grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:6px!important;paddin
     if (!cfg || !cfg.url){ f.style.display = 'none'; err.style.display = 'block'; err.textContent = 'Configura prima il server in Impostazioni › Collegamenti.'; return; }
     err.style.display = 'none'; f.style.display = 'block';
     f.style.height = Math.max(420, window.innerHeight - sw.getBoundingClientRect().bottom - (pill.style.display === 'none' ? 0 : pill.offsetHeight + 12) - 4) + 'px';
-    f.src = String(cfg.url).replace(/\/$/, '') + percorso + (percorso.indexOf('?') >= 0 ? '&' : '?') + 'app=1' + (cfg.secret ? '#k=' + encodeURIComponent(cfg.secret) : '');
+    f.src = String(cfg.url).replace(/\/$/, '') + percorso + (percorso.indexOf('?') >= 0 ? '&' : '?') + 'app=1&t=' + Date.now() + (cfg.secret ? '#k=' + encodeURIComponent(cfg.secret) : '');
   }
   function vai(g, s, p){
     var pl = PILLOLE[g + '/' + s];
